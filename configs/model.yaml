@@ -1,0 +1,18 @@
+model:
+  name: lightgbm
+  objective: regression
+  seed: 42
+  deterministic: true
+  num_threads: 4
+  learning_rate: 0.03
+  num_leaves: 31
+  max_depth: -1
+  feature_fraction: 0.9
+  bagging_fraction: 0.8
+  bagging_freq: 1
+  min_data_in_leaf: 100
+  verbosity: -1
+label:
+  # Provisional; finalize against the execution calendar before training.
+  horizon_trading_days: 5
+  type: forward_return
