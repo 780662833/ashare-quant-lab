@@ -319,31 +319,4 @@ def render_markdown(report: dict[str, Any]) -> str:
     for gate in report.get("gates", []):
         lines.append(f"| {gate['name']} | **{gate['status']}** |")
     lines.extend(["", "完整证据、覆盖统计和数据版本见同目录 JSON 报告。", ""])
-    return "\n".join(lines)    report["overall_status"] = (
-        "PASS" if report["gates"] and all(g["status"] == "PASS" for g in report["gates"])
-        else "FAIL"
-    )
-    # Deliberately remains false even on PASS: training integration must
-    # consume and verify this report in a separate, explicit change.
-    report["training_dataset_unlocked"] = False
-    return report
-
-
-def render_markdown(report: dict[str, Any]) -> str:
-    lines = [
-        "# CNEquity 数据准入验收报告",
-        "",
-        f"- 总状态：**{report.get('overall_status', 'FAIL')}**",
-        f"- 数据目录：`{report.get('data_root')}`",
-        f"- 验收区间：{report.get('window', {}).get('start')} 至 {report.get('window', {}).get('end')}",
-        f"- 股票池：`{report.get('profile')}`",
-        f"- 股票数量：{report.get('scope', {}).get('symbols', 'N/A')}",
-        "- 训练数据集开放：否（本工具只验收，不开放训练接口）",
-        "",
-        "| 门禁 | 状态 |",
-        "|---|---|",
-    ]
-    for gate in report.get("gates", []):
-        lines.append(f"| {gate['name']} | **{gate['status']}** |")
-    lines.extend(["", "完整证据、覆盖统计和数据版本见同目录 JSON 报告。", ""])
     return "\n".join(lines)
