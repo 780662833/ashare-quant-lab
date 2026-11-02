@@ -5,7 +5,7 @@ adjusted columns are research features only.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,7 @@ class CNEquityAdapter:
     config_path: str | Path | None = None
     data_root: str | Path | None = None
     profile: str = RESEARCH_PROFILE
+    _config: Any = field(init=False, default=None, repr=False)
 
     def __post_init__(self) -> None:
         if self.config_path is not None and self.data_root is not None:
