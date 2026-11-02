@@ -48,28 +48,13 @@ def run_acceptance(
     if not items:
         raise ValueError("pit_items must contain at least one documented item code")
 
-    from cnequity.query import dataset_state, load, load_with_receipt, resolve_config
+    from cnequity.query import load, load_with_receipt, resolve_config
     from cnequity.quality.factor_diagnostics import publish_factor_diagnostics
     from cnequity.quality.historical_validity import historical_universe_validity
     from cnequity.quality.trading_status_coverage import traded_status_evidence
 
     root = Path(data_root).expanduser().resolve()
     config = resolve_config(data_root=root)
-    tracked_datasets = ("daily_bars", "adj_factors", "instruments", "trading_status", "financial_statement_items", "corporate_actions", "trading_calendar")
-    before_versions: dict[str, Any] = {}
-    version_errors: dict[str, str] = {}
-    for dataset in tracked_datasets:
-        try:
-            state = dataset_state(dataset, config=config)
-            before_versions[dataset] = {
-                "revision_id": state.revision_id,
-                "schema_version": state.schema_version,
-                "contract_fingerprint": state.contract_fingerprint,
-                "content_digest": state.content_digest,
-            }
-        except Exception as exc:
-            version_errors[dataset] = _error(exc)
-
     report: dict[str, Any] = {
         "schema_version": 1,
         "created_at": datetime.now(timezone.utc).isoformat(),
