@@ -171,6 +171,7 @@ def run_acceptance(
         hfq_ok = (
             not adjusted.frame.is_empty()
             and assessed
+            and factor_diagnostic.get("assessed") is True
             and related_events == 0
             and missing_factor_rows == 0
             and bool(adjusted.receipt.get("replayable"))
