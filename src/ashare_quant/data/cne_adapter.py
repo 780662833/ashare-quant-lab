@@ -151,7 +151,7 @@ class CNEquityAdapter:
         if frame["pit_is_exact"].null_count() or not frame["pit_is_exact"].all():
             raise CNEquityDataError("Strict PIT query returned missing/non-exact evidence")
         if frame["pit_quality"].null_count() or frame.filter(
-            pl.col("pit_quality") != "exact"
+            pl.col("pit_quality") != "strict"
         ).height:
             raise CNEquityDataError("Strict PIT query returned reconstructed/unknown quality")
         if "announce_date" not in frame.columns:
