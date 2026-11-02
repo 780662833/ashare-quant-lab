@@ -1,0 +1,20 @@
+backtest:
+  initial_cash: 1000000
+  rebalance: weekly
+  holdings: 20
+  weighting: equal
+  allow_leverage: false
+  execution:
+    price_reference: next_open
+    suspended: no_fill
+    limit_locked: no_fill
+    board_lot: 100
+  costs:
+    commission_rate: 0.0003
+    minimum_commission: 5.0
+    stamp_duty_sell_rate: 0.0005
+    transfer_fee_rate: 0.00001
+    slippage_bps: 5
+  accounting:
+    retain_unfilled_orders: true
+    retain_existing_positions_when_unfilled: true
