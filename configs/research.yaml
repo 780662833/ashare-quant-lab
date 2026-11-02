@@ -6,9 +6,11 @@ project:
 universe:
   source: cnequity
   point_in_time: true
-  include_delisted: true
+  profile: cn_a_sh_sz_research_v1
+  exchange_scope: [SH, SZ]
+  point_in_time_listing_and_delisting: true
   exclude_st: true
-  exclude_suspended: true
+  exclude_suspended_at_selection: true
 schedule:
   rebalance: weekly
   decision_time: close
