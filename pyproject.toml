@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ashare-quant-lab"
+version = "0.1.0"
+description = "A reproducible A-share quantitative research MVP."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "duckdb>=1.2,<2",
+  "polars>=1.20,<2",
+  "pydantic>=2.10,<3",
+  "pyyaml>=6,<7",
+]
+
+[project.optional-dependencies]
+research = [
+  "lightgbm>=4.5,<5",
+  "pyqlib>=0.9.6",
+]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<7",
+  "ruff>=0.9,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ashare_quant"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
