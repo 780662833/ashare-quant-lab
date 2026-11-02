@@ -55,7 +55,22 @@ def run_acceptance(
 
     root = Path(data_root).expanduser().resolve()
     config = resolve_config(data_root=root)
-    tracked_datasets = ("daily_bars", "adj_factors", "instruments", "trading_status", "financial_statement_items", "corporate_actions", "trading_calendar")\n    before_versions: dict[str, Any] = {}\n    version_errors: dict[str, str] = {}\n    for dataset in tracked_datasets:\n        try:\n            state = dataset_state(dataset, config=config)\n            before_versions[dataset] = {\n                "revision_id": state.revision_id,\n                "schema_version": state.schema_version,\n                "contract_fingerprint": state.contract_fingerprint,\n                "content_digest": state.content_digest,\n            }\n        except Exception as exc:\n            version_errors[dataset] = _error(exc)\n\n    report: dict[str, Any] = {
+    tracked_datasets = ("daily_bars", "adj_factors", "instruments", "trading_status", "financial_statement_items", "corporate_actions", "trading_calendar")
+    before_versions: dict[str, Any] = {}
+    version_errors: dict[str, str] = {}
+    for dataset in tracked_datasets:
+        try:
+            state = dataset_state(dataset, config=config)
+            before_versions[dataset] = {
+                "revision_id": state.revision_id,
+                "schema_version": state.schema_version,
+                "contract_fingerprint": state.contract_fingerprint,
+                "content_digest": state.content_digest,
+            }
+        except Exception as exc:
+            version_errors[dataset] = _error(exc)
+
+    report: dict[str, Any] = {
         "schema_version": 1,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "data_root": str(root),
@@ -292,6 +307,33 @@ def run_acceptance(
         report["gates"].append(_gate("trading_status", False, {"error": _error(exc)}))
 
     report["overall_status"] = (
+        "PASS" if report["gates"] and all(g["status"] == "PASS" for g in report["gates"])
+        else "FAIL"
+    )
+    # Deliberately remains false even on PASS: training integration must
+    # consume and verify this report in a separate, explicit change.
+    report["training_dataset_unlocked"] = False
+    return report
+
+
+def render_markdown(report: dict[str, Any]) -> str:
+    lines = [
+        "# CNEquity 数据准入验收报告",
+        "",
+        f"- 总状态：**{report.get('overall_status', 'FAIL')}**",
+        f"- 数据目录：`{report.get('data_root')}`",
+        f"- 验收区间：{report.get('window', {}).get('start')} 至 {report.get('window', {}).get('end')}",
+        f"- 股票池：`{report.get('profile')}`",
+        f"- 股票数量：{report.get('scope', {}).get('symbols', 'N/A')}",
+        "- 训练数据集开放：否（本工具只验收，不开放训练接口）",
+        "",
+        "| 门禁 | 状态 |",
+        "|---|---|",
+    ]
+    for gate in report.get("gates", []):
+        lines.append(f"| {gate['name']} | **{gate['status']}** |")
+    lines.extend(["", "完整证据、覆盖统计和数据版本见同目录 JSON 报告。", ""])
+    return "\n".join(lines)    report["overall_status"] = (
         "PASS" if report["gates"] and all(g["status"] == "PASS" for g in report["gates"])
         else "FAIL"
     )
