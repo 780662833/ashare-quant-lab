@@ -1,6 +1,10 @@
 # Data contract
 
-CNEquity is the sole authoritative provider of market and point-in-time facts.
+CNEquity 0.21.0 is the sole authoritative provider of market and point-in-time facts. The v1 default universe is the official research-eligible `cn_a_sh_sz_research_v1` profile (Shanghai/Shenzhen only); Beijing remains excluded because CNEquity labels its all-exchange profile experimental.
+
+`daily_bars` is historical price data, not itself a point-in-time universe. Use the versioned profile for the selection-date universe, and read `trading_status` separately for execution/no-fill decisions. Keep raw OHLC for fills and use `adj_*` only for return/feature calculations. Strict HFQ coverage is required before using adjusted values.
+
+For fundamentals, use `financial_statement_items` with both `as_of` and `pit_mode="strict"`. CNEquity's current contract identifies this dataset as partial/reconstructed at the dataset level; strict mode excludes reconstructed backfills and only rows with exact evidence may enter model features. Empty strict results are a data-coverage failure, not permission to fall back to best-effort.
 Application code accesses it only through `data/cne_adapter.py`; strategy and
 model modules must not query CNEquity internals directly.
 
