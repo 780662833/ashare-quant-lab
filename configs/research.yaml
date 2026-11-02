@@ -1,0 +1,20 @@
+project:
+  name: ashare-quant-lab
+  version: 1
+  timezone: Asia/Shanghai
+  currency: CNY
+universe:
+  source: cnequity
+  point_in_time: true
+  include_delisted: true
+  exclude_st: true
+  exclude_suspended: true
+schedule:
+  rebalance: weekly
+  decision_time: close
+  execution: next_trading_session
+portfolio:
+  holdings: 20
+  weighting: equal
+  target_weight: 0.05
+  leverage: 1.0
