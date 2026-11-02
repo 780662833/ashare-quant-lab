@@ -94,7 +94,7 @@ def test_pit_requires_nonempty_exact_evidence_and_announce_date(monkeypatch):
         "symbol": ["600000.SH"], "report_period": ["2023Q4"],
         "item_code": ["roe"], "item_value": [10.0],
         "announce_date": ["2024-03-20"], "pit_is_exact": [True],
-        "pit_quality": ["exact"],
+        "pit_quality": ["strict"],
     })
     calls = []
     def fake_load(dataset, **kwargs):

@@ -41,9 +41,9 @@ Install model dependencies when entering the model stage:
 python -m pip install -e ".[research]"
 ```
 
-CNEquity is intentionally not pinned as a guessed PyPI dependency. Its actual
-supported installation/API contract must be inspected and documented before
-the data integration stage.
+CNEquity is pinned to the inspected 0.21.0 release. Its public query and
+quality contracts are isolated behind the adapter and the local four-gate
+acceptance runner. See `docs/data_contract.md` before using any lake data.
 
 ## Research integrity
 
