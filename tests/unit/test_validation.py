@@ -5,9 +5,18 @@ from ashare_quant.data.validation import validate_daily_bars
 
 
 def valid_bars() -> pl.DataFrame:
-    return pl.DataFrame({"instrument": ["600000.SH"], "date": ["2024-01-02"],
-        "open": [10.0], "high": [11.0], "low": [9.0], "close": [10.5],
-        "volume": [1000], "amount": [10500.0]})
+    return pl.DataFrame(
+        {
+            "instrument": ["600000.SH"],
+            "date": ["2024-01-02"],
+            "open": [10.0],
+            "high": [11.0],
+            "low": [9.0],
+            "close": [10.5],
+            "volume": [1000],
+            "amount": [10500.0],
+        }
+    )
 
 
 def test_valid_daily_bars_pass() -> None:
@@ -20,7 +29,8 @@ def test_missing_column_fails() -> None:
 
 
 def test_invalid_ohlc_fails() -> None:
-    frame = valid_bars().with_columns(pl.lit(8.0).alias("low"))
+    # A low above the open/close is invalid; low=8 would be a valid bar.
+    frame = valid_bars().with_columns(pl.lit(12.0).alias("low"))
     with pytest.raises(ValueError, match="OHLC"):
         validate_daily_bars(frame)
 
