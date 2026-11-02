@@ -16,3 +16,4 @@ mlruns/
 *.duckdb
 .env
 reports/data_acceptance/
+/data
