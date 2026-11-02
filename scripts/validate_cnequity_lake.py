@@ -12,7 +12,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run fail-closed four-gate acceptance against a local CNEquity lake."
     )
-    parser.add_argument("--data-root", default=r"F:\\cnEquity")
+    parser.add_argument("--data-root", default=r"F:\cnEquity")
     parser.add_argument("--start-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument(
@@ -41,7 +41,7 @@ def main() -> int:
     json_path = output_dir / f"cnequity_acceptance_{stamp}.json"
     md_path = output_dir / f"cnequity_acceptance_{stamp}.md"
     json_path.write_text(
-        json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\\n",
+        json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n",
         encoding="utf-8",
     )
     md_path.write_text(render_markdown(report), encoding="utf-8")
