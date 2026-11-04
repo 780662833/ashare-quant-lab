@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import polars as pl
 
-from ashare_quant.research.bundle import ResearchBundleError
+from ashare_quant.exceptions import ResearchBundleError
 
 NATIVE_STATUS_COLUMNS = {
     "symbol", "trade_date", "is_trading", "status", "risk_warning",
