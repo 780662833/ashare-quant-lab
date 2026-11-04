@@ -21,6 +21,7 @@ RAW_COLUMNS = {
 EXECUTION_EVIDENCE_COLUMNS = {
     "instrument", "date", "is_suspended", "is_limit_up_locked",
     "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
+    "limit_evidence_source", "limit_rule_version",
 }
 ADJUSTED_COLUMNS = {"instrument", "date", "adj_close", "adj_is_exact"}
 UNIVERSE_COLUMNS = {"instrument", "date"}
@@ -192,6 +193,15 @@ def build_research_data_bundle(
     revisions = {str(k): str(v) for k, v in source_revisions.items()}
     if any(not key.strip() or not value.strip() for key, value in revisions.items()):
         raise ResearchBundleError("source_revisions keys and values must be non-empty")
+    required_revisions = {
+        "daily_bars", "adj_factors", "universe", "trading_status",
+        "trading_calendar", "price_limit_rules",
+    }
+    missing_revisions = sorted(required_revisions.difference(revisions))
+    if missing_revisions:
+        raise ResearchBundleError(
+            f"source_revisions missing required datasets: {missing_revisions}"
+        )
 
     required_gate_status = _require_gates(
         acceptance_report,
@@ -278,6 +288,13 @@ def build_research_data_bundle(
         raise ResearchBundleError("execution_evidence contains unknown/null state flags")
     if state.filter(~pl.col("risk_warning_known")).height:
         raise ResearchBundleError("execution_evidence contains unknown risk-warning state")
+    evidence_text = ["limit_evidence_source", "limit_rule_version"]
+    if state.select(pl.any_horizontal([pl.col(c).is_null() for c in evidence_text]).any()).item():
+        raise ResearchBundleError("execution_evidence has missing limit source/version provenance")
+    if state.filter(
+        pl.any_horizontal([pl.col(c).cast(pl.String).str.strip_chars().eq("") for c in evidence_text])
+    ).height:
+        raise ResearchBundleError("execution_evidence has empty limit source/version provenance")
     if state.filter(
         (pl.col("limit_up").is_not_null() & (
             (~pl.col("limit_up").is_finite()) | (pl.col("limit_up") <= 0)
@@ -330,12 +347,17 @@ def build_research_data_bundle(
             f"{missing_weekly_membership}"
         )
 
+    state_keys = state.select("instrument", "date")
     raw_keys_status = raw_keys.join(
-        state.select("instrument", "date"), on=["instrument", "date"], how="anti"
+        state_keys, on=["instrument", "date"], how="anti"
     )
-    if raw_keys_status.height:
+    extra_state = state_keys.join(
+        raw_keys, on=["instrument", "date"], how="anti"
+    )
+    if raw_keys_status.height or extra_state.height:
         raise ResearchBundleError(
-            f"execution_evidence missing evidence for {raw_keys_status.height} raw market rows"
+            "execution_evidence key scope differs from raw bars; "
+            f"missing={raw_keys_status.height}, extra={extra_state.height}"
         )
     joined = raw.join(state, on=["instrument", "date"], how="left")
     if joined.select(pl.any_horizontal([pl.col(c).is_null() for c in status_flags]).any()).item():
@@ -359,6 +381,11 @@ def build_research_data_bundle(
         "training_dataset_unlocked": False,
         "source_revisions": revisions,
         "source_receipts": acceptance_report.get("receipts", {}),
+        "limit_evidence": {
+            "sources": sorted(state["limit_evidence_source"].unique().to_list()),
+            "rule_versions": sorted(state["limit_rule_version"].unique().to_list()),
+            "revision": revisions["price_limit_rules"],
+        },
         "scope": {
             "start_date": start,
             "end_date": end,
