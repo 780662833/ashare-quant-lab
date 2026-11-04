@@ -16,11 +16,12 @@ NATIVE_STATUS_COLUMNS = {
 }
 LIMIT_EVIDENCE_COLUMNS = {
     "symbol", "trade_date", "is_limit_up_locked", "is_limit_down_locked",
-    "limit_up", "limit_down",
+    "limit_up", "limit_down", "source", "rule_version",
 }
 CANONICAL_EXECUTION_COLUMNS = [
     "instrument", "date", "is_suspended", "is_limit_up_locked",
     "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
+    "limit_evidence_source", "limit_rule_version",
 ]
 LEGACY_STATES = {"st", "*st"}
 VALID_STATES = {"normal", "suspended", "delisted", *LEGACY_STATES}
@@ -133,6 +134,10 @@ def combine_execution_evidence(
     )
     if raw_keys.is_empty():
         raise ResearchBundleError("raw_bars has no keys")
+    if raw_keys.select(
+        pl.any_horizontal(pl.col("instrument").is_null(), pl.col("date").is_null()).any()
+    ).item():
+        raise ResearchBundleError("raw_bars contains null keys")
     if raw_keys.select(pl.struct(["instrument", "date"]).is_duplicated().any()).item():
         raise ResearchBundleError("raw_bars contains duplicate instrument/date keys")
 
@@ -155,13 +160,14 @@ def combine_execution_evidence(
     missing_limit = LIMIT_EVIDENCE_COLUMNS.difference(price_limit_evidence.columns)
     if missing_limit:
         raise ResearchBundleError(f"price_limit_evidence missing columns: {sorted(missing_limit)}")
-    limits = price_limit_evidence.select(
-        pl.col("symbol").cast(pl.String, strict=True).alias("instrument"),
-        pl.col("trade_date").cast(pl.String, strict=True).alias("date"),
+    limit_frame = _validate_native_keys(price_limit_evidence, "price_limit_evidence")
+    limits = limit_frame.select(
+        pl.col("symbol").alias("instrument"),
+        pl.col("trade_date").alias("date"),
         "is_limit_up_locked", "is_limit_down_locked", "limit_up", "limit_down",
+        pl.col("source").cast(pl.String, strict=True).alias("limit_evidence_source"),
+        pl.col("rule_version").cast(pl.String, strict=True).alias("limit_rule_version"),
     )
-    if limits.select(pl.struct(["instrument", "date"]).is_duplicated().any()).item():
-        raise ResearchBundleError("price_limit_evidence contains duplicate instrument/date keys")
     missing_limits = raw_keys.join(limits.select("instrument", "date"), on=["instrument", "date"], how="anti")
     if missing_limits.height:
         raise ResearchBundleError(
@@ -190,6 +196,18 @@ def combine_execution_evidence(
     ]
     if combined.select(pl.any_horizontal([pl.col(c).is_null() for c in flags]).any()).item():
         raise ResearchBundleError("Execution evidence contains null state flags")
+    if combined.select(
+        pl.any_horizontal(
+            pl.col("limit_evidence_source").is_null(),
+            pl.col("limit_rule_version").is_null(),
+        ).any()
+    ).item():
+        raise ResearchBundleError("Price-limit evidence is missing source/version provenance")
+    if combined.filter(
+        (pl.col("limit_evidence_source").str.strip_chars() == "") |
+        (pl.col("limit_rule_version").str.strip_chars() == "")
+    ).height:
+        raise ResearchBundleError("Price-limit evidence has empty source/version provenance")
     if combined.filter(
         (pl.col("limit_up").is_not_null() & (
             (~pl.col("limit_up").is_finite()) | (pl.col("limit_up") <= 0)
