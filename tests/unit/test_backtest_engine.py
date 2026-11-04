@@ -21,7 +21,7 @@ def make_bars(days=4, *, locked_buy_day=None, suspended=None):
             "instrument": "600000.SH",
             "date": day.isoformat(),
             "open": 10.0,
-            "high": 10.5,
+            "high": 13.5,
             "low": 9.5,
             "close": 10.0 + offset,
             "volume": 100000,
@@ -29,7 +29,7 @@ def make_bars(days=4, *, locked_buy_day=None, suspended=None):
             "is_suspended": offset in (suspended or set()),
             "is_limit_up_locked": offset == locked_buy_day,
             "is_limit_down_locked": False,
-            "limit_up": 11.0,
+            "limit_up": 14.0,
             "limit_down": 9.0,
         })
     return pl.DataFrame(rows)
