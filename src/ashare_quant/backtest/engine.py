@@ -159,11 +159,31 @@ def equal_weight_targets(scores: pl.DataFrame, top_n: int = 20) -> pl.DataFrame:
     })
 
 
-def _fees(notional: float, side: str, costs: CostModel) -> float:
+def _fee_components(notional: float, side: str, costs: CostModel) -> dict[str, float]:
+    """Return explicit transaction-fee components for one filled order.
+
+    Slippage is deliberately not included here: it is already reflected in
+    the worse fill price versus the raw open and is reported separately.
+    """
+    if notional <= 0:
+        return {
+            "commission": 0.0,
+            "transfer_fee": 0.0,
+            "stamp_duty": 0.0,
+        }
     commission = max(notional * costs.commission_rate, costs.minimum_commission)
     transfer = notional * costs.transfer_fee_rate
     stamp = notional * costs.stamp_duty_sell_rate if side == "sell" else 0.0
-    return commission + transfer + stamp
+    return {
+        "commission": commission,
+        "transfer_fee": transfer,
+        "stamp_duty": stamp,
+    }
+
+
+def _fees(notional: float, side: str, costs: CostModel) -> float:
+    """Transaction fees excluding slippage, retained for cash-affordability checks."""
+    return sum(_fee_components(notional, side, costs).values())
 
 
 def run_backtest(
@@ -221,7 +241,9 @@ def run_backtest(
                     order_rows.append({
                         "date": date_value, "instrument": instrument, "side": "buy",
                         "requested_qty": None, "filled_qty": 0, "fill_price": None,
-                        "fees": 0.0, "status": "no_fill", "reason": "missing_bar",
+                        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+                        "stamp_duty": 0.0, "slippage_cost": 0.0,
+                        "status": "no_fill", "reason": "missing_bar",
                     })
                     continue
                 open_price = float(bar["open"])
@@ -256,14 +278,23 @@ def run_backtest(
             filled = 0
             fill_price = None
             fee = 0.0
+            fee_parts = {
+                "commission": 0.0,
+                "transfer_fee": 0.0,
+                "stamp_duty": 0.0,
+            }
+            slippage_cost = 0.0
             if reason is None and bar is not None:
+                raw_open = float(bar["open"])
                 slip = costs.slippage_bps / 10_000.0
-                fill_price = float(bar["open"]) * (1.0 + slip if side == "buy" else 1.0 - slip)
+                fill_price = raw_open * (1.0 + slip if side == "buy" else 1.0 - slip)
                 if side == "sell":
                     filled = min(requested, positions.get(instrument, 0))
                     if filled:
                         notional = filled * fill_price
-                        fee = _fees(notional, side, costs)
+                        fee_parts = _fee_components(notional, side, costs)
+                        fee = sum(fee_parts.values())
+                        slippage_cost = filled * max(raw_open - fill_price, 0.0)
                         cash += notional - fee
                         positions[instrument] = positions.get(instrument, 0) - filled
                         if positions[instrument] == 0:
@@ -279,7 +310,9 @@ def run_backtest(
                     filled = max(0, affordable)
                     if filled:
                         notional = filled * fill_price
-                        fee = _fees(notional, side, costs)
+                        fee_parts = _fee_components(notional, side, costs)
+                        fee = sum(fee_parts.values())
+                        slippage_cost = filled * max(fill_price - raw_open, 0.0)
                         cash -= notional + fee
                         positions[instrument] = positions.get(instrument, 0) + filled
                     else:
@@ -293,8 +326,9 @@ def run_backtest(
             order_rows.append({
                 "date": date_value, "instrument": instrument, "side": side,
                 "requested_qty": requested, "filled_qty": filled,
-                "fill_price": fill_price, "fees": fee, "status": status,
-                "reason": reason,
+                "fill_price": fill_price, "fees": fee,
+                **fee_parts, "slippage_cost": slippage_cost,
+                "status": status, "reason": reason,
             })
 
         for instrument, bar in day.items():
@@ -331,8 +365,10 @@ def run_backtest(
         orders=pl.DataFrame(order_rows) if order_rows else pl.DataFrame(schema={
             "date": pl.String, "instrument": pl.String, "side": pl.String,
             "requested_qty": pl.Int64, "filled_qty": pl.Int64,
-            "fill_price": pl.Float64, "fees": pl.Float64, "status": pl.String,
-            "reason": pl.String,
+            "fill_price": pl.Float64, "fees": pl.Float64,
+            "commission": pl.Float64, "transfer_fee": pl.Float64,
+            "stamp_duty": pl.Float64, "slippage_cost": pl.Float64,
+            "status": pl.String, "reason": pl.String,
         }),
         holdings=pl.DataFrame(holding_rows) if holding_rows else pl.DataFrame(schema={
             "date": pl.String, "instrument": pl.String, "quantity": pl.Int64,

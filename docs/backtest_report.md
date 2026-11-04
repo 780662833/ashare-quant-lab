@@ -10,14 +10,20 @@ does not fetch data, train models, or alter portfolio accounting.
   and annualized Sharpe ratio (risk-free rate defaults to zero).
 - Order counts, share fill ratio, traded notional, and gross turnover
   (sum of filled buy and sell notional divided by average daily NAV).
-- Total recorded transaction fees and fees in basis points of initial NAV.
+- Commission (including minimum commission), transfer fee, sell stamp duty,
+  slippage cost, total transaction fees, and total attributed transaction costs.
+- Fee-only and all-cost basis points of initial NAV.
 - Optional benchmark return and strategy excess return over the common
   observed first/last sessions.
 
 The report preserves no-fill orders in the execution counts. Turnover counts
 both buys and sells, so it is gross traded notional rather than one-way
-turnover. The engine currently records aggregate fees, not separate commission,
-stamp-duty, and transfer-fee columns; the report does not fabricate that split.
+turnover. The order ledger separates commission, transfer fee and sell stamp
+duty (summed as `fees`) from slippage (`slippage_cost`). Slippage is measured
+against the raw open and is already embedded in the worse fill price; it is
+reported for attribution but is not deducted a second time from cash. For a
+legacy result with only the aggregate `fees` column, unavailable component
+fields are reported as zero rather than inferred.
 
 ## Benchmark contract
 
