@@ -49,7 +49,7 @@ def test_normalizer_rejects_conflicting_or_unknown_status():
 
     rows = make_status().with_columns(
         pl.when(pl.col("symbol") == "600000.SH")
-        .then("unknown")
+        .then(pl.lit("unknown"))
         .otherwise(pl.col("status"))
         .alias("status")
     )
