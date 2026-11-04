@@ -33,10 +33,10 @@ branch is not part of `main` until GitHub reports it merged.
 | 2 | Deterministic backtest core | Merged | Synthetic execution/accounting tests; not a full historical exchange simulator |
 | 3 | Performance and benchmark report | Merged | Performance, risk, fill, turnover, cost and benchmark metrics |
 | 4 | Weekly momentum benchmark | Merged | 126/21 HFQ momentum, PIT membership, Top-N equal weight and shared-engine tests |
-| 5 | Architecture, canonical research bundle and benchmark orchestration | PR #10 open; CI run #52 passed | Synthetic bundle and orchestration work; real price-limit evidence provider and local-lake acceptance remain pending |
-| 6 | Chronological walk-forward fold planner | PR #11 open, stacked on PR #10; CI run #53 passed | Expanding/rolling folds, label-maturity purge, embargo and non-overlapping test windows; no model fitting |
-| 7 | Itemized execution-cost attribution | Current branch `phase-7-cost-attribution`; PR pending | Separate commission, transfer fee, sell stamp duty and slippage; CI pending |
-| 8 | Walk-forward experiment runner | Planned | Apply identical fold windows to model and benchmark; produce fold-level reports |
+| 5 | Architecture, canonical research bundle and benchmark orchestration | Merged in PR #10 | Canonical bundle, native status normalization and momentum orchestration have synthetic coverage; direct CNEquity assembly, audited historical price-limit evidence and local-lake acceptance remain pending |
+| 6 | Chronological walk-forward fold planner | Merged in PR #11 | Expanding/rolling folds, label-maturity purge, embargo and non-overlapping test windows; no model fitting |
+| 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
+| 8 | Walk-forward experiment runner | PR #13 open; CI pending on current head | Executes the deterministic momentum benchmark fold by fold, with cutoff-isolated inputs and test-only ledgers; model runner remains later work |
 | 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
 | 10 | Robustness and research QA | Planned | Costs/fill/universe/period/regime sensitivities and reproducible comparisons |
 | 11 | Optional report inspection UI | Deferred | Only after research validity is demonstrated |
@@ -125,7 +125,7 @@ test windows remain untouched until the final evaluation.
 
 The user's current Windows lake root is:
 
-`F:\\python\\ashare-quant-lab\\data\\cnequity`
+`F:\cnEquity`
 
 Use CNEquity's config resolver; do not hard-code the user-level config file.
 Do not trigger repeated full downloads as part of ordinary research-platform

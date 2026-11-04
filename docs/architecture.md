@@ -291,9 +291,10 @@ As of 2026-11-04:
 |---|---|
 | CNEquity 0.21 adapter and four-gate acceptance | Implemented; real-lake gates require local evidence |
 | Deterministic first-slice backtest engine | Implemented; exchange-simulation gaps remain |
-| Performance/execution report | Implemented; itemized commission, transfer fee, stamp duty, and separately attributed slippage on Phase 7 branch |
-| Weekly momentum score/targets | Merged; canonical bundle orchestration on open PR #10; real CNEquity-to-limit-evidence input remains pending |
-| Unified research data bundle | PR #10 open (CI passed); core builder, momentum orchestration, and native CNEquity status normalization included; external historical price-limit evidence provider and local-lake validation remain pending |
-| Walk-forward fold planner | PR #11 open and stacked on PR #10 (CI passed); plans folds only, does not train/evaluate models |
+| Performance/execution report | Merged; PR #12 adds itemized commission, transfer fee, stamp duty and separately attributed slippage |
+| Weekly momentum score/targets | Merged in PR #9; canonical bundle orchestration merged in PR #10; direct CNEquity-to-limit-evidence input remains pending |
+| Unified research data bundle | Merged in PR #10; core builder, momentum orchestration and native CNEquity status normalization have synthetic coverage; direct source assembly, audited historical price-limit evidence and local-lake validation remain pending |
+| Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
+| Walk-forward momentum runner | PR #13 open; cutoff-isolated deterministic momentum replay and test-only fold ledgers; CI pending; no model training |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |

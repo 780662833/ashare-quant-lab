@@ -67,8 +67,12 @@ Fold boundaries are generated from the official exchange calendar by
 or fixed-length rolling training windows. The train-to-validation and
 validation-to-test gaps purge the configured label horizon and add an embargo.
 Out-of-sample test windows must not overlap. See [walk_forward.md](walk_forward.md).
-The current module only plans folds; the fold runner and fold-level strategy
-metrics are still future work.
+Phase 8 adds a deterministic momentum benchmark runner over those test
+windows. For each fold it replays the fixed momentum rule only through that
+fold's test-end date, carries the rule's portfolio state into the test period,
+and emits test-only ledgers and fold metrics. It does not fit a model. A future
+model runner must use the same fold definitions and test windows after the
+four-gate training admission has been independently enforced.
 
 ## Current implementation boundaries
 
