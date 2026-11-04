@@ -30,7 +30,7 @@ remain out of scope.
 | 2. Backtest core | Cash/position/NAV accounting, next-open orders, costs, no-fill | Merged | Synthetic tests pass; exchange gaps documented |
 | 3. Report | Performance, risk, turnover, fill, costs, benchmark comparison | Merged | Synthetic metric tests pass and definitions documented |
 | 4. Momentum benchmark | Weekly 126/21 momentum, PIT membership, top-20 equal-weight | Merged | Synthetic no-lookahead and shared-engine tests pass |
-| 5. Research data bundle | Canonical price/universe/calendar/execution evidence inputs | In progress | Deterministic builder validates keys, coverage, dates and provenance; no training unlock |
+| 5. Research data bundle | Canonical price/universe/calendar/execution evidence inputs and momentum orchestration | Core implemented on PR #10; CNEquity mapping/local-lake validation pending | Deterministic builder validates keys, coverage, dates, receipts and provenance; no training unlock |
 | 6. Walk-forward framework | Chronological folds and common benchmark/model evaluation windows | Planned | No random splits; fold and timestamp boundaries tested |
 | 7. Feature/label + model adapter | PIT features, future-only labels, Qlib/LightGBM | Planned; gated | Four gates pass for same revisions/window; builder checks exact acceptance identity |
 | 8. Robustness and research QA | Cost, fill, universe, period and regime sensitivity | Planned | Reproducible net-of-cost model/benchmark comparison |
