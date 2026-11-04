@@ -21,10 +21,11 @@ Call `build_research_data_bundle(...)` with:
 | `execution_evidence` | `instrument,date,is_suspended,is_limit_up_locked,is_limit_down_locked,limit_up,limit_down,risk_warning_known,limit_evidence_source,limit_rule_version` | Joined native status and separate versioned price-limit evidence |
 | `trading_dates` | ordered exchange-local session dates | Session and next-open timing |
 | `acceptance_report` | matching window/profile and named gate results | Evidence admission |
-| `source_revisions` | non-empty dataset-to-revision map | Reproducibility |
+| `source_revisions` | `daily_bars`, `adj_factors`, `universe`, `trading_status`, `trading_calendar`, `price_limit_rules` | Reproducibility |
 
 The acceptance report must show PASS for historical universe, HFQ adjustment,
-and trading status. The pure momentum benchmark does not consume fundamental
+and trading status, and include replayable receipts for historical universe
+and HFQ. Any failed historical-universe receipt sub-gate is a hard failure. The pure momentum benchmark does not consume fundamental
 PIT fields. A failed PIT gate therefore does not block this **price-only
 benchmark**; it still blocks all model-training work. The builder never sets
 `training_dataset_unlocked` to true.
@@ -45,8 +46,10 @@ benchmark**; it still blocks all model-training work. The builder never sets
 - Calendar sessions are unique and match the raw-bar date coverage.
 - Point-in-time membership must include every weekly signal date; unknown
   membership symbols are rejected.
-- Acceptance report window/profile and source revisions are retained as
-  provenance. A different window or profile is rejected.
+- Acceptance report window/profile, replayable receipts and source revisions
+  are retained as provenance. A different window or profile is rejected.
+- Source revisions must explicitly cover daily bars, factors, historical
+  universe, trading status, exchange calendar, and the separate limit-rule source.
 
 No status flag, adjusted price, or universe row is inferred or forward-filled.
 
