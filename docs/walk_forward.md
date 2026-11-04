@@ -70,7 +70,9 @@ embargo, and expanding/rolling mode. Folds can be serialized with
 
 ## Current limitation
 
-The fold planner is a deterministic calendar utility, not yet a fold runner.
-The next implementation will attach the same train/validation/test windows to
-data snapshots, strategy results and fold-level metrics without relaxing any
-data admission requirement.
+The Phase 8 momentum runner now applies these folds to the fixed weekly
+momentum benchmark. It replays each fold only through its test-end date and
+returns test-only ledgers plus fold metrics. It does not fit or evaluate a
+LightGBM model. A future model runner must use the same fold windows after the
+four-gate training admission has been independently enforced. See
+[walk_forward_runner.md](walk_forward_runner.md).
