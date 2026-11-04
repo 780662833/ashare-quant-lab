@@ -8,6 +8,7 @@ from ashare_quant.backtest.engine import (
     run_backtest,
     weekly_rebalance_dates,
 )
+from ashare_quant.backtest.report import summarize_backtest
 
 __all__ = [
     "BacktestConfig",
@@ -15,5 +16,6 @@ __all__ = [
     "CostModel",
     "equal_weight_targets",
     "run_backtest",
+    "summarize_backtest",
     "weekly_rebalance_dates",
 ]
