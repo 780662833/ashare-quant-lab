@@ -82,7 +82,7 @@ def test_combine_execution_evidence_requires_separate_limit_facts():
         "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
         "limit_evidence_source", "limit_rule_version",
     ]
-    assert combined.filter(pl.col("symbol") == "000001.SZ")["is_limit_up_locked"].item()
+    assert combined.filter(pl.col("instrument") == "000001.SZ")["is_limit_up_locked"].item()
 
 
 def test_combine_execution_evidence_fails_closed_on_missing_limit_state():
