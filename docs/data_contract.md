@@ -97,6 +97,12 @@ codes are CNEquity-documented `roe` and `net_profit`. Reports are written to
 passed; exit code 2 means one or more gates failed. A successful report still
 does not create a training dataset.
 
+## CNEquity v0.21.0 status and price-limit semantics
+
+The exact v0.21.0 contract declares `trading_status` fields `symbol`, `trade_date`, `is_trading`, `status`, `risk_warning`, `source`, `data_version`, and `fetched_at`. The domain model defines `status` as `normal` / `suspended` / `delisted`, while ST/*ST is orthogonal in `risk_warning`; null is unknown, not false. Legacy `status="st"` / `"*st"` is interpreted as positive ST evidence by the compatibility normalizer. See the [v0.21.0 contract](https://github.com/rootSunc/CNEquity/blob/v0.21.0/contracts/v0.21.0.json) and [v0.21.0 trading-status implementation](https://github.com/rootSunc/CNEquity/blob/v0.21.0/src/cnequity/domain/trading_status.py).
+
+The same release contract does not publish daily limit-up/down prices or locked-limit flags in `daily_bars` or `trading_status`. Consequently, the project must receive these from a separately audited, versioned historical rule/evidence source. Until that source can correctly model board/date regimes and no-limit periods, a real execution bundle cannot be built. This is intentional fail-closed behavior, not a missing-value imputation task.
+
 ## Validation
 
 Reject duplicate instrument/date keys, invalid OHLC, negative volume/amount,
