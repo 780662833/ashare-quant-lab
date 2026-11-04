@@ -16,12 +16,12 @@ NATIVE_STATUS_COLUMNS = {
 }
 LIMIT_EVIDENCE_COLUMNS = {
     "symbol", "trade_date", "is_limit_up_locked", "is_limit_down_locked",
-    "limit_up", "limit_down", "source", "rule_version",
+    "limit_up", "limit_down", "source", "rule_version", "limit_regime",
 }
 CANONICAL_EXECUTION_COLUMNS = [
     "instrument", "date", "is_suspended", "is_limit_up_locked",
     "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
-    "limit_evidence_source", "limit_rule_version",
+    "limit_evidence_source", "limit_rule_version", "limit_regime",
 ]
 LEGACY_STATES = {"st", "*st"}
 VALID_STATES = {"normal", "suspended", "delisted", *LEGACY_STATES}
