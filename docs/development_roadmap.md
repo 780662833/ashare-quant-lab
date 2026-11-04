@@ -125,7 +125,7 @@ test windows remain untouched until the final evaluation.
 
 The user's current Windows lake root is:
 
-`F:\\cnEquity`
+`F:\cnEquity`
 
 Use CNEquity's config resolver; do not hard-code the user-level config file.
 Do not trigger repeated full downloads as part of ordinary research-platform
