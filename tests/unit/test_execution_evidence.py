@@ -22,9 +22,12 @@ def make_status():
 
 def test_normalizer_preserves_orthogonal_st_and_trading_state():
     normalized = normalize_cnequity_trading_status(make_status()).sort("instrument")
-    assert normalized["is_suspended"].to_list() == [False, True, True, False]
-    assert normalized["risk_warning"].to_list() == [True, True, None, True]
-    assert normalized["risk_warning_known"].to_list() == [True, True, False, True]
+    assert normalized["instrument"].to_list() == [
+        "000001.SZ", "000002.SZ", "600000.SH", "600519.SH"
+    ]
+    assert normalized["is_suspended"].to_list() == [True, False, False, True]
+    assert normalized["risk_warning"].to_list() == [True, True, True, None]
+    assert normalized["risk_warning_known"].to_list() == [True, True, True, False]
 
 
 def test_null_risk_warning_is_unknown_not_false():
@@ -36,7 +39,7 @@ def test_null_risk_warning_is_unknown_not_false():
 
 def test_normalizer_rejects_conflicting_or_unknown_status():
     rows = make_status().with_columns(
-        pl.when(pl.col("instrument") == "000001.SZ")
+        pl.when(pl.col("symbol") == "000001.SZ")
         .then(True)
         .otherwise(pl.col("is_trading"))
         .alias("is_trading")
@@ -45,7 +48,7 @@ def test_normalizer_rejects_conflicting_or_unknown_status():
         normalize_cnequity_trading_status(rows)
 
     rows = make_status().with_columns(
-        pl.when(pl.col("instrument") == "600000.SH")
+        pl.when(pl.col("symbol") == "600000.SH")
         .then("unknown")
         .otherwise(pl.col("status"))
         .alias("status")
@@ -79,7 +82,7 @@ def test_combine_execution_evidence_requires_separate_limit_facts():
         "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
         "limit_evidence_source", "limit_rule_version",
     ]
-    assert combined.filter(pl.col("instrument") == "000001.SZ")["is_limit_up_locked"].item()
+    assert combined.filter(pl.col("symbol") == "000001.SZ")["is_limit_up_locked"].item()
 
 
 def test_combine_execution_evidence_fails_closed_on_missing_limit_state():
