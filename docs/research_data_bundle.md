@@ -18,7 +18,7 @@ Call `build_research_data_bundle(...)` with:
 | `raw_bars` | `instrument,date,open,high,low,close,volume,amount` | Raw execution/marking prices |
 | `adjusted_bars` | `instrument,date,adj_close,adj_is_exact` | Exact HFQ signal prices |
 | `universe_membership` | `instrument,date` | Historical as-of membership snapshots |
-| `trading_status` | `instrument,date,is_suspended,is_limit_up_locked,is_limit_down_locked,limit_up,limit_down,risk_warning_known` | Explicit execution and risk-state evidence |
+| `execution_evidence` | `instrument,date,is_suspended,is_limit_up_locked,is_limit_down_locked,limit_up,limit_down,risk_warning_known,limit_evidence_source,limit_rule_version` | Joined native status and separate versioned price-limit evidence |
 | `trading_dates` | ordered exchange-local session dates | Session and next-open timing |
 | `acceptance_report` | matching window/profile and named gate results | Evidence admission |
 | `source_revisions` | non-empty dataset-to-revision map | Reproducibility |
@@ -34,8 +34,11 @@ benchmark**; it still blocks all model-training work. The builder never sets
 - All keyed frames have unique, non-null `(instrument,date)` keys within the
   exact report window.
 - Raw OHLCV is finite and internally valid.
-- Every raw bar has a matching explicit trading-status row and known
-  risk-warning state; a positive-volume row marked suspended is rejected.
+- Every raw bar has a matching explicit execution-evidence row and known
+  risk-warning state; a positive-volume row marked non-trading is rejected.
+- Price-limit evidence carries a non-empty source and rule version, and both
+  are retained in bundle provenance. The resolver must be independently
+  validated for board/date-specific limits and IPO no-limit periods.
 - Limit prices are either null (not applicable) or finite and positive.
 - Every raw bar has exactly one matching adjusted row with
   `adj_is_exact=True`; adjusted and raw key scopes must match.
@@ -70,6 +73,12 @@ No status flag, adjusted price, or universe row is inferred or forward-filled.
 
 This is a reproducible synthetic integration path. It does not certify that
 the current local CNEquity lake can yet provide complete normalized inputs.
-Provider-specific mapping of CNEquity output columns into the canonical
-`trading_status`/price-limit evidence contract remains explicit and must not
-guess unknown lock states.
+CNEquity 0.21.0's native `trading_status` maps only the trading state and
+nullable ST/risk-warning state. Its stable `daily_bars` and
+`trading_status` contracts do not contain price-limit values or locked-limit
+flags. `normalize_cnequity_trading_status()` maps the native status facts;
+`combine_execution_evidence()` joins a separately supplied, versioned
+price-limit evidence table. The project must not derive limit values or lock
+states by guessing a percentage from the previous close or current board.
+Until a verified rule/evidence provider supplies those fields, the bundle
+builder correctly refuses to run the historical execution backtest.
