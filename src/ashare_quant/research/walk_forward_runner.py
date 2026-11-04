@@ -151,6 +151,7 @@ def _aggregate(
     folds: list[WalkForwardMomentumFoldRun],
     *,
     trading_dates: list[str],
+    annualization: int,
 ) -> dict[str, Any]:
     returns = [float(item.report["total_return"]) for item in folds]
     fold_cagrs = [float(item.report["cagr"]) for item in folds]
@@ -187,7 +188,7 @@ def _aggregate(
         "worst_fold_max_drawdown": min(fold_drawdowns),
         "fold_linked_total_return": linked_return,
         "fold_linked_cagr": (
-            (1.0 + linked_return) ** (252 / total_sessions) - 1.0
+            (1.0 + linked_return) ** (annualization / total_sessions) - 1.0
             if contiguous and total_sessions > 0 else None
         ),
         "execution": execution,
@@ -362,5 +363,7 @@ def run_walk_forward_momentum(
         oos_daily=oos_daily,
         oos_orders=oos_orders,
         oos_holdings=oos_holdings,
-        aggregate_report=_aggregate(fold_runs, trading_dates=sessions),
+        aggregate_report=_aggregate(
+            fold_runs, trading_dates=sessions, annualization=annualization
+        ),
     )
