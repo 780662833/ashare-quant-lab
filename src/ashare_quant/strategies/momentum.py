@@ -66,8 +66,11 @@ def _validate_inputs(
     if universe_membership.is_empty():
         raise ValueError("universe_membership must not be empty")
 
-    sessions = sorted(set(_iso_dates(trading_dates, name="trading_dates")))
-    if len(sessions) != len(set(sessions)) or len(sessions) < 2:
+    raw_sessions = _iso_dates(trading_dates, name="trading_dates")
+    if len(raw_sessions) != len(set(raw_sessions)):
+        raise ValueError("trading_dates must contain unique sessions")
+    sessions = sorted(raw_sessions)
+    if len(sessions) < 2:
         raise ValueError("trading_dates must contain at least two unique sessions")
     session_set = set(sessions)
 
