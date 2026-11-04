@@ -96,7 +96,7 @@ def make_inputs(count=12):
         "raw_bars": pl.DataFrame(raw),
         "adjusted_bars": pl.DataFrame(adjusted),
         "universe_membership": pl.DataFrame(membership),
-        "trading_status": pl.DataFrame(status),
+        "execution_evidence": pl.DataFrame(status),
         "trading_dates": sessions,
         "acceptance_report": report,
         "acceptance_report_id": "synthetic-acceptance-v1",
@@ -136,7 +136,7 @@ def test_price_only_benchmark_does_not_require_fundamental_pit_pass():
 
 def test_bundle_rejects_missing_status_row():
     inputs = make_inputs()
-    inputs["trading_status"] = inputs["trading_status"].slice(1)
+    inputs["execution_evidence"] = inputs["execution_evidence"].slice(1)
     with pytest.raises(ResearchBundleError, match="missing evidence"):
         build_research_data_bundle(**inputs)
 
