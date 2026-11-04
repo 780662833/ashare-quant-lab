@@ -143,7 +143,7 @@ def test_price_only_benchmark_does_not_require_fundamental_pit_pass():
 def test_bundle_rejects_missing_status_row():
     inputs = make_inputs()
     inputs["execution_evidence"] = inputs["execution_evidence"].slice(1)
-    with pytest.raises(ResearchBundleError, match="missing evidence"):
+    with pytest.raises(ResearchBundleError, match="key scope differs"):
         build_research_data_bundle(**inputs)
 
 
