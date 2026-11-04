@@ -82,7 +82,18 @@ def summarize_backtest(
     metrics = _performance(daily["nav"], daily["daily_return"], annualization, risk_free_rate)
 
     orders = result.orders
-    total_fees = _safe_float(orders["fees"].sum()) if "fees" in orders.columns and orders.height else 0.0
+    def order_cost(column: str) -> float:
+        # Backward compatible with hand-built/legacy BacktestResult fixtures.
+        if not orders.height or column not in orders.columns:
+            return 0.0
+        return _safe_float(orders[column].sum())
+
+    commission = order_cost("commission")
+    transfer_fee = order_cost("transfer_fee")
+    stamp_duty = order_cost("stamp_duty")
+    total_fees = order_cost("fees")
+    slippage_cost = order_cost("slippage_cost")
+    total_transaction_costs = total_fees + slippage_cost
     if orders.height and {"filled_qty", "fill_price"}.issubset(orders.columns):
         notionals = orders.with_columns(
             (pl.col("filled_qty") * pl.col("fill_price").fill_null(0)).alias("_notional")
@@ -115,8 +126,18 @@ def summarize_backtest(
             "turnover": turnover,
         },
         "costs": {
+            "commission": commission,
+            "transfer_fee": transfer_fee,
+            "stamp_duty": stamp_duty,
+            "slippage_cost": slippage_cost,
             "total_fees": total_fees,
-            "fees_bps_of_initial_nav": total_fees / initial_nav * 10_000 if initial_nav > 0 else 0.0,
+            "total_transaction_costs": total_transaction_costs,
+            "fees_bps_of_initial_nav": (
+                total_fees / initial_nav * 10_000 if initial_nav > 0 else 0.0
+            ),
+            "total_costs_bps_of_initial_nav": (
+                total_transaction_costs / initial_nav * 10_000 if initial_nav > 0 else 0.0
+            ),
         },
         "benchmark": None,
     }
