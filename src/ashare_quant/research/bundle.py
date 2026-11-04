@@ -233,13 +233,16 @@ def build_research_data_bundle(
             pl.col("adj_close").cast(pl.Float64, strict=True),
             pl.col("adj_is_exact").cast(pl.Boolean, strict=True),
         )
-        status = status.with_columns(
-            [pl.col(column).cast(pl.Boolean, strict=True) for column in (
-                "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "risk_warning_known",
-            )],
+        status = status.with_columns([
+            *[
+                pl.col(column).cast(pl.Boolean, strict=True)
+                for column in (
+                    "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "risk_warning_known",
+                )
+            ],
             pl.col("limit_up").cast(pl.Float64, strict=True),
             pl.col("limit_down").cast(pl.Float64, strict=True),
-        )
+        ])
     except Exception as exc:
         raise ResearchBundleError(f"Canonical inputs contain non-canonical value types: {exc}") from exc
 
