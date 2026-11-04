@@ -64,7 +64,6 @@ def make_inputs(count=12):
                 "risk_warning_known": True,
             })
     # Snapshots are required on every final available session in an ISO week.
-    weekly = []
     seen = {}
     for session in sessions:
         year, week, _ = date.fromisoformat(session).isocalendar()
@@ -187,6 +186,24 @@ def test_bundle_rejects_window_mismatch_and_duplicate_calendar():
     inputs = make_inputs()
     inputs["trading_dates"] = inputs["trading_dates"] + [inputs["trading_dates"][0]]
     with pytest.raises(ResearchBundleError, match="unique"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_missing_replayable_source_receipt():
+    inputs = make_inputs()
+    inputs["acceptance_report"] = {
+        **inputs["acceptance_report"],
+        "receipts": {"hfq": {"revision": "a1"}},
+    }
+    with pytest.raises(ResearchBundleError, match="historical_universe receipt"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_membership_snapshot_outside_exchange_calendar():
+    inputs = make_inputs()
+    extra = pl.DataFrame([{"instrument": "600000.SH", "date": "2024-01-06"}])
+    inputs["universe_membership"] = pl.concat([inputs["universe_membership"], extra])
+    with pytest.raises(ResearchBundleError, match="outside trading calendar"):
         build_research_data_bundle(**inputs)
 
 
