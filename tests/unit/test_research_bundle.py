@@ -64,6 +64,7 @@ def make_inputs(count=12):
                 "risk_warning_known": True,
                 "limit_evidence_source": "synthetic_rule_provider",
                 "limit_rule_version": "synthetic-rules-v1",
+                "limit_regime": "synthetic_limited_session",
             })
     # Snapshots are required on every final available session in an ISO week.
     seen = {}
@@ -144,6 +145,16 @@ def test_bundle_rejects_missing_status_row():
     inputs = make_inputs()
     inputs["execution_evidence"] = inputs["execution_evidence"].slice(1)
     with pytest.raises(ResearchBundleError, match="key scope differs"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_locked_limit_without_price_when_passed_directly():
+    inputs = make_inputs()
+    inputs["execution_evidence"] = inputs["execution_evidence"].with_columns(
+        pl.lit(True).alias("is_limit_up_locked"),
+        pl.lit(None, dtype=pl.Float64).alias("limit_up"),
+    )
+    with pytest.raises(ResearchBundleError, match="Limit-up lock flag lacks"):
         build_research_data_bundle(**inputs)
 
 
