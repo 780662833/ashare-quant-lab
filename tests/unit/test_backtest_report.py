@@ -92,3 +92,16 @@ def test_report_attributes_fee_components_and_slippage_separately():
     assert report["costs"]["total_fees"] == pytest.approx(13.0)
     assert report["costs"]["total_transaction_costs"] == pytest.approx(24.0)
     assert report["costs"]["total_costs_bps_of_initial_nav"] == pytest.approx(2400.0)
+
+
+def test_report_rejects_inconsistent_fee_component_ledger():
+    result = make_result()
+    orders = result.orders.with_columns(
+        pl.Series("fees", [5.0, 5.5]),
+        pl.Series("commission", [3.0, 4.0]),
+        pl.Series("transfer_fee", [1.0, 2.0]),
+        pl.Series("stamp_duty", [0.0, 3.0]),
+    )
+    result = BacktestResult(daily=result.daily, orders=orders, holdings=result.holdings)
+    with pytest.raises(ValueError, match="do not equal"):
+        summarize_backtest(result)
