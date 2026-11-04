@@ -219,10 +219,11 @@ The current engine implements a deterministic first slice:
 - Daily NAV is cash plus marked positions.
 
 This is **not yet a full historical exchange simulator**. Known gaps include
-T+1 availability/settlement enforcement, board- and date-specific limit
-regimes, IPO no-limit windows, corporate-action share/cash adjustments,
-historical odd-lot liquidation rules, and a full security-by-calendar status
-matrix. Do not describe results as production-grade A-share simulation until
+T+1 availability/settlement enforcement, a validated historical price-limit
+rule/evidence provider for board- and date-specific limits and IPO no-limit
+windows, corporate-action share/cash adjustments, historical odd-lot
+liquidation rules, and a full security-by-calendar status matrix. CNEquity
+0.21.0 native trading_status does not supply the limit prices or lock flags. Do not describe results as production-grade A-share simulation until
 these are implemented and tested.
 
 Configured costs are experiment assumptions, not a statement of current
@@ -292,7 +293,7 @@ As of 2026-11-04:
 | Deterministic first-slice backtest engine | Implemented; exchange-simulation gaps remain |
 | Performance/execution report | Implemented; aggregate fees only, no category split |
 | Weekly momentum score/targets | Implemented with synthetic tests; real bundle wiring remains Phase 5 |
-| Unified research data bundle | Core builder and momentum orchestration implemented on PR #10; provider-specific CNEquity mapping and local-lake validation remain pending |
+| Unified research data bundle | Core builder and momentum orchestration implemented on PR #10; native CNEquity status normalization implemented; external historical price-limit evidence provider and local-lake validation remain pending |
 | Walk-forward evaluator | Not implemented |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |
