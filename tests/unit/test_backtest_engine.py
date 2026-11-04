@@ -124,3 +124,37 @@ def test_no_leverage_and_costs_reduce_nav():
     assert result.daily["cash"].min() >= -1e-6
     assert result.daily["gross_exposure"].max() <= 1.0 + 1e-9
     assert result.orders["fees"].sum() > 0
+
+
+
+def test_missing_bar_for_new_target_is_recorded_as_no_fill():
+    rows = make_bars(days=3).to_dicts()
+    rows = [row for row in rows if row["date"] != "2024-01-02"]
+    # Keep the session in the calendar through a second instrument.
+    for offset in range(3):
+        day = (date(2024, 1, 1) + timedelta(days=offset)).isoformat()
+        if day == "2024-01-02":
+            row = make_bars(days=3).filter(pl.col("date") == day).to_dicts()[0]
+            row["instrument"] = "000001.SZ"
+            rows.append(row)
+    bars = pl.DataFrame(rows)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01"],
+        "instrument": ["600000.SH"],
+        "weight": [0.5],
+    })
+    result = run_backtest(bars, targets, BacktestConfig(initial_cash=100000))
+    missing_attempt = result.orders.filter(pl.col("reason") == "missing_bar")
+    assert missing_attempt.height == 1
+    assert missing_attempt["status"].item() == "no_fill"
+
+
+def test_configured_top_n_is_enforced():
+    bars = make_bars()
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-01"],
+        "instrument": ["600000.SH", "000001.SZ"],
+        "weight": [0.25, 0.25],
+    })
+    with pytest.raises(ValueError, match="top_n"):
+        run_backtest(bars, targets, BacktestConfig(initial_cash=100000, top_n=1))
