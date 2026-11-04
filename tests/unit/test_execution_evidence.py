@@ -62,6 +62,8 @@ def make_limit_evidence():
         "is_limit_down_locked": [False, False],
         "limit_up": [11.0, 22.0],
         "limit_down": [9.0, 18.0],
+        "source": ["synthetic-exchange-rules"] * 2,
+        "rule_version": ["rules-v1"] * 2,
     })
 
 
@@ -75,6 +77,7 @@ def test_combine_execution_evidence_requires_separate_limit_facts():
     assert combined.columns == [
         "instrument", "date", "is_suspended", "is_limit_up_locked",
         "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
+        "limit_evidence_source", "limit_rule_version",
     ]
     assert combined.filter(pl.col("instrument") == "000001.SZ")["is_limit_up_locked"].item()
 
