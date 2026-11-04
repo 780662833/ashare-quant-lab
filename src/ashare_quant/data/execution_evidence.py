@@ -165,6 +165,7 @@ def combine_execution_evidence(
         pl.col("symbol").alias("instrument"),
         pl.col("trade_date").alias("date"),
         "is_limit_up_locked", "is_limit_down_locked", "limit_up", "limit_down",
+        "limit_regime",
         pl.col("source").cast(pl.String, strict=True).alias("limit_evidence_source"),
         pl.col("rule_version").cast(pl.String, strict=True).alias("limit_rule_version"),
     )
