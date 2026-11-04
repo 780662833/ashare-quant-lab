@@ -21,7 +21,8 @@
 ## Order lifecycle
 
 Represent target selection, order intent, eligibility, requested quantity,
-filled quantity/price, fees, and no-fill/partial-fill reason separately.
+filled quantity/price, commission, transfer fee, stamp duty, slippage
+cost, and no-fill/partial-fill reason separately.
 An unfilled order is not a trade. Existing holdings remain until a valid sell
 executes. Sells are attempted before buys so proceeds can fund buys on the same
 simulation session.
@@ -32,8 +33,12 @@ simulation session.
 - Explicit locked limit-up buys and locked limit-down sells are no-fill.
 - Supplied limit prices are checked against the attempted open.
 - Buy quantities are rounded down to the configured 100-share lot by default.
-- Cash availability, commission/minimum commission, sell stamp duty, transfer
-  fee and slippage are reflected in cash accounting.
+- Cash availability, commission/minimum commission, sell stamp duty, and
+  transfer fee are reflected in cash accounting.
+- Slippage is embedded in fill prices relative to the raw open; the order ledger
+  records its cost separately for reporting and does not deduct it twice.
+- `fees` is the sum of commission, transfer fee, and stamp duty; `slippage_cost`
+  is a separate execution cost.
 
 ## Explicitly not yet fully modeled
 
