@@ -21,7 +21,7 @@ RAW_COLUMNS = {
 EXECUTION_EVIDENCE_COLUMNS = {
     "instrument", "date", "is_suspended", "is_limit_up_locked",
     "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
-    "limit_evidence_source", "limit_rule_version",
+    "limit_evidence_source", "limit_rule_version", "limit_regime",
 }
 ADJUSTED_COLUMNS = {"instrument", "date", "adj_close", "adj_is_exact"}
 UNIVERSE_COLUMNS = {"instrument", "date"}
@@ -288,7 +288,7 @@ def build_research_data_bundle(
         raise ResearchBundleError("execution_evidence contains unknown/null state flags")
     if state.filter(~pl.col("risk_warning_known")).height:
         raise ResearchBundleError("execution_evidence contains unknown risk-warning state")
-    evidence_text = ["limit_evidence_source", "limit_rule_version"]
+    evidence_text = ["limit_evidence_source", "limit_rule_version", "limit_regime"]
     if state.select(pl.any_horizontal([pl.col(c).is_null() for c in evidence_text]).any()).item():
         raise ResearchBundleError("execution_evidence has missing limit source/version provenance")
     if state.filter(
@@ -304,6 +304,18 @@ def build_research_data_bundle(
         ))
     ).height:
         raise ResearchBundleError("execution_evidence contains invalid limit prices")
+    if state.filter(
+        pl.col("is_limit_up_locked") & pl.col("limit_up").is_null()
+    ).height:
+        raise ResearchBundleError("Limit-up lock flag lacks a limit-up price")
+    if state.filter(
+        pl.col("is_limit_down_locked") & pl.col("limit_down").is_null()
+    ).height:
+        raise ResearchBundleError("Limit-down lock flag lacks a limit-down price")
+    if state.filter(
+        pl.col("is_limit_up_locked") & pl.col("is_limit_down_locked")
+    ).height:
+        raise ResearchBundleError("A row cannot be locked at both limit-up and limit-down")
 
     session_set = set(sessions)
     membership_dates = set(membership["date"].to_list())
@@ -384,6 +396,7 @@ def build_research_data_bundle(
         "limit_evidence": {
             "sources": sorted(state["limit_evidence_source"].unique().to_list()),
             "rule_versions": sorted(state["limit_rule_version"].unique().to_list()),
+            "regimes": sorted(state["limit_regime"].unique().to_list()),
             "revision": revisions["price_limit_rules"],
         },
         "scope": {
