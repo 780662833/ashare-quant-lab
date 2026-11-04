@@ -179,3 +179,47 @@ def test_filled_target_is_not_rebalanced_every_day_as_price_moves():
     result = run_backtest(bars, targets, BacktestConfig(initial_cash=100000, costs=zero_costs))
     assert result.orders["date"].to_list() == ["2024-01-02"]
     assert result.orders["filled_qty"].to_list() == [5000]
+
+
+def test_order_ledger_separates_fee_components_and_slippage_without_double_charging():
+    bars = make_bars(days=4)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "weight": [0.5, 0.0],
+    })
+    costs = CostModel(
+        commission_rate=0.001,
+        minimum_commission=2.0,
+        stamp_duty_sell_rate=0.001,
+        transfer_fee_rate=0.0002,
+        slippage_bps=100.0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=1, costs=costs),
+    )
+    assert result.orders["side"].to_list() == ["buy", "sell"]
+    buy, sell = result.orders.row(0, named=True), result.orders.row(1, named=True)
+
+    assert buy["filled_qty"] == 5000
+    assert buy["fill_price"] == pytest.approx(10.10)
+    assert buy["commission"] == pytest.approx(50.5)
+    assert buy["transfer_fee"] == pytest.approx(10.1)
+    assert buy["stamp_duty"] == pytest.approx(0.0)
+    assert buy["slippage_cost"] == pytest.approx(500.0)
+    assert buy["fees"] == pytest.approx(60.6)
+
+    assert sell["filled_qty"] == 5000
+    assert sell["fill_price"] == pytest.approx(9.90)
+    assert sell["commission"] == pytest.approx(49.5)
+    assert sell["transfer_fee"] == pytest.approx(9.9)
+    assert sell["stamp_duty"] == pytest.approx(49.5)
+    assert sell["slippage_cost"] == pytest.approx(500.0)
+    assert sell["fees"] == pytest.approx(108.9)
+
+    # Slippage is embedded in fill_price/cash accounting; only fees are
+    # deducted as a separate cash item. This prevents double subtraction.
+    assert result.daily["cash"].min() >= 0
+    assert result.orders["slippage_cost"].sum() == pytest.approx(1000.0)
+    assert result.orders["fees"].sum() == pytest.approx(169.5)

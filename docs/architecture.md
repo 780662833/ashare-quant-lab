@@ -213,7 +213,7 @@ The current engine implements a deterministic first slice:
 - Buy quantities are rounded down to 100-share lots by default.
 - No leverage or negative cash; unaffordable buys are reduced by whole lots.
 - Commission/minimum commission, sell stamp duty, transfer fee, and slippage
-  reduce cash once per filled order.
+  are reflected in filled prices/cash once; slippage is not double deducted.
 - Missing bars and blocked orders remain visible as no-fill records.
 - Existing positions remain when a sell cannot execute.
 - Daily NAV is cash plus marked positions.
@@ -266,8 +266,8 @@ versions, data receipts/revisions, requested window, universe profile,
 execution/cost configuration, and random seed where applicable.
 
 Report total return, CAGR, annualized volatility, Sharpe, maximum drawdown,
-gross turnover, fill ratio, no-fill counts, aggregate costs, and benchmark
-excess return over the same common window. Walk-forward work must report
+gross turnover, fill ratio, no-fill counts, itemized fees plus slippage cost,
+and benchmark excess return over the same common window. Walk-forward work must report
 fold-level and regime-level results, not only pooled headline metrics.
 
 ## 9. Development discipline
@@ -291,9 +291,9 @@ As of 2026-11-04:
 |---|---|
 | CNEquity 0.21 adapter and four-gate acceptance | Implemented; real-lake gates require local evidence |
 | Deterministic first-slice backtest engine | Implemented; exchange-simulation gaps remain |
-| Performance/execution report | Implemented; aggregate fees only, no category split |
-| Weekly momentum score/targets | Implemented with synthetic tests and shared backtest orchestration; real CNEquity-to-limit-evidence input remains pending |
-| Unified research data bundle | Core builder, momentum orchestration, and native CNEquity status normalization implemented on PR #10; external historical price-limit evidence provider and local-lake validation remain pending |
-| Walk-forward evaluator | Not implemented |
+| Performance/execution report | Implemented; itemized commission, transfer fee, stamp duty, and separately attributed slippage on Phase 7 branch |
+| Weekly momentum score/targets | Merged; canonical bundle orchestration on open PR #10; real CNEquity-to-limit-evidence input remains pending |
+| Unified research data bundle | PR #10 open (CI passed); core builder, momentum orchestration, and native CNEquity status normalization included; external historical price-limit evidence provider and local-lake validation remain pending |
+| Walk-forward fold planner | PR #11 open and stacked on PR #10 (CI passed); plans folds only, does not train/evaluate models |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |

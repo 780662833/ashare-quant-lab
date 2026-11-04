@@ -60,6 +60,16 @@ dataset. The future builder must verify the exact report identity and preserve
 its receipts/revisions with the dataset. See [data_contract.md](data_contract.md)
 and [architecture.md](architecture.md).
 
+## Walk-forward evaluation
+
+Fold boundaries are generated from the official exchange calendar by
+[walk_forward.py](../src/ashare_quant/research/walk_forward.py) using expanding
+or fixed-length rolling training windows. The train-to-validation and
+validation-to-test gaps purge the configured label horizon and add an embargo.
+Out-of-sample test windows must not overlap. See [walk_forward.md](walk_forward.md).
+The current module only plans folds; the fold runner and fold-level strategy
+metrics are still future work.
+
 ## Current implementation boundaries
 
 The first backtest engine is deterministic but is not a full A-share exchange

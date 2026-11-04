@@ -35,8 +35,12 @@ directly. See the system-level architecture before extending a component.
   boundaries, data/time rules, acceptance gates, simulation limitations.
 - [Development roadmap](docs/development_roadmap.md) — phase status, scope,
   exit criteria, and next engineering work.
+- [Walk-forward split plan](docs/walk_forward.md) — chronological folds,
+  label-maturity purge, embargo, and non-overlapping test windows.
 - [Canonical research data bundle](docs/research_data_bundle.md) — data assembly,
   acceptance report identity, provenance, and benchmark orchestration.
+- [Walk-forward split plan](docs/walk_forward.md) — chronological folds,
+  label-maturity purge, embargo, and non-overlapping test windows.
 - [Data contract](docs/data_contract.md) — CNEquity fields, PIT, four-gate admission.
 - [Research protocol](docs/research_protocol.md) — experiment fairness and anti-bias rules.
 - [Backtest rules](docs/backtest_rules.md) — timing, fills, accounting, known gaps.
