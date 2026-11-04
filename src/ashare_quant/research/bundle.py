@@ -138,10 +138,22 @@ def _require_gates(
     failed = sorted(
         name for name in REQUIRED_BENCHMARK_GATES if gate_map.get(name) != "PASS"
     )
+    if gate_map.get("historical_universe_receipt", "PASS") != "PASS":
+        failed.append("historical_universe_receipt")
     if failed:
         raise ResearchBundleError(
             "Benchmark data admission failed these required gates: " + ", ".join(failed)
         )
+
+    receipts = report.get("receipts")
+    if not isinstance(receipts, Mapping):
+        raise ResearchBundleError("Acceptance report is missing its source receipts")
+    for receipt_name in ("historical_universe", "hfq"):
+        receipt = receipts.get(receipt_name)
+        if not isinstance(receipt, Mapping) or not receipt:
+            raise ResearchBundleError(
+                f"Acceptance report is missing replayable {receipt_name} receipt"
+            )
     return {name: gate_map[name] for name in sorted(REQUIRED_BENCHMARK_GATES)}
 
 
@@ -271,6 +283,15 @@ def build_research_data_bundle(
         ))
     ).height:
         raise ResearchBundleError("trading_status contains invalid limit prices")
+
+    session_set = set(sessions)
+    membership_dates = set(membership["date"].to_list())
+    if not membership_dates.issubset(session_set):
+        raise ResearchBundleError("universe_membership contains dates outside trading calendar")
+
+    status_dates = set(status["date"].to_list())
+    if not status_dates.issubset(session_set):
+        raise ResearchBundleError("trading_status contains dates outside trading calendar")
 
     raw_dates = set(raw["date"].to_list())
     if raw_dates != set(sessions):
