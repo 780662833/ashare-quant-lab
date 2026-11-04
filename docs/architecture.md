@@ -292,8 +292,8 @@ As of 2026-11-04:
 | CNEquity 0.21 adapter and four-gate acceptance | Implemented; real-lake gates require local evidence |
 | Deterministic first-slice backtest engine | Implemented; exchange-simulation gaps remain |
 | Performance/execution report | Implemented; aggregate fees only, no category split |
-| Weekly momentum score/targets | Implemented with synthetic tests; real bundle wiring remains Phase 5 |
-| Unified research data bundle | Core builder and momentum orchestration implemented on PR #10; native CNEquity status normalization implemented; external historical price-limit evidence provider and local-lake validation remain pending |
+| Weekly momentum score/targets | Implemented with synthetic tests and shared backtest orchestration; real CNEquity-to-limit-evidence input remains pending |
+| Unified research data bundle | Core builder, momentum orchestration, and native CNEquity status normalization implemented on PR #10; external historical price-limit evidence provider and local-lake validation remain pending |
 | Walk-forward evaluator | Not implemented |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |
