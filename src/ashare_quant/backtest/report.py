@@ -93,6 +93,26 @@ def summarize_backtest(
     stamp_duty = order_cost("stamp_duty")
     total_fees = order_cost("fees")
     slippage_cost = order_cost("slippage_cost")
+    fee_component_columns = {"commission", "transfer_fee", "stamp_duty"}
+    if orders.height and fee_component_columns.issubset(orders.columns) and "fees" in orders.columns:
+        component_check = orders.with_columns(
+            pl.sum_horizontal(
+                "commission", "transfer_fee", "stamp_duty"
+            ).alias("_fee_components")
+        )
+        if component_check.filter(
+            (pl.col("fees") - pl.col("_fee_components")).abs() > 1e-7
+        ).height:
+            raise ValueError("Order fees do not equal commission + transfer_fee + stamp_duty")
+    for name, value in (
+        ("commission", commission),
+        ("transfer_fee", transfer_fee),
+        ("stamp_duty", stamp_duty),
+        ("total_fees", total_fees),
+        ("slippage_cost", slippage_cost),
+    ):
+        if value < -1e-8:
+            raise ValueError(f"{name} must be non-negative")
     total_transaction_costs = total_fees + slippage_cost
     if orders.height and {"filled_qty", "fill_price"}.issubset(orders.columns):
         notionals = orders.with_columns(
