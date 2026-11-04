@@ -98,7 +98,7 @@ def _validate_bars(bars: pl.DataFrame) -> pl.DataFrame:
     return bars.sort(["date", "instrument"])
 
 
-def _validate_targets(targets: pl.DataFrame, trading_dates: set[str]) -> pl.DataFrame:
+def _validate_targets(targets: pl.DataFrame, trading_dates: set[str], top_n: int) -> pl.DataFrame:
     missing = TARGET_COLUMNS.difference(targets.columns)
     if missing:
         raise ValueError(f"Missing target columns: {sorted(missing)}")
@@ -117,6 +117,9 @@ def _validate_targets(targets: pl.DataFrame, trading_dates: set[str]) -> pl.Data
     for signal_date in {_date_text(x) for x in targets["signal_date"].to_list()}:
         if signal_date not in trading_dates:
             raise ValueError(f"Signal date {signal_date} is not a trading session")
+    counts = targets.group_by("signal_date").len()
+    if counts.filter(pl.col("len") > top_n).height:
+        raise ValueError(f"Target holdings exceed configured top_n={top_n}")
     sums = targets.group_by("signal_date").agg(pl.col("weight").sum().alias("total"))
     if sums.filter(pl.col("total") > 1.0 + 1e-9).height:
         raise ValueError("Target weights must not exceed 100% gross exposure")
@@ -176,7 +179,7 @@ def run_backtest(
     cfg = config or BacktestConfig()
     frame = _validate_bars(bars)
     dates = sorted({_date_text(x) for x in frame["date"].to_list()})
-    checked_targets = _validate_targets(targets, set(dates))
+    checked_targets = _validate_targets(targets, set(dates), cfg.top_n)
     targets_by_date: dict[str, dict[str, float]] = {}
     if not checked_targets.is_empty():
         for signal_date in dates:
@@ -211,7 +214,14 @@ def run_backtest(
             current_qty = positions.get(instrument, 0)
             weight = active_targets.get(instrument, 0.0)
             if bar is None:
-                attempts.append((instrument, -current_qty, None))
+                if current_qty:
+                    attempts.append((instrument, -current_qty, None))
+                elif weight > 0:
+                    order_rows.append({
+                        "date": date_value, "instrument": instrument, "side": "buy",
+                        "requested_qty": None, "filled_qty": 0, "fill_price": None,
+                        "fees": 0.0, "status": "no_fill", "reason": "missing_bar",
+                    })
                 continue
             open_price = float(bar["open"])
             desired_qty = floor((target_nav * weight / open_price) / cfg.board_lot) * cfg.board_lot
@@ -268,6 +278,8 @@ def run_backtest(
                         fee = _fees(notional, side, costs)
                         cash -= notional + fee
                         positions[instrument] = positions.get(instrument, 0) + filled
+                    else:
+                        fee = 0.0
             status = (
                 "no_fill" if filled == 0 else
                 "filled" if filled == requested else "partially_filled"
