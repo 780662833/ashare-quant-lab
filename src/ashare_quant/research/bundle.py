@@ -13,6 +13,7 @@ from typing import Any, Mapping
 import polars as pl
 
 from ashare_quant.backtest.engine import weekly_rebalance_dates
+from ashare_quant.exceptions import ResearchBundleError
 
 RAW_COLUMNS = {
     "instrument", "date", "open", "high", "low", "close", "volume", "amount",
@@ -30,10 +31,6 @@ ENGINE_COLUMNS = [
     "instrument", "date", "open", "high", "low", "close", "volume", "amount",
     "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "limit_up", "limit_down",
 ]
-
-
-class ResearchBundleError(ValueError):
-    """Raised when research inputs are incomplete, contradictory, or untraceable."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +147,11 @@ def _require_gates(
         raise ResearchBundleError("Acceptance report is missing its source receipts")
     for receipt_name in ("historical_universe", "hfq"):
         receipt = receipts.get(receipt_name)
-        if not isinstance(receipt, Mapping) or not receipt:
+        if (
+            not isinstance(receipt, Mapping)
+            or not receipt
+            or receipt.get("replayable") is not True
+        ):
             raise ResearchBundleError(
                 f"Acceptance report is missing replayable {receipt_name} receipt"
             )
@@ -276,7 +277,7 @@ def build_research_data_bundle(
     if state.select(pl.any_horizontal([pl.col(c).is_null() for c in status_flags]).any()).item():
         raise ResearchBundleError("execution_evidence contains unknown/null state flags")
     if state.filter(~pl.col("risk_warning_known")).height:
-        raise ResearchBundleError("trading_status contains unknown risk-warning state")
+        raise ResearchBundleError("execution_evidence contains unknown risk-warning state")
     if state.filter(
         (pl.col("limit_up").is_not_null() & (
             (~pl.col("limit_up").is_finite()) | (pl.col("limit_up") <= 0)
@@ -292,7 +293,7 @@ def build_research_data_bundle(
     if not membership_dates.issubset(session_set):
         raise ResearchBundleError("universe_membership contains dates outside trading calendar")
 
-    status_dates = set(status["date"].to_list())
+    status_dates = set(state["date"].to_list())
     if not status_dates.issubset(session_set):
         raise ResearchBundleError("trading_status contains dates outside trading calendar")
 
