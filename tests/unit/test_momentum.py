@@ -3,6 +3,8 @@ from datetime import date, timedelta
 import polars as pl
 import pytest
 
+from ashare_quant.backtest import BacktestConfig, run_backtest
+
 from ashare_quant.strategies.momentum import (
     MomentumConfig,
     momentum_scores,
@@ -133,6 +135,42 @@ def test_momentum_rejects_duplicate_trading_sessions():
             bars, members, sessions + [sessions[0]],
             MomentumConfig(lookback_sessions=8, skip_recent_sessions=2),
         )
+
+
+def test_momentum_targets_flow_into_shared_backtest_next_open():
+    adjusted, members, sessions = make_market()
+    cfg = MomentumConfig(top_n=2, lookback_sessions=8, skip_recent_sessions=2)
+    targets = weekly_momentum_targets(adjusted, members, sessions, cfg)
+
+    execution_rows = []
+    for row in adjusted.to_dicts():
+        close = float(row["adj_close"])
+        open_price = close * 1.001
+        execution_rows.append({
+            "instrument": row["instrument"],
+            "date": row["date"],
+            "open": open_price,
+            "high": max(open_price, close) * 1.01,
+            "low": min(open_price, close) * 0.99,
+            "close": close,
+            "volume": 100000,
+            "amount": close * 100000,
+            "is_suspended": False,
+            "is_limit_up_locked": False,
+            "is_limit_down_locked": False,
+            "limit_up": close * 1.20,
+            "limit_down": close * 0.80,
+        })
+    result = run_backtest(
+        pl.DataFrame(execution_rows),
+        targets,
+        BacktestConfig(initial_cash=1_000_000, top_n=2),
+    )
+    assert result.orders.height > 0
+    assert min(result.orders["date"].to_list()) == "2024-01-15"
+    assert result.orders.filter(pl.col("date") == "2024-01-15")["status"].is_in(
+        ["filled", "partially_filled"]
+    ).all()
 
 
 def test_config_requires_a_valid_momentum_window():
