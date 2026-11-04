@@ -201,12 +201,14 @@ def combine_execution_evidence(
         pl.any_horizontal(
             pl.col("limit_evidence_source").is_null(),
             pl.col("limit_rule_version").is_null(),
+        pl.col("limit_regime").is_null(),
         ).any()
     ).item():
         raise ResearchBundleError("Price-limit evidence is missing source/version provenance")
     if combined.filter(
         (pl.col("limit_evidence_source").str.strip_chars() == "") |
-        (pl.col("limit_rule_version").str.strip_chars() == "")
+        (pl.col("limit_rule_version").str.strip_chars() == "") |
+        (pl.col("limit_regime").str.strip_chars() == "")
     ).height:
         raise ResearchBundleError("Price-limit evidence has empty source/version provenance")
     if combined.filter(
@@ -218,6 +220,10 @@ def combine_execution_evidence(
         ))
     ).height:
         raise ResearchBundleError("Execution evidence contains invalid price limits")
+    if combined.filter(
+        pl.col("is_limit_up_locked") & pl.col("is_limit_down_locked")
+    ).height:
+        raise ResearchBundleError("A row cannot be locked at both limit-up and limit-down")
     if combined.filter(pl.col("is_limit_up_locked") & pl.col("limit_up").is_null()).height:
         raise ResearchBundleError("Limit-up lock flag lacks a limit-up price")
     if combined.filter(pl.col("is_limit_down_locked") & pl.col("limit_down").is_null()).height:
