@@ -294,6 +294,6 @@ As of 2026-11-04:
 | Performance/execution report | Implemented; aggregate fees only, no category split |
 | Weekly momentum score/targets | Implemented with synthetic tests and shared backtest orchestration; real CNEquity-to-limit-evidence input remains pending |
 | Unified research data bundle | Core builder, momentum orchestration, and native CNEquity status normalization implemented on PR #10; external historical price-limit evidence provider and local-lake validation remain pending |
-| Walk-forward evaluator | Not implemented |
+| Walk-forward fold planner | Implemented on stacked Phase 6 branch; does not train/evaluate models yet |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |
