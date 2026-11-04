@@ -295,6 +295,6 @@ As of 2026-11-04:
 | Weekly momentum score/targets | Merged in PR #9; canonical bundle orchestration merged in PR #10; direct CNEquity-to-limit-evidence input remains pending |
 | Unified research data bundle | Merged in PR #10; core builder, momentum orchestration and native CNEquity status normalization have synthetic coverage; direct source assembly, audited historical price-limit evidence and local-lake validation remain pending |
 | Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
-| Walk-forward momentum runner | Implemented on the Phase 8 branch; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
+| Walk-forward momentum runner | PR #13 open; cutoff-isolated deterministic momentum replay and test-only fold ledgers; CI pending; no model training |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |
