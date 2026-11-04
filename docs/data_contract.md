@@ -85,7 +85,7 @@ Use the project's current local lake path:
 ```powershell
 python -m pip install -e ".[dev]"
 python scripts/validate_cnequity_lake.py `
-  --data-root "F:\python\ashare-quant-lab\data\cnequity" `
+  --data-root "F:\\cnEquity" `
   --start-date 2018-01-01 `
   --end-date 2025-12-31
 ```
