@@ -199,6 +199,7 @@ def run_backtest(
     positions: dict[str, int] = {}
     active_targets: dict[str, float] = {}
     target_nav = cfg.initial_cash
+    desired_quantities: dict[str, int] = {}
     daily_rows: list[dict[str, Any]] = []
     order_rows: list[dict[str, Any]] = []
     holding_rows: list[dict[str, Any]] = []
@@ -213,18 +214,21 @@ def run_backtest(
             bar = day.get(instrument)
             current_qty = positions.get(instrument, 0)
             weight = active_targets.get(instrument, 0.0)
-            if bar is None:
-                if current_qty:
-                    attempts.append((instrument, -current_qty, None))
-                elif weight > 0:
+            if weight <= 0:
+                desired_quantities[instrument] = 0
+            elif instrument not in desired_quantities:
+                if bar is None:
                     order_rows.append({
                         "date": date_value, "instrument": instrument, "side": "buy",
                         "requested_qty": None, "filled_qty": 0, "fill_price": None,
                         "fees": 0.0, "status": "no_fill", "reason": "missing_bar",
                     })
-                continue
-            open_price = float(bar["open"])
-            desired_qty = floor((target_nav * weight / open_price) / cfg.board_lot) * cfg.board_lot
+                    continue
+                open_price = float(bar["open"])
+                desired_quantities[instrument] = (
+                    floor((target_nav * weight / open_price) / cfg.board_lot) * cfg.board_lot
+                )
+            desired_qty = desired_quantities[instrument]
             delta = desired_qty - current_qty
             if delta:
                 attempts.append((instrument, delta, bar))
@@ -318,6 +322,9 @@ def run_backtest(
         if date_value in targets_by_date:
             active_targets = targets_by_date[date_value]
             target_nav = nav
+            desired_quantities = {
+                instrument: 0 for instrument in positions if instrument not in active_targets
+            }
 
     return BacktestResult(
         daily=pl.DataFrame(daily_rows),

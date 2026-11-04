@@ -158,3 +158,24 @@ def test_configured_top_n_is_enforced():
     })
     with pytest.raises(ValueError, match="top_n"):
         run_backtest(bars, targets, BacktestConfig(initial_cash=100000, top_n=1))
+
+
+
+def test_filled_target_is_not_rebalanced_every_day_as_price_moves():
+    rows = make_bars(days=3).to_dicts()
+    rows[2]["open"] = 12.0
+    rows[2]["high"] = 13.5
+    rows[2]["close"] = 12.5
+    bars = pl.DataFrame(rows)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01"],
+        "instrument": ["600000.SH"],
+        "weight": [0.5],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+    result = run_backtest(bars, targets, BacktestConfig(initial_cash=100000, costs=zero_costs))
+    assert result.orders["date"].to_list() == ["2024-01-02"]
+    assert result.orders["filled_qty"].to_list() == [5000]
