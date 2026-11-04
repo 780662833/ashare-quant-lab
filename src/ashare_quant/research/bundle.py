@@ -17,7 +17,7 @@ from ashare_quant.backtest.engine import weekly_rebalance_dates
 RAW_COLUMNS = {
     "instrument", "date", "open", "high", "low", "close", "volume", "amount",
 }
-STATUS_COLUMNS = {
+EXECUTION_EVIDENCE_COLUMNS = {
     "instrument", "date", "is_suspended", "is_limit_up_locked",
     "is_limit_down_locked", "limit_up", "limit_down", "risk_warning_known",
 }
@@ -162,7 +162,7 @@ def build_research_data_bundle(
     raw_bars: pl.DataFrame,
     adjusted_bars: pl.DataFrame,
     universe_membership: pl.DataFrame,
-    trading_status: pl.DataFrame,
+    execution_evidence: pl.DataFrame,
     trading_dates: list[Any],
     acceptance_report: Mapping[str, Any],
     acceptance_report_id: str,
@@ -221,8 +221,8 @@ def build_research_data_bundle(
         universe_membership, name="universe_membership",
         required_columns=UNIVERSE_COLUMNS, start_date=start, end_date=end,
     )
-    status = _keyed_frame(
-        trading_status, name="trading_status", required_columns=STATUS_COLUMNS,
+    state = _keyed_frame(
+        execution_evidence, name="execution_evidence", required_columns=EXECUTION_EVIDENCE_COLUMNS,
         start_date=start, end_date=end,
     )
 
@@ -233,7 +233,7 @@ def build_research_data_bundle(
             pl.col("adj_close").cast(pl.Float64, strict=True),
             pl.col("adj_is_exact").cast(pl.Boolean, strict=True),
         )
-        status = status.with_columns([
+        state = state.with_columns([
             *[
                 pl.col(column).cast(pl.Boolean, strict=True)
                 for column in (
@@ -273,11 +273,11 @@ def build_research_data_bundle(
     status_flags = [
         "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "risk_warning_known",
     ]
-    if status.select(pl.any_horizontal([pl.col(c).is_null() for c in status_flags]).any()).item():
-        raise ResearchBundleError("trading_status contains unknown/null state flags")
-    if status.filter(~pl.col("risk_warning_known")).height:
+    if state.select(pl.any_horizontal([pl.col(c).is_null() for c in status_flags]).any()).item():
+        raise ResearchBundleError("execution_evidence contains unknown/null state flags")
+    if state.filter(~pl.col("risk_warning_known")).height:
         raise ResearchBundleError("trading_status contains unknown risk-warning state")
-    if status.filter(
+    if state.filter(
         (pl.col("limit_up").is_not_null() & (
             (~pl.col("limit_up").is_finite()) | (pl.col("limit_up") <= 0)
         )) |
@@ -285,7 +285,7 @@ def build_research_data_bundle(
             (~pl.col("limit_down").is_finite()) | (pl.col("limit_down") <= 0)
         ))
     ).height:
-        raise ResearchBundleError("trading_status contains invalid limit prices")
+        raise ResearchBundleError("execution_evidence contains invalid limit prices")
 
     session_set = set(sessions)
     membership_dates = set(membership["date"].to_list())
@@ -330,13 +330,13 @@ def build_research_data_bundle(
         )
 
     raw_keys_status = raw_keys.join(
-        status.select("instrument", "date"), on=["instrument", "date"], how="anti"
+        state.select("instrument", "date"), on=["instrument", "date"], how="anti"
     )
     if raw_keys_status.height:
         raise ResearchBundleError(
-            f"trading_status missing evidence for {raw_keys_status.height} raw market rows"
+            f"execution_evidence missing evidence for {raw_keys_status.height} raw market rows"
         )
-    joined = raw.join(status, on=["instrument", "date"], how="left")
+    joined = raw.join(state, on=["instrument", "date"], how="left")
     if joined.select(pl.any_horizontal([pl.col(c).is_null() for c in status_flags]).any()).item():
         raise ResearchBundleError("Joined execution rows contain missing trading-state evidence")
     if joined.filter(pl.col("is_suspended") & (pl.col("volume") > 0)).height:
