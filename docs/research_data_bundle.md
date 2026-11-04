@@ -37,8 +37,9 @@ benchmark**; it still blocks all model-training work. The builder never sets
 - Raw OHLCV is finite and internally valid.
 - Every raw bar has a matching explicit execution-evidence row and known
   risk-warning state; a positive-volume row marked non-trading is rejected.
-- Price-limit evidence carries a non-empty source and rule version, and both
-  are retained in bundle provenance. The resolver must be independently
+- Price-limit evidence carries a non-empty source, rule version and per-row
+  regime code (including explicit no-limit regimes); these are retained in
+  bundle provenance. The resolver must be independently
   validated for board/date-specific limits and IPO no-limit periods.
 - Limit prices are either null (not applicable) or finite and positive.
 - Every raw bar has exactly one matching adjusted row with
