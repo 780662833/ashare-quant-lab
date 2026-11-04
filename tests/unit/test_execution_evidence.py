@@ -97,6 +97,16 @@ def test_combine_execution_evidence_fails_closed_on_missing_limit_state():
         combine_execution_evidence(raw, native, limits)
 
 
+def test_combine_execution_evidence_rejects_empty_limit_regime():
+    native = normalize_cnequity_trading_status(make_status())
+    raw = pl.DataFrame({"instrument": ["600000.SH"], "date": ["2024-01-02"]})
+    limits = make_limit_evidence().head(1).with_columns(
+        pl.lit("").alias("limit_regime")
+    )
+    with pytest.raises(ResearchBundleError, match="empty source/version provenance"):
+        combine_execution_evidence(raw, native, limits)
+
+
 def test_combine_execution_evidence_rejects_lock_without_limit_price():
     native = normalize_cnequity_trading_status(make_status())
     raw = pl.DataFrame({"instrument": ["600000.SH"], "date": ["2024-01-02"]})
