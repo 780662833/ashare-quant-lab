@@ -272,9 +272,8 @@ def run_walk_forward_momentum(
                 f"{fold.fold_id} is missing the preceding-session NAV baseline {baseline_date}"
             )
         test_daily = full_daily.filter(
-            pl.col("date").cast(pl.String).is_between(
-                fold.test_start, fold.test_end, closed="both"
-            )
+            (pl.col("date").cast(pl.String) >= pl.lit(fold.test_start))
+            & (pl.col("date").cast(pl.String) <= pl.lit(fold.test_end))
         )
         if test_daily.height != fold.test_sessions:
             raise ValueError(
@@ -282,14 +281,12 @@ def run_walk_forward_momentum(
                 f"received {test_daily.height}"
             )
         test_orders = benchmark.result.orders.filter(
-            pl.col("date").cast(pl.String).is_between(
-                fold.test_start, fold.test_end, closed="both"
-            )
+            (pl.col("date").cast(pl.String) >= pl.lit(fold.test_start))
+            & (pl.col("date").cast(pl.String) <= pl.lit(fold.test_end))
         )
         test_holdings = benchmark.result.holdings.filter(
-            pl.col("date").cast(pl.String).is_between(
-                fold.test_start, fold.test_end, closed="both"
-            )
+            (pl.col("date").cast(pl.String) >= pl.lit(fold.test_start))
+            & (pl.col("date").cast(pl.String) <= pl.lit(fold.test_end))
         )
         baseline_nav = float(baseline["nav"].item())
         report = _fold_report(
