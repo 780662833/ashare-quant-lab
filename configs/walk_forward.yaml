@@ -1,0 +1,9 @@
+walk_forward:
+  min_train_sessions: 504
+  validation_sessions: 63
+  test_sessions: 63
+  step_sessions: null
+  label_horizon_sessions: 5
+  embargo_sessions: 1
+  expanding_train: true
+  random_split: false

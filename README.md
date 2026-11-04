@@ -1,13 +1,13 @@
 # ashare-quant-lab
 
-A reproducible A-share quantitative research MVP. The goal is to test whether a
-cross-sectional stock-selection model has persistent, executable, net-of-cost
-alpha—not to build an automated trading platform.
+A reproducible A-share quantitative **research** MVP. The goal is to test
+whether a cross-sectional stock-selection model has persistent, executable,
+net-of-cost alpha—not to build an automated trading platform.
 
 ## Frozen v1 scope
 
 - One weekly cross-sectional model strategy (LightGBM).
-- One simple weekly momentum benchmark.
+- One transparent weekly momentum benchmark (126-session lookback, 21-session skip).
 - Top 20 holdings, equal-weight target allocation, no leverage.
 - Historical backtest, walk-forward evaluation, daily holdings, trades, and
   return/risk reports.
@@ -16,15 +16,36 @@ alpha—not to build an automated trading platform.
 
 ## Architecture
 
-- **CNEquity**: authoritative source for historical market/universe/fundamental
-  facts and point-in-time availability. Integration is isolated behind an adapter.
-- **DuckDB + Polars**: research queries and deterministic data transformations.
-- **Qlib + LightGBM**: feature dataset/model training and prediction workflow.
-- **Native backtest module**: A-share execution constraints, costs, holdings,
-  and accounting.
+- **CNEquity 0.21.0**: sole authoritative source for historical market,
+  universe, adjustment, trading-status, and PIT facts.
+- **DuckDB + Polars**: local analytical queries and deterministic transforms.
+- **Qlib + LightGBM**: optional research/model workflow; training remains gated.
+- **Native backtest module**: shared A-share execution, cost, holdings, and
+  accounting engine for both model and benchmark strategies.
+- **Report module**: NAV performance, risk, turnover, fill, costs, and
+  benchmark-relative summaries.
 
-No second source of truth for market data is allowed. Do not assume a trade
-filled when the security is suspended or locked at an unfillable price limit.
+Raw OHLC is for execution; HFQ adjusted prices are for research signals.
+Strategies emit target weights and never place orders or query CNEquity
+directly. See the system-level architecture before extending a component.
+
+## Documentation index
+
+- [Architecture and engineering contract](docs/architecture.md) — components,
+  boundaries, data/time rules, acceptance gates, simulation limitations.
+- [Development roadmap](docs/development_roadmap.md) — phase status, scope,
+  exit criteria, and next engineering work.
+- [Walk-forward split plan](docs/walk_forward.md) — chronological folds,
+  label-maturity purge, embargo, and non-overlapping test windows.
+- [Canonical research data bundle](docs/research_data_bundle.md) — data assembly,
+  acceptance report identity, provenance, and benchmark orchestration.
+- [Walk-forward split plan](docs/walk_forward.md) — chronological folds,
+  label-maturity purge, embargo, and non-overlapping test windows.
+- [Data contract](docs/data_contract.md) — CNEquity fields, PIT, four-gate admission.
+- [Research protocol](docs/research_protocol.md) — experiment fairness and anti-bias rules.
+- [Backtest rules](docs/backtest_rules.md) — timing, fills, accounting, known gaps.
+- [Momentum benchmark](docs/momentum_benchmark.md) — weekly 126/21 signal definition.
+- [Backtest report](docs/backtest_report.md) — metric definitions and caveats.
 
 ## Development
 
@@ -32,31 +53,26 @@ Install the package and development dependencies:
 
 ```bash
 python -m pip install -e ".[dev]"
-pytest
+python -m pytest
 ```
 
-Install model dependencies when entering the model stage:
+Install model dependencies only when entering the model stage:
 
 ```bash
 python -m pip install -e ".[research]"
 ```
 
-CNEquity is pinned to the inspected 0.21.0 release. Its public query and
-quality contracts are isolated behind the adapter and the local four-gate
-acceptance runner. See `docs/data_contract.md` before using any lake data.
+CI tests use synthetic data and do not certify the local CNEquity lake. See
+[docs/data_contract.md](docs/data_contract.md) for local data acceptance.
 
 ## Research integrity
 
-- Every feature must be available at the simulated decision timestamp.
+- Every feature must be knowable at the simulated decision timestamp.
 - Labels must use strictly future outcomes and be separated from features.
 - Train/validation/test splits are chronological; no random time-series split.
 - Universe membership is point-in-time, including delisted securities.
-- Corporate actions, suspensions, price limits, lot sizes, and costs must be
-  represented explicitly.
-- Failed/unfilled orders remain visible; they are never silently dropped.
-- Model and momentum benchmark use the same universe, schedule, execution
-  assumptions, and cost model.
-
-See [docs/research_protocol.md](docs/research_protocol.md),
-[docs/data_contract.md](docs/data_contract.md), and
-[docs/backtest_rules.md](docs/backtest_rules.md).
+- Costs, execution restrictions, and unfilled orders must remain visible.
+- Model and momentum benchmark use the same universe, schedule, execution,
+  cost model, and report window.
+- Training remains locked until all four data acceptance gates pass for the
+  exact same window and data revisions; a PASS report alone does not unlock it.

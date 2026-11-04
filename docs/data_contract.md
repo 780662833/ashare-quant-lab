@@ -1,12 +1,24 @@
 # Data contract
 
-CNEquity 0.21.0 is the sole authoritative provider of market and point-in-time facts. The v1 default universe is the official research-eligible `cn_a_sh_sz_research_v1` profile (Shanghai/Shenzhen only); Beijing remains excluded because CNEquity labels its all-exchange profile experimental.
+CNEquity 0.21.0 is the sole authoritative provider of market and point-in-time
+facts. The v1 default universe is the documented research-eligible
+`cn_a_sh_sz_research_v1` profile (Shanghai/Shenzhen only); Beijing remains
+excluded because CNEquity labels its all-exchange profile experimental.
 
-`daily_bars` is historical price data, not itself a point-in-time universe. Use the versioned profile for the selection-date universe, and read `trading_status` separately for execution/no-fill decisions. Keep raw OHLC for fills and use `adj_*` only for return/feature calculations.
+`daily_bars` is historical price data, not itself a point-in-time universe.
+Use the versioned profile for the selection-date universe, and read
+`trading_status` separately for execution/no-fill decisions. Keep raw OHLC for
+fills and use `adj_*` only for return/feature calculations.
 
-For fundamentals, use `financial_statement_items` with both `as_of` and `pit_mode="strict"`. CNEquity's `pit_quality` value for exact, contemporaneously observed evidence is `strict`; `reconstructed`, `snapshot_only`, `not_applicable`, null or missing evidence is not eligible for model features. Empty strict results are a data-coverage failure, not permission to fall back to best-effort.
+For fundamentals, use `financial_statement_items` with both `as_of` and
+`pit_mode="strict"`. CNEquity's `pit_quality` value for exact,
+contemporaneously observed evidence is `strict`; `reconstructed`,
+`snapshot_only`, `not_applicable`, null or missing evidence is not eligible
+for model features. Empty strict results are a coverage failure, not permission
+to fall back to best-effort.
 
-Application code accesses CNEquity through the adapter and the explicit acceptance runner; strategy/model modules must not query CNEquity internals directly.
+Application code accesses CNEquity through the adapter and the explicit
+acceptance runner; strategy/model modules must not query CNEquity internals.
 
 ## Canonical keys and timestamps
 
@@ -31,49 +43,65 @@ time; revisions must not overwrite historically knowable values.
 ## Four-gate data admission
 
 No model-training input may be built until all four gates pass for the exact
-research window and CNEquity data revisions:
+research window, universe profile, and CNEquity data revisions:
 
-1. **Historical universe** — CNEquity's `historical_universe_validity()`
-   verifies window coverage, interior trading-session gaps, historical ST
-   evidence receipts, and delisted-security survivorship for the selected
-   versioned profile.
+1. **Historical universe** — historical membership, interior trading-session
+   gaps, ST evidence, listing/delisting and survivorship checks for the
+   selected versioned profile.
 2. **HFQ adjustment** — require `adjust="hfq"` and `strict_adj=True`, then
-   run CNEquity's revision-bound `publish_factor_diagnostics()`. Factor
-   coverage alone is not accuracy. Missing/unassessed diagnostics or unresolved
-   historical factor/action contradictions fail this gate.
+   run revision-bound factor diagnostics. Factor coverage alone is not
+   historical adjustment accuracy.
 3. **PIT fundamentals** — query only with `as_of` and
    `pit_mode="strict"`; require non-empty rows, `pit_is_exact=True`,
-   `pit_quality="strict"`, and complete coverage for the requested
-   symbol/item pairs.
-4. **Trading status** — every positive-volume SH/SZ stock bar must have
-   corresponding trading-status evidence, known risk-warning state, and no
-   contradiction between a print and a non-trading/suspended status.
+   `pit_quality="strict"`, complete requested symbol/item coverage, and
+   availability no later than the simulated decision time.
+4. **Trading status** — the current acceptance check validates evidence and
+   risk-warning state for observed positive-volume SH/SZ stock bars and
+   surfaces contradictions.
 
-Any missing evidence is FAIL. There is no best-effort fallback. The acceptance
-report records the requested window, profile, symbol/row counts, monthly
-coverage, blockers, software versions and CNEquity read receipts/revisions.
-This report does not itself unlock training; a future training-data builder
-must explicitly verify an overall PASS report for the same window/profile and
-must preserve the report/receipts with the dataset.
+Any missing evidence is FAIL. There is no best-effort fallback. The
+acceptance report records the requested window, profile, counts, blockers,
+software versions and CNEquity read receipts/revisions.
+
+**Scope limitation:** the current trading-status check is based on observed
+positive-volume SH/SZ bars. It is not yet a complete instrument-by-calendar
+matrix proving every suspension/non-trading date. That remains a Phase 5+
+data-contract gap.
+
+This report does not itself unlock training. A future training-data builder
+must explicitly verify an overall PASS report for the same window/profile/data
+revisions and preserve the report/receipts with the dataset.
+`training_dataset_unlocked` remains false until that separate implementation.
+
+A pure price-momentum benchmark does not consume fundamental PIT features, but
+still requires valid historical membership, adjusted-price evidence, official
+calendar, and execution-state evidence. This exception does not authorize model
+training.
 
 ### Run locally on Windows
 
-The local CNEquity lake is not available to GitHub Actions. From the repository
-root, install the project dependencies and run:
+Use the project's current local lake path:
 
 ```powershell
 python -m pip install -e ".[dev]"
 python scripts/validate_cnequity_lake.py `
-  --data-root "F:\\cnEquity" `
+  --data-root "F:\python\ashare-quant-lab\data\cnequity" `
   --start-date 2018-01-01 `
   --end-date 2025-12-31
 ```
 
-The default PIT item codes are CNEquity-documented `roe` and `net_profit`.
-They can be overridden with `--pit-items` and must be valid CNEquity item
-codes. Reports are written to `reports/data_acceptance/` as JSON and Markdown.
-Exit code 0 means all four gates passed; exit code 2 means one or more gates
-failed. A successful report still does not create a training dataset.
+The CNEquity user configuration is resolved by its local config resolver;
+avoid hard-coding an account-specific configuration path. Default PIT item
+codes are CNEquity-documented `roe` and `net_profit`. Reports are written to
+`reports/data_acceptance/` as JSON and Markdown. Exit code 0 means all gates
+passed; exit code 2 means one or more gates failed. A successful report still
+does not create a training dataset.
+
+## CNEquity v0.21.0 status and price-limit semantics
+
+The exact v0.21.0 contract declares `trading_status` fields `symbol`, `trade_date`, `is_trading`, `status`, `risk_warning`, `source`, `data_version`, and `fetched_at`. The domain model defines `status` as `normal` / `suspended` / `delisted`, while ST/*ST is orthogonal in `risk_warning`; null is unknown, not false. Legacy `status="st"` / `"*st"` is interpreted as positive ST evidence by the compatibility normalizer. See the [v0.21.0 contract](https://github.com/rootSunc/CNEquity/blob/v0.21.0/contracts/v0.21.0.json) and [v0.21.0 trading-status implementation](https://github.com/rootSunc/CNEquity/blob/v0.21.0/src/cnequity/domain/trading_status.py).
+
+The same release contract does not publish daily limit-up/down prices or locked-limit flags in `daily_bars` or `trading_status`. Consequently, the project must receive these from a separately audited, versioned historical rule/evidence source. Until that source can correctly model board/date regimes and no-limit periods, a real execution bundle cannot be built. This is intentional fail-closed behavior, not a missing-value imputation task.
 
 ## Validation
 
@@ -85,5 +113,5 @@ explicitly; do not silently forward-fill unexplained gaps.
 
 The concrete adapter is pinned to CNEquity 0.21.0. Its query arguments,
 profile semantics, PIT quality values and diagnostic APIs are taken from that
-release's public API contract; changes to the pinned upstream version require
-a fresh contract review and adapter tests.
+release's public API contract; a version upgrade requires a fresh contract
+review and adapter tests.

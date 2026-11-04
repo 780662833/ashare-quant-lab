@@ -72,3 +72,36 @@ def test_report_rejects_invalid_nav():
 def test_report_rejects_invalid_annualization():
     with pytest.raises(ValueError, match="annualization"):
         summarize_backtest(make_result(), annualization=0)
+
+
+def test_report_attributes_fee_components_and_slippage_separately():
+    result = make_result()
+    orders = result.orders.with_columns(
+        pl.Series("fees", [4.0, 9.0]),
+        pl.Series("commission", [3.0, 4.0]),
+        pl.Series("transfer_fee", [1.0, 2.0]),
+        pl.Series("stamp_duty", [0.0, 3.0]),
+        pl.Series("slippage_cost", [5.0, 6.0]),
+    )
+    result = BacktestResult(daily=result.daily, orders=orders, holdings=result.holdings)
+    report = summarize_backtest(result)
+    assert report["costs"]["commission"] == pytest.approx(7.0)
+    assert report["costs"]["transfer_fee"] == pytest.approx(3.0)
+    assert report["costs"]["stamp_duty"] == pytest.approx(3.0)
+    assert report["costs"]["slippage_cost"] == pytest.approx(11.0)
+    assert report["costs"]["total_fees"] == pytest.approx(13.0)
+    assert report["costs"]["total_transaction_costs"] == pytest.approx(24.0)
+    assert report["costs"]["total_costs_bps_of_initial_nav"] == pytest.approx(2400.0)
+
+
+def test_report_rejects_inconsistent_fee_component_ledger():
+    result = make_result()
+    orders = result.orders.with_columns(
+        pl.Series("fees", [5.0, 5.5]),
+        pl.Series("commission", [3.0, 4.0]),
+        pl.Series("transfer_fee", [1.0, 2.0]),
+        pl.Series("stamp_duty", [0.0, 3.0]),
+    )
+    result = BacktestResult(daily=result.daily, orders=orders, holdings=result.holdings)
+    with pytest.raises(ValueError, match="do not equal"):
+        summarize_backtest(result)
