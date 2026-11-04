@@ -62,6 +62,8 @@ def make_inputs(count=12):
                 "limit_up": close * 1.20,
                 "limit_down": close * 0.80,
                 "risk_warning_known": True,
+                "limit_evidence_source": "synthetic_rule_provider",
+                "limit_rule_version": "synthetic-rules-v1",
             })
     # Snapshots are required on every final available session in an ISO week.
     seen = {}
@@ -83,7 +85,10 @@ def make_inputs(count=12):
             {"name": "point_in_time_fundamentals", "status": "FAIL"},
             {"name": "trading_status", "status": "PASS"},
         ],
-        "receipts": {"historical_universe": {"revision": "u1"}, "hfq": {"revision": "a1"}},
+        "receipts": {
+            "historical_universe": {"revision": "u1", "replayable": True},
+            "hfq": {"revision": "a1", "replayable": True},
+        },
     }
     revisions = {
         "daily_bars": "daily-v1",
@@ -91,6 +96,7 @@ def make_inputs(count=12):
         "universe": "universe-v1",
         "trading_status": "status-v1",
         "trading_calendar": "calendar-v1",
+        "price_limit_rules": "synthetic-rules-v1",
     }
     return {
         "raw_bars": pl.DataFrame(raw),
