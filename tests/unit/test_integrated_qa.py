@@ -26,13 +26,15 @@ def base_report():
         "conclusion": "INSUFFICIENT_EVIDENCE",
     }
 
-def fill_report():
+def fill_report(admission="PRICE_ONLY_ELIGIBLE"):
     return {
-        "admission_decision": "PRICE_ONLY_ELIGIBLE",
+        "experiment_id": "experiment-001",
+        "admission_decision": admission,
         "observed_baseline_execution": {"share_fill_ratio": 0.91, "no_fill_reasons": {"suspended": 2}},
         "engine_capabilities": {"deterministic_target_fill_ratio_policy": False},
         "scenarios": [
-            {"scenario_id": f"F{i}", "target_fill_ratio": ratio, "status": "UNSUPPORTED",
+            {"scenario_id": f"F{i}", "target_fill_ratio": ratio,
+             "status": "BLOCKED" if admission == "BLOCKED" else "UNSUPPORTED",
              "achieved_fill_ratio": None, "reason": "no deterministic fill policy"}
             for i, ratio in enumerate((1.0, 0.95, 0.9, 0.8, 0.7))
         ],
@@ -40,9 +42,12 @@ def fill_report():
         "training_dataset_unlocked": False,
     }
 
-def stats_report():
+def stats_report(admission="PRICE_ONLY_ELIGIBLE"):
     return {
-        "decision": "DESCRIPTIVE_ONLY", "positive_fold_ratio": 0.6,
+        "experiment_id": "experiment-001",
+        "admission_decision": admission,
+        "decision": "BLOCKED" if admission == "BLOCKED" else "DESCRIPTIVE_ONLY",
+        "positive_fold_ratio": 0.6,
         "limitations": ["No dependence-aware inference."],
     }
 
@@ -54,8 +59,8 @@ def build(monkeypatch, *, cost=None, admission=None):
             base["admission"]["gates"]["historical_universe"] = "FAIL"
             base["conclusion"] = "BLOCKED"
     monkeypatch.setattr(integrated_qa, "build_research_qa_report", lambda *args, **kwargs: base)
-    monkeypatch.setattr(fill_stress, "build_fill_stress_assessment", lambda _path: fill_report())
-    monkeypatch.setattr(statistical_qa, "build_statistical_qa_summary", lambda _path: stats_report())
+    monkeypatch.setattr(fill_stress, "build_fill_stress_assessment", lambda _path: fill_report(admission or "PRICE_ONLY_ELIGIBLE"))
+    monkeypatch.setattr(statistical_qa, "build_statistical_qa_summary", lambda _path: stats_report(admission or "PRICE_ONLY_ELIGIBLE"))
     return integrated_qa.build_integrated_research_qa_report(
         "verified-experiment", qa_id="qa-integrated-001",
         created_at="2026-11-13T10:00:00+00:00",
@@ -67,6 +72,7 @@ def cost_report():
         "protocol_version": "phase10.4",
         "repository_commit": "abcdef1234567",
         "baseline_experiment_id": "experiment-001",
+        "experiment_ids": ["experiment-001", "experiment-001-C1", "experiment-001-C2", "experiment-001-C3"],
         "training_dataset_unlocked": False, "model_training_performed": False,
         "integrity": {
             "all_artifacts_verified": True,
