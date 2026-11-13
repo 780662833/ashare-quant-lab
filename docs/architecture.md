@@ -285,7 +285,7 @@ fold-level and regime-level results, not only pooled headline metrics.
 
 ## 10. Current maturity snapshot
 
-As of 2026-11-04:
+As of 2026-11-13:
 
 | Capability | State |
 |---|---|
@@ -295,6 +295,7 @@ As of 2026-11-04:
 | Weekly momentum score/targets | Merged in PR #9; canonical bundle orchestration merged in PR #10; direct CNEquity-to-limit-evidence input remains pending |
 | Unified research data bundle | Merged in PR #10; core builder, momentum orchestration and native CNEquity status normalization have synthetic coverage; direct source assembly, audited historical price-limit evidence and local-lake validation remain pending |
 | Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
-| Walk-forward momentum runner | PR #13 open; cutoff-isolated deterministic momentum replay and test-only fold ledgers; CI pending; no model training |
+| Walk-forward momentum runner | Merged in PR #13; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
+| Experiment artifact store | Merged in PR #15; immutable manifest, source/config provenance, fold manifests and checksummed Parquet OOS ledgers; 92 synthetic unit tests pass |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |
