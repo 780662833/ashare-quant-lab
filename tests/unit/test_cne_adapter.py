@@ -14,7 +14,16 @@ def install_fake_cne(monkeypatch, loader):
         if isinstance(result, tuple):
             frame, receipt = result
         else:
-            frame, receipt = result, {"replayable": True, "revision": "test-revision"}
+            frame, receipt = result, {
+                "replayable": True,
+                "receipt_id": "test-receipt",
+                "dependencies": {
+                    dataset: {
+                        "revision_id": "test-revision",
+                        "contract_fingerprint": "test-contract",
+                    }
+                },
+            }
         return SimpleNamespace(frame=frame, receipt=receipt)
     query.load_with_receipt = load_with_receipt
     package = ModuleType("cnequity")
@@ -169,4 +178,61 @@ def test_adapter_rejects_non_replayable_receipt(monkeypatch):
     )
     adapter = CNEquityAdapter(data_root="/tmp/cne")
     with pytest.raises(CNEquityDataError, match="replayable"):
+        adapter.daily_bars(None, "2024-01-01", "2024-01-31")
+
+
+
+def test_adapter_pins_dependency_revisions_across_reads(monkeypatch):
+    calls = []
+
+    def fake_load(dataset, **kwargs):
+        calls.append((dataset, kwargs))
+        return bars()
+
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    adapter.daily_bars(["600000.SH"], "2024-01-01", "2024-01-31")
+    adapter.daily_bars(["600000.SH"], "2024-02-01", "2024-02-29")
+
+    assert calls[0][1].get("revision_map") is None
+    assert calls[1][1]["revision_map"] == {"daily_bars": "test-revision"}
+    assert adapter.source_revision_map == {"daily_bars": "test-revision"}
+    assert adapter.source_contract_fingerprints == {"daily_bars": "test-contract"}
+
+
+def test_adapter_rejects_dependency_revision_drift(monkeypatch):
+    calls = 0
+
+    def fake_load(dataset, **kwargs):
+        nonlocal calls
+        calls += 1
+        revision = "revision-a" if calls == 1 else "revision-b"
+        return bars(), {
+            "replayable": True,
+            "receipt_id": f"receipt-{calls}",
+            "dependencies": {
+                dataset: {
+                    "revision_id": revision,
+                    "contract_fingerprint": "test-contract",
+                }
+            },
+        }
+
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    adapter.daily_bars(["600000.SH"], "2024-01-01", "2024-01-31")
+    with pytest.raises(CNEquityDataError, match="revision drift"):
+        adapter.daily_bars(["600000.SH"], "2024-02-01", "2024-02-29")
+
+
+def test_adapter_rejects_receipt_without_dependency_identity(monkeypatch):
+    install_fake_cne(
+        monkeypatch,
+        lambda dataset, **kwargs: (
+            bars(),
+            {"replayable": True, "receipt_id": "missing-deps"},
+        ),
+    )
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    with pytest.raises(CNEquityDataError, match="dependency identities"):
         adapter.daily_bars(None, "2024-01-01", "2024-01-31")

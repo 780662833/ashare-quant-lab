@@ -1,9 +1,10 @@
-"""CNEquity 0.21.x adapter with fail-closed research evidence checks.
+"""CNEquity receipt-backed adapter with fail-closed research evidence checks.
 
 Raw OHLC remains the execution-price source. HFQ columns are research-only.
 """
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
@@ -27,6 +28,8 @@ class CNEquityAdapter:
     profile: str = RESEARCH_PROFILE
     _config: Any = field(init=False, default=None, repr=False)
     _source_receipts: list[dict[str, Any]] = field(init=False, default_factory=list, repr=False)
+    _revision_map: dict[str, str | int] = field(init=False, default_factory=dict, repr=False)
+    _revision_fingerprints: dict[str, str] = field(init=False, default_factory=dict, repr=False)
 
     def __post_init__(self) -> None:
         if self.config_path is not None and self.data_root is not None:
@@ -41,7 +44,70 @@ class CNEquityAdapter:
     @property
     def source_receipts(self) -> list[dict[str, Any]]:
         """Return a copy of the replayable source receipts collected by this adapter."""
-        return [dict(item) for item in self._source_receipts]
+        return deepcopy(self._source_receipts)
+
+    @property
+    def source_revision_map(self) -> dict[str, str | int]:
+        """Return the dataset revisions pinned by this adapter session."""
+        return dict(self._revision_map)
+
+    @property
+    def source_contract_fingerprints(self) -> dict[str, str]:
+        """Return contract fingerprints paired with the pinned revisions."""
+        return dict(self._revision_fingerprints)
+
+    def _record_receipt(self, dataset: str, receipt: Mapping[str, Any]) -> None:
+        """Pin dependency revisions and reject drift across reads in this session.
+
+        CNEquity receipts describe the dependencies of one query, not an
+        atomic lake-wide snapshot. New dependencies are pinned when first
+        encountered; already-seen dependencies must retain both revision and
+        contract identity on every later read.
+        """
+        dependencies = receipt.get("dependencies")
+        if not isinstance(dependencies, Mapping) or not dependencies:
+            raise CNEquityDataError(
+                f"CNEquity {dataset} receipt is missing dependency identities"
+            )
+        observed: dict[str, tuple[str | int, str]] = {}
+        for name, identity in dependencies.items():
+            if not isinstance(identity, Mapping):
+                raise CNEquityDataError(
+                    f"CNEquity {dataset} receipt has invalid dependency identity: {name}"
+                )
+            revision_id = identity.get("revision_id")
+            fingerprint = identity.get("contract_fingerprint")
+            if not isinstance(revision_id, (str, int)) or not str(revision_id):
+                raise CNEquityDataError(
+                    f"CNEquity {dataset} dependency {name} has no committed revision_id"
+                )
+            if not isinstance(fingerprint, str) or not fingerprint:
+                raise CNEquityDataError(
+                    f"CNEquity {dataset} dependency {name} has no contract_fingerprint"
+                )
+            observed[str(name)] = (revision_id, fingerprint)
+
+        if dataset not in observed:
+            raise CNEquityDataError(
+                f"CNEquity {dataset} receipt does not identify its primary dataset"
+            )
+
+        for name, (revision_id, fingerprint) in observed.items():
+            pinned_revision = self._revision_map.get(name)
+            pinned_fingerprint = self._revision_fingerprints.get(name)
+            if pinned_revision is not None and pinned_revision != revision_id:
+                raise CNEquityDataError(
+                    f"CNEquity dependency revision drift for {name}: "
+                    f"{pinned_revision!r} != {revision_id!r}"
+                )
+            if pinned_fingerprint is not None and pinned_fingerprint != fingerprint:
+                raise CNEquityDataError(
+                    f"CNEquity dependency contract drift for {name}"
+                )
+
+        for name, (revision_id, fingerprint) in observed.items():
+            self._revision_map[name] = revision_id
+            self._revision_fingerprints[name] = fingerprint
 
     def _load(self, dataset: str, **kwargs: Any) -> pl.DataFrame:
         """Read through CNEquity's receipt API; ordinary unprovenanced reads are forbidden."""
@@ -51,6 +117,11 @@ class CNEquityAdapter:
         else:
             kwargs["data_root"] = str(Path(self.data_root).expanduser())
         kwargs["require_replayable"] = True
+        if self._revision_map:
+            # CNEquity accepts a per-dataset revision map. Reuse every
+            # previously observed dependency revision; newly encountered
+            # dependencies are captured by the first receipt that needs them.
+            kwargs["revision_map"] = dict(self._revision_map)
         result = load_with_receipt(dataset, **kwargs)
         frame = getattr(result, "frame", None)
         receipt = getattr(result, "receipt", None)
@@ -62,7 +133,8 @@ class CNEquityAdapter:
             raise CNEquityDataError(
                 f"CNEquity {dataset} did not return a replayable source receipt"
             )
-        self._source_receipts.append({"dataset": dataset, "receipt": dict(receipt)})
+        self._record_receipt(dataset, receipt)
+        self._source_receipts.append({"dataset": dataset, "receipt": deepcopy(dict(receipt))})
         return frame
 
     @staticmethod
