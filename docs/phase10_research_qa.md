@@ -255,6 +255,20 @@ Phase 10.1 is complete when:
 No phase after 10.1 may relax the frozen project scope or four-gate model-training lock.
 
 
+## 10.6 — Descriptive statistical QA
+
+`build_statistical_qa_summary(experiment_path)` verifies the Phase 8 artifact
+and reports fold-level distributions for returns, CAGR, volatility, Sharpe,
+drawdown and attributed costs, including sample counts, missing counts, mean,
+median, sample standard deviation, quartiles/IQR, min/max and worst fold. It
+also reports OOS session coverage, observed share fill ratio and no-fill reasons.
+
+The summary is explicitly `DESCRIPTIVE_ONLY`. It does not treat daily returns
+as IID, calculate p-values or confidence intervals, or infer benchmark excess
+when no independent benchmark fold ledger is attached. Parameter multiplicity
+and post-test selection history remain `NOT_ASSESSED` until a pre-registered
+scenario registry exists. Admission failure blocks metric emission.
+
 ## 10.3 — Period and market-regime diagnostics
 
 The P10.3 implementation is exposed as
