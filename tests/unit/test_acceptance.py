@@ -27,7 +27,6 @@ def test_markdown_report_shows_fail_and_never_unlocks_training():
     assert "训练数据集开放：否" in markdown
 
 
-
 def test_pit_coverage_uses_cnequity_item_code_and_checks_every_pair():
     frame = pl.DataFrame({
         "symbol": ["600000.SH", "600000.SH", "000001.SZ"],
