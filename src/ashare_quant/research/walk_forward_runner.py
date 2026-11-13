@@ -149,6 +149,12 @@ def _fold_report(
     report["final_nav"] = final_nav
     report["total_return"] = total_return
     report["max_drawdown"] = min(drawdowns)
+    report["costs"]["fees_bps_of_initial_nav"] = (
+        float(report["costs"]["total_fees"]) / float(baseline_nav) * 10_000
+    )
+    report["costs"]["total_costs_bps_of_initial_nav"] = (
+        float(report["costs"]["total_transaction_costs"]) / float(baseline_nav) * 10_000
+    )
     gross_growth = 1.0 + total_return
     report["cagr"] = gross_growth ** (annualization / sessions) - 1.0
     report["period"] = {
