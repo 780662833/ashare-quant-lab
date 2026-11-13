@@ -106,3 +106,12 @@ price-limit evidence table. The project must not derive limit values or lock
 states by guessing a percentage from the previous close or current board.
 Until a verified rule/evidence provider supplies those fields, the bundle
 builder correctly refuses to run the historical execution backtest.
+
+
+## Receipt-bound source identity and completeness audit (Phase 10.5)
+
+The builder no longer accepts free-form source revision strings. Callers must supply the actual adapter source_receipts records. The builder aggregates each receipt's dependencies identities and checks that declared source_revisions match committed revision_id and contract_fingerprint values for daily_bars, adj_factors, trading_status, and trading_calendar. The historical-universe identity is an explicit alias of the receipt-bound daily_bars identity. External price_limit_rules remain separately versioned with a provider identity; they are not represented as CNEquity dependencies.
+
+Every bundle requires dataset-specific coverage_audits for daily bars, HFQ factors, historical universe, trading status, trading calendar, and price-limit rules. Each audit must match the requested window, identify its audit, method, and source, reconcile expected and observed row counts, and report zero missing or unexpected keys. For datasets assembled inside the builder, the audit observed count must equal the assembled row/session count.
+
+A CNEquity receipt with coverage.completeness=not_assessed remains unproven metadata; it is never promoted to complete merely because rows exist or min/max dates span the requested window. The separate audit is required for admission. The builder validates audit structure and agreement with assembled data but does not itself create or independently certify the upstream audit. Synthetic tests use explicitly synthetic audits and do not constitute real-lake completeness evidence.
