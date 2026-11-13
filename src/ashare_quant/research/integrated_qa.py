@@ -11,6 +11,74 @@ from ashare_quant.research.qa import (
     validate_research_qa_report,
 )
 
+def _verified_fill_stress_section(
+    payload: Mapping[str, Any], *, baseline_experiment_id: str,
+    repository_commit: str, admission_decision: str,
+) -> dict[str, Any]:
+    """Validate and normalize an immutable P10.5 F0-F4 suite report."""
+    if payload.get("protocol_version") != "phase10.5":
+        raise ValueError("fill_stress_report protocol_version must be phase10.5")
+    if admission_decision != "PRICE_ONLY_ELIGIBLE":
+        raise ValueError("A blocked baseline cannot be combined with a verified P10.5 fill report")
+    if payload.get("baseline_experiment_id") != baseline_experiment_id:
+        raise ValueError("P10.5 fill-stress baseline does not match the QA experiment")
+    if payload.get("repository_commit") != repository_commit.lower():
+        raise ValueError("P10.5 fill-stress repository commit does not match the QA report")
+    if payload.get("training_dataset_unlocked") is not False or payload.get("model_training_performed") is not False:
+        raise ValueError("P10.5 fill-stress report violates the training lock")
+    integrity = payload.get("integrity")
+    if not isinstance(integrity, Mapping) or integrity.get("all_artifacts_verified") is not True:
+        raise ValueError("P10.5 fill-stress artifacts are not all verified")
+    decisions = integrity.get("admission_decisions")
+    if not isinstance(decisions, list) or decisions != ["PRICE_ONLY_ELIGIBLE"] * 5:
+        raise ValueError("P10.5 fill-stress admission was not PRICE_ONLY_ELIGIBLE for every scenario")
+    expected_ids = ["F0", "F1", "F2", "F3", "F4"]
+    expected_ratios = [1.0, 0.95, 0.90, 0.80, 0.70]
+    scenarios = payload.get("scenarios")
+    if not isinstance(scenarios, list) or len(scenarios) != 5 or not all(isinstance(x, Mapping) for x in scenarios):
+        raise ValueError("P10.5 fill-stress report must contain structured F0-F4 scenarios")
+    if [x.get("scenario_id") for x in scenarios] != expected_ids:
+        raise ValueError("P10.5 fill-stress report must contain F0-F4 in protocol order")
+    if any(x.get("status") != "VERIFIED" for x in scenarios):
+        raise ValueError("P10.5 fill-stress scenarios must all be VERIFIED")
+    if [x.get("target_fill_ratio") for x in scenarios] != expected_ratios:
+        raise ValueError("P10.5 fill-stress target ratios do not match the registered protocol")
+    experiment_ids = payload.get("experiment_ids")
+    if not isinstance(experiment_ids, list) or len(experiment_ids) != 5 or not experiment_ids or experiment_ids[0] != baseline_experiment_id:
+        raise ValueError("P10.5 fill-stress experiment IDs do not include the matching F0 baseline")
+    if [x.get("experiment_id") for x in scenarios] != experiment_ids:
+        raise ValueError("P10.5 fill-stress scenario experiment IDs do not match the verified artifact list")
+    if payload.get("scenario_ratios") != expected_ratios:
+        raise ValueError("P10.5 fill-stress scenario ratio registry is invalid")
+    for field, expected_length in (("config_sha256", 5),):
+        values = integrity.get(field)
+        if not isinstance(values, list) or len(values) != expected_length or any(
+            not isinstance(value, str) or len(value) != 64 for value in values
+        ):
+            raise ValueError(f"P10.5 fill-stress {field} values are missing or invalid")
+    provenance_hash = integrity.get("data_provenance_sha256")
+    if not isinstance(provenance_hash, str) or len(provenance_hash) != 64:
+        raise ValueError("P10.5 fill-stress data provenance hash is missing or invalid")
+    declared_hash = integrity.get("report_sha256")
+    if not isinstance(declared_hash, str) or len(declared_hash) != 64:
+        raise ValueError("P10.5 fill-stress report hash is missing or invalid")
+    unhashed = dict(payload)
+    unhashed_integrity = dict(integrity)
+    unhashed_integrity.pop("report_sha256", None)
+    unhashed["integrity"] = unhashed_integrity
+    actual_hash = hashlib.sha256(
+        json.dumps(unhashed, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    if actual_hash != declared_hash:
+        raise ValueError("P10.5 fill-stress report content does not match its SHA-256")
+    return {
+        "status": "VERIFIED", "baseline_experiment_id": baseline_experiment_id,
+        "scenarios": [dict(item) for item in scenarios],
+        "limitations": list(payload.get("limitations", [])),
+        "report_sha256": declared_hash,
+    }
+
+
 def build_integrated_research_qa_report(
     experiment_path: str,
     *,
@@ -19,6 +87,7 @@ def build_integrated_research_qa_report(
     repository_commit: str,
     bundle: Any | None = None,
     cost_stress_report: Mapping[str, Any] | None = None,
+    fill_stress_report: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble independently verified P10.2-P10.6 outputs without rerunning scenarios."""
     base = build_research_qa_report(
@@ -39,6 +108,31 @@ def build_integrated_research_qa_report(
         raise ValueError("Fill-stress admission does not match integrated QA admission")
     if statistical_qa.get("admission_decision") != base["admission"]["decision"]:
         raise ValueError("Statistical QA admission does not match integrated QA admission")
+
+    if fill_stress_report is None:
+        fill_section = {
+            "status": "NOT_PROVIDED", "baseline_experiment_id": experiment_id,
+            "scenarios": [],
+            "limitations": ["No verified P10.5 F0-F4 fill-stress report was supplied."],
+        }
+    else:
+        if not isinstance(fill_stress_report, Mapping):
+            raise TypeError("fill_stress_report must be a verified P10.5 report mapping")
+        fill_section = _verified_fill_stress_section(
+            fill_stress_report, baseline_experiment_id=experiment_id,
+            repository_commit=repository_commit,
+            admission_decision=base["admission"]["decision"],
+        )
+        execution_stress = {
+            "protocol_version": "phase10.5",
+            "experiment_id": experiment_id,
+            "admission_decision": base["admission"]["decision"],
+            "scenarios": fill_section["scenarios"],
+            "model_training_performed": False,
+            "training_dataset_unlocked": False,
+            "limitations": fill_section["limitations"],
+            "report_sha256": fill_section["report_sha256"],
+        }
 
     if cost_stress_report is None:
         cost_section = {
@@ -95,6 +189,7 @@ def build_integrated_research_qa_report(
     report = dict(base)
     report["protocol_version"] = "phase10.7"
     report["cost_stress"] = cost_section
+    report["fill_stress"] = fill_section
     report["execution_stress"] = execution_stress
     report["statistical_qa"] = statistical_qa
     report["scenarios"] = [
@@ -103,6 +198,7 @@ def build_integrated_research_qa_report(
     ]
     report["limitations"] = list(base["limitations"])
     report["limitations"].extend(cost_section["limitations"])
+    report["limitations"].extend(fill_section["limitations"])
     report["limitations"].extend(execution_stress["limitations"])
     report["limitations"].extend(statistical_qa["limitations"])
     if bundle is None:
@@ -119,6 +215,8 @@ def build_integrated_research_qa_report(
         ).hexdigest()
     if cost_section["status"] == "VERIFIED":
         report["integrity"]["cost_stress_sha256"] = cost_section["report_sha256"]
+    if fill_section["status"] == "VERIFIED":
+        report["integrity"]["fill_stress_suite_sha256"] = fill_section["report_sha256"]
     report["conclusion"] = (
         "BLOCKED" if base["admission"]["decision"] == "BLOCKED" else "INSUFFICIENT_EVIDENCE"
     )

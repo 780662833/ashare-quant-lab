@@ -52,7 +52,7 @@ def stats_report(admission="PRICE_ONLY_ELIGIBLE"):
         "limitations": ["No dependence-aware inference."],
     }
 
-def build(monkeypatch, *, cost=None, admission=None):
+def build(monkeypatch, *, cost=None, fill=None, admission=None):
     base = base_report()
     if admission is not None:
         base["admission"]["decision"] = admission
@@ -66,6 +66,7 @@ def build(monkeypatch, *, cost=None, admission=None):
         "verified-experiment", qa_id="qa-integrated-001",
         created_at="2026-11-13T10:00:00+00:00",
         repository_commit="abcdef1234567", cost_stress_report=cost,
+        fill_stress_report=fill,
     )
 
 def cost_report():
@@ -139,3 +140,72 @@ def test_write_research_qa_report_is_write_once(tmp_path, monkeypatch):
     assert len(written["json_sha256"]) == 64
     with pytest.raises(FileExistsError):
         integrated_qa.write_research_qa_report(report, output_root=tmp_path)
+
+
+def fill_suite_report():
+    report = {
+        "schema_version": 1, "protocol_version": "phase10.5",
+        "repository_commit": "abcdef1234567",
+        "baseline_experiment_id": "experiment-001",
+        "experiment_ids": ["experiment-001", "experiment-001-F1", "experiment-001-F2", "experiment-001-F3", "experiment-001-F4"],
+        "scenario_ratios": [1.0, 0.95, 0.90, 0.80, 0.70],
+        "scenarios": [
+            {"scenario_id": f"F{i}", "experiment_id": experiment_id,
+             "target_fill_ratio": ratio, "status": "VERIFIED",
+             "achieved_fill_ratio": ratio, "target_fill_cap_ratio": ratio}
+            for i, (ratio, experiment_id) in enumerate(zip(
+                (1.0, 0.95, 0.90, 0.80, 0.70),
+                ("experiment-001", "experiment-001-F1", "experiment-001-F2", "experiment-001-F3", "experiment-001-F4"),
+            ))
+        ],
+        "integrity": {
+            "all_artifacts_verified": True,
+            "admission_decisions": ["PRICE_ONLY_ELIGIBLE"] * 5,
+            "config_sha256": ["b" * 64] * 5,
+            "data_provenance_sha256": "c" * 64,
+        },
+        "limitations": ["Fill caps are not a market liquidity model."],
+        "training_dataset_unlocked": False, "model_training_performed": False,
+    }
+    report["integrity"]["report_sha256"] = hashlib.sha256(
+        json.dumps(report, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    return report
+
+
+def test_integrated_report_accepts_verified_fill_stress_suite(monkeypatch):
+    report = build(monkeypatch, fill=fill_suite_report())
+    assert report["fill_stress"]["status"] == "VERIFIED"
+    assert [x["scenario_id"] for x in report["execution_stress"]["scenarios"]] == ["F0", "F1", "F2", "F3", "F4"]
+    assert all(x["status"] == "VERIFIED" for x in report["execution_stress"]["scenarios"])
+    assert report["integrity"]["fill_stress_suite_sha256"] == fill_suite_report()["integrity"]["report_sha256"]
+    assert "No verified F0-F4" not in " ".join(report["limitations"])
+
+
+def test_integrated_report_rejects_tampered_fill_stress_hash(monkeypatch):
+    suite = fill_suite_report()
+    suite["scenarios"][1]["achieved_fill_ratio"] = 0.99
+    with pytest.raises(ValueError, match="content does not match its SHA-256"):
+        build(monkeypatch, fill=suite)
+
+
+@pytest.mark.parametrize("mutation, message", [
+    (lambda x: x.update(baseline_experiment_id="other"), "baseline does not match"),
+    (lambda x: x.update(repository_commit="deadbeef"), "repository commit does not match"),
+    (lambda x: x.update(training_dataset_unlocked=True), "training lock"),
+    (lambda x: x["scenarios"].pop(), "F0-F4 scenarios"),
+    (lambda x: x["scenarios"][2].update(status="UNSUPPORTED"), "must all be VERIFIED"),
+    (lambda x: x["integrity"].update(admission_decisions=["BLOCKED"] * 5), "admission was not"),
+])
+def test_integrated_report_rejects_unverified_fill_stress_suite(monkeypatch, mutation, message):
+    suite = fill_suite_report()
+    mutation(suite)
+    # Mutations are intentionally rejected before report-hash verification where applicable.
+    with pytest.raises(ValueError, match=message):
+        build(monkeypatch, fill=suite)
+
+
+def test_integrated_report_does_not_accept_fill_suite_for_blocked_baseline(monkeypatch):
+    with pytest.raises(ValueError, match="blocked baseline"):
+        build(monkeypatch, fill=fill_suite_report(), admission="BLOCKED")
+

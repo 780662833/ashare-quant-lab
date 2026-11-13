@@ -234,6 +234,7 @@ def _fill_scenario_metrics(
     return {
         "scenario_id": scenario_id,
         "experiment_id": experiment.manifest["experiment_id"],
+        "status": "VERIFIED",
         "target_fill_ratio": target_fill_ratio,
         "target_fill_cap_ratio": cap_ratio,
         "achieved_fill_ratio": achieved_ratio,
