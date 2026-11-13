@@ -9,7 +9,9 @@ from ashare_quant.research import (
     WalkForwardConfig,
     WalkForwardMomentumFoldRun,
     WalkForwardMomentumRun,
+    compare_walk_forward_experiments,
     persist_walk_forward_momentum_run,
+    verify_walk_forward_experiment,
 )
 from ashare_quant.research.walk_forward import WalkForwardFold
 from ashare_quant.strategies.momentum import MomentumConfig
@@ -93,6 +95,10 @@ def make_run() -> WalkForwardMomentumRun:
             "initial_nav": 100_000.0,
             "final_nav": 100_250.0,
             "total_return": 0.0025,
+            "cagr": 0.3,
+            "annualized_volatility": 0.02,
+            "sharpe_ratio": 0.5,
+            "max_drawdown": -0.01,
             "costs": {"total_transaction_costs": 1.2},
         },
         provenance=fold_provenance,
@@ -111,6 +117,14 @@ def make_run() -> WalkForwardMomentumRun:
         oos_holdings=holdings,
         aggregate_report={
             "fold_count": 1,
+            "out_of_sample_sessions": 2,
+            "mean_fold_total_return": 0.0025,
+            "median_fold_total_return": 0.0025,
+            "positive_fold_ratio": 1.0,
+            "mean_fold_cagr": 0.3,
+            "mean_fold_sharpe": 0.5,
+            "worst_fold_max_drawdown": -0.01,
+            "fold_linked_total_return": 0.0025,
             "model_training_performed": False,
             "training_dataset_unlocked": False,
         },
@@ -294,3 +308,142 @@ def test_persist_rejects_combined_ledgers_with_different_values(tmp_path):
     with pytest.raises(ValueError, match="oos_daily contents"):
         persist(tmp_path, run=invalid)
     assert not (tmp_path / "momentum-smoke-001").exists()
+
+
+
+def persist_variant(
+    root: Path,
+    experiment_id: str,
+    *,
+    strategy_config: MomentumConfig,
+    backtest_config: BacktestConfig | None = None,
+    run: WalkForwardMomentumRun | None = None,
+) -> Path:
+    return persist_walk_forward_momentum_run(
+        run or make_run(),
+        root=root,
+        experiment_id=experiment_id,
+        repository_commit=COMMIT,
+        walk_forward_config=WalkForwardConfig(
+            min_train_sessions=2,
+            validation_sessions=2,
+            test_sessions=2,
+            label_horizon_sessions=0,
+            embargo_sessions=0,
+        ),
+        strategy_config=strategy_config,
+        backtest_config=backtest_config or BacktestConfig(
+            initial_cash=100_000,
+            top_n=1,
+            costs=CostModel(minimum_commission=1.0),
+        ),
+    )
+
+
+def test_verify_checks_hashes_and_returns_parquet_ledgers(tmp_path):
+    destination = persist(tmp_path)
+    verified = verify_walk_forward_experiment(destination)
+
+    assert verified.manifest["experiment_id"] == "momentum-smoke-001"
+    assert verified.fold_table.height == 1
+    assert verified.oos_daily.height == 2
+    assert verified.oos_orders.height == 1
+    assert verified.oos_holdings.height == 2
+    assert verified.folds[0]["fold"]["fold_id"] == "fold_001"
+
+
+def test_verify_rejects_tampered_artifact(tmp_path):
+    destination = persist(tmp_path)
+    artifact = destination / "oos_daily.parquet"
+    artifact.write_bytes(artifact.read_bytes() + b"tampered")
+
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        verify_walk_forward_experiment(destination)
+
+
+def test_compare_allows_strategy_variants_on_identical_data_and_execution(tmp_path):
+    first = persist_variant(
+        tmp_path,
+        "momentum-126-21",
+        strategy_config=MomentumConfig(top_n=1, lookback_sessions=2, skip_recent_sessions=0),
+    )
+    second = persist_variant(
+        tmp_path,
+        "momentum-3-1",
+        strategy_config=MomentumConfig(top_n=1, lookback_sessions=3, skip_recent_sessions=1),
+    )
+
+    comparison = compare_walk_forward_experiments([first, second])
+
+    assert comparison.summary.height == 2
+    assert comparison.by_fold.height == 2
+    assert comparison.summary["experiment_id"].to_list() == [
+        "momentum-126-21",
+        "momentum-3-1",
+    ]
+    assert comparison.summary["strategy_config"].n_unique() == 2
+
+
+def test_compare_rejects_different_source_revisions(tmp_path):
+    first = persist_variant(
+        tmp_path,
+        "same-data-r1",
+        strategy_config=MomentumConfig(top_n=1, lookback_sessions=2, skip_recent_sessions=0),
+    )
+    run = make_run()
+    fold_run = run.folds[0]
+    altered_provenance = {
+        **fold_run.provenance,
+        "source_revisions": {
+            **fold_run.provenance["source_revisions"],
+            "daily_bars": "daily-r2",
+        },
+    }
+    altered_fold = WalkForwardMomentumFoldRun(
+        fold=fold_run.fold,
+        baseline_date=fold_run.baseline_date,
+        baseline_nav=fold_run.baseline_nav,
+        daily=fold_run.daily,
+        orders=fold_run.orders,
+        holdings=fold_run.holdings,
+        report=fold_run.report,
+        provenance=altered_provenance,
+    )
+    altered_run = WalkForwardMomentumRun(
+        folds=[altered_fold],
+        fold_table=run.fold_table,
+        oos_daily=run.oos_daily,
+        oos_orders=run.oos_orders,
+        oos_holdings=run.oos_holdings,
+        aggregate_report=run.aggregate_report,
+    )
+    second = persist_variant(
+        tmp_path,
+        "same-data-r2",
+        strategy_config=MomentumConfig(top_n=1, lookback_sessions=3, skip_recent_sessions=1),
+        run=altered_run,
+    )
+
+    with pytest.raises(ValueError, match="data provenance/revisions"):
+        compare_walk_forward_experiments([first, second])
+
+
+def test_compare_rejects_different_cost_configs(tmp_path):
+    first = persist_variant(
+        tmp_path,
+        "costs-a",
+        strategy_config=MomentumConfig(top_n=1, lookback_sessions=2, skip_recent_sessions=0),
+    )
+    second = persist_variant(
+        tmp_path,
+        "costs-b",
+        strategy_config=MomentumConfig(top_n=1, lookback_sessions=3, skip_recent_sessions=1),
+        backtest_config=BacktestConfig(
+            initial_cash=200_000,
+            top_n=1,
+            costs=CostModel(minimum_commission=1.0),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="backtest/cost configurations"):
+        compare_walk_forward_experiments([first, second])
