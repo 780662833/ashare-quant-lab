@@ -379,8 +379,8 @@ def test_accounting_replay_rejects_non_liquidating_odd_lot_sell():
         "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
     }])
     daily = pl.DataFrame([
-        {"date": "2024-01-02", "cash": 98000.0, "market_value": 2000.0, "nav": 100000.0, "gross_exposure": 0.02},
-        {"date": "2024-01-03", "cash": 99500.0, "market_value": 500.0, "nav": 100000.0, "gross_exposure": 0.005},
+        {"date": "2024-01-02", "cash": 98000.0, "market_value": 2000.0, "nav": 100000.0, "gross_exposure": 0.02, "daily_return": 0.0},
+        {"date": "2024-01-03", "cash": 99500.0, "market_value": 500.0, "nav": 100000.0, "gross_exposure": 0.005, "daily_return": 0.0},
     ])
     holdings = pl.DataFrame([
         {"date": "2024-01-02", "instrument": "600000.SH", "quantity": 200, "mark_price": 10.0, "market_value": 2000.0},
@@ -407,8 +407,8 @@ def test_accounting_replay_rejects_sell_quantity_above_inventory():
         "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
     }])
     daily = pl.DataFrame([
-        {"date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0, "nav": 100000.0, "gross_exposure": 0.01},
-        {"date": "2024-01-03", "cash": 100500.0, "market_value": 0.0, "nav": 100500.0, "gross_exposure": 0.0},
+        {"date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0, "nav": 100000.0, "gross_exposure": 0.01, "daily_return": 0.0},
+        {"date": "2024-01-03", "cash": 100500.0, "market_value": 0.0, "nav": 100500.0, "gross_exposure": 0.0, "daily_return": 0.005},
     ])
     holdings = pl.DataFrame([{
         "date": "2024-01-02", "instrument": "600000.SH",
@@ -538,3 +538,105 @@ def test_engine_rejects_conflicting_price_limit_lock_flags():
     empty_targets = pl.DataFrame(schema={"signal_date": pl.String, "instrument": pl.String, "weight": pl.Float64})
     with pytest.raises(ValueError, match="both limit-up and limit-down"):
         run_backtest(bars, empty_targets)
+
+
+
+def _valid_accounting_frames():
+    orders = pl.DataFrame([{
+        "date": "2024-01-02", "instrument": "600000.SH", "side": "buy",
+        "requested_qty": 100, "filled_qty": 100, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }])
+    daily = pl.DataFrame([{
+        "date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0,
+        "nav": 100000.0, "gross_exposure": 0.01, "daily_return": 0.0,
+    }])
+    holdings = pl.DataFrame([{
+        "date": "2024-01-02", "instrument": "600000.SH",
+        "quantity": 100, "mark_price": 10.0, "market_value": 1000.0,
+    }])
+    return orders, daily, holdings
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+def test_accounting_replay_rejects_non_finite_order_costs(bad_value):
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    orders = orders.with_columns(pl.lit(bad_value).alias("slippage_cost"))
+    with pytest.raises(AssertionError, match="finite"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+def test_accounting_replay_rejects_non_finite_fill_price(bad_value):
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    orders = orders.with_columns(pl.lit(bad_value).alias("fill_price"))
+    with pytest.raises(AssertionError, match="finite"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_orders_outside_daily_ledger():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    orders = orders.with_columns(pl.lit("2024-01-03").alias("date"))
+    with pytest.raises(AssertionError, match="order date"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_non_finite_daily_nav():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    daily = daily.with_columns(pl.lit(float("nan")).alias("nav"))
+    with pytest.raises(AssertionError, match="Daily nav"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_duplicate_daily_dates():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    daily = pl.concat([daily, daily])
+    with pytest.raises(AssertionError, match="unique"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_duplicate_daily_holding_instrument():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    holdings = pl.concat([holdings, holdings])
+    with pytest.raises(AssertionError, match="duplicate instruments"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_duplicate_order_intents():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    orders = pl.concat([orders, orders])
+    with pytest.raises(AssertionError, match="Duplicate order intent"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_gross_exposure_mismatch():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    daily = daily.with_columns(pl.lit(0.02).alias("gross_exposure"))
+    with pytest.raises(AssertionError, match="gross exposure does not reconcile"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_holding_market_value_mismatch():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    holdings = holdings.with_columns(pl.lit(900.0).alias("market_value"))
+    with pytest.raises(AssertionError, match="market value must equal"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
