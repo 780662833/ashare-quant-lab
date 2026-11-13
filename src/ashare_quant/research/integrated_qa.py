@@ -70,7 +70,8 @@ def build_integrated_research_qa_report(
         decisions = integrity.get("admission_decisions")
         if not isinstance(decisions, list) or len(decisions) != 4 or any(item != "PRICE_ONLY_ELIGIBLE" for item in decisions):
             raise ValueError("P10.4 cost-stress admission was not PRICE_ONLY_ELIGIBLE for every scenario")
-        if cost_stress_report.get("experiment_ids", [experiment_id])[0] != experiment_id:
+        experiment_ids = cost_stress_report.get("experiment_ids")
+        if not isinstance(experiment_ids, list) or not experiment_ids or experiment_ids[0] != experiment_id:
             raise ValueError("P10.4 cost-stress experiment IDs do not include the QA baseline")
         if not isinstance(integrity.get("report_sha256"), str) or len(integrity["report_sha256"]) != 64:
             raise ValueError("P10.4 cost-stress report hash is missing or invalid")
