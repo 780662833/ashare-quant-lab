@@ -275,3 +275,22 @@ def test_persist_rejects_missing_source_revision(tmp_path):
     with pytest.raises(ValueError, match="price_limit_rules"):
         persist(tmp_path, run=invalid)
     assert not (tmp_path / "momentum-smoke-001").exists()
+
+
+
+def test_persist_rejects_combined_ledgers_with_different_values(tmp_path):
+    run = make_run()
+    altered_daily = run.oos_daily.with_columns(
+        (pl.col("nav") * 2).alias("nav")
+    )
+    invalid = WalkForwardMomentumRun(
+        folds=run.folds,
+        fold_table=run.fold_table,
+        oos_daily=altered_daily,
+        oos_orders=run.oos_orders,
+        oos_holdings=run.oos_holdings,
+        aggregate_report=run.aggregate_report,
+    )
+    with pytest.raises(ValueError, match="oos_daily contents"):
+        persist(tmp_path, run=invalid)
+    assert not (tmp_path / "momentum-smoke-001").exists()
