@@ -414,8 +414,18 @@ def test_compare_rejects_different_source_revisions(tmp_path):
         "source_revisions": {
             **fold_run.provenance["source_revisions"],
             "daily_bars": {"revision_id": "daily-r2", "contract_fingerprint": "daily-contract"},
+            "universe": {"revision_id": "daily-r2", "contract_fingerprint": "daily-contract"},
         },
     }
+    altered_dependencies = {
+        **fold_run.provenance["receipt_provenance"]["dependency_identities"],
+        "daily_bars": {"revision_id": "daily-r2", "contract_fingerprint": "daily-contract"},
+    }
+    altered_provenance["receipt_provenance"] = {"dependency_identities": altered_dependencies}
+    altered_provenance["source_receipts"] = [{
+        **record,
+        "receipt": {**record["receipt"], "dependencies": altered_dependencies},
+    } for record in fold_run.provenance["source_receipts"]]
     altered_fold = WalkForwardMomentumFoldRun(
         fold=fold_run.fold,
         baseline_date=fold_run.baseline_date,
