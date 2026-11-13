@@ -1,6 +1,6 @@
 # Phase 10.1 — Research QA architecture and acceptance criteria
 
-**Status:** P10.1–P10.4 merged (PR #17–20); P10.5 fill-stress capability assessment merged (PR #37), target-fill execution policy still unsupported  
+**Status:** P10.1–P10.7 code/report architecture merged (PR #17–20, #37–39); target-fill execution policy remains UNSUPPORTED, and empirical QA remains blocked pending real-data acceptance  
 **Date:** 2026-11-13  
 **Scope:** Research QA over verified Phase 8 artifacts; reuse the existing runner/store, with no new backtest engine, model training, data backfill, or live-trading capability.
 
