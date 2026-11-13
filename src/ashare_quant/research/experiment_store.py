@@ -154,6 +154,23 @@ def _common_provenance(run: WalkForwardMomentumRun) -> dict[str, Any]:
                     raise ValueError(f"{fold_run.fold.fold_id} {name} ledger escapes its test window")
 
     assert common is not None
+    fold_ids = [item.fold.fold_id for item in run.folds]
+    if len(fold_ids) != len(set(fold_ids)):
+        raise ValueError("Walk-forward fold IDs must be unique")
+    expected_rows = {
+        "fold_table": len(run.folds),
+        "oos_daily": sum(item.daily.height for item in run.folds),
+        "oos_orders": sum(item.orders.height for item in run.folds),
+        "oos_holdings": sum(item.holdings.height for item in run.folds),
+    }
+    for name, expected in expected_rows.items():
+        if getattr(run, name).height != expected:
+            raise ValueError(f"run.{name} row count does not match its fold ledgers")
+    if "date" not in run.oos_daily.columns:
+        raise ValueError("Combined OOS daily ledger must contain date")
+    if run.oos_daily["date"].cast(pl.String).n_unique() != run.oos_daily.height:
+        raise ValueError("Combined OOS daily ledger contains duplicate sessions")
+
     required_provenance = {
         "acceptance_report_id",
         "acceptance_report_window",
@@ -173,6 +190,24 @@ def _common_provenance(run: WalkForwardMomentumRun) -> dict[str, Any]:
         raise ValueError(
             f"Experiment provenance missing source revisions: {sorted(missing_revisions)}"
         )
+    invalid_revisions = sorted(
+        key for key in _REQUIRED_REVISIONS
+        if not isinstance(revisions[key], str) or not revisions[key].strip()
+    )
+    if invalid_revisions:
+        raise ValueError(
+            f"Experiment provenance has empty/invalid source revisions: {invalid_revisions}"
+        )
+    for key in ("acceptance_report_id", "universe_profile"):
+        if not isinstance(common.get(key), str) or not common[key].strip():
+            raise ValueError(f"Experiment provenance {key} must be non-empty")
+    receipts = common.get("source_receipts")
+    if not isinstance(receipts, Mapping):
+        raise ValueError("Experiment provenance source_receipts must be a mapping")
+    for name in ("historical_universe", "hfq"):
+        receipt = receipts.get(name)
+        if not isinstance(receipt, Mapping) or receipt.get("replayable") is not True:
+            raise ValueError(f"Experiment provenance is missing replayable {name} receipt")
     return common
 
 
