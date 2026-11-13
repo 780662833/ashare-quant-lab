@@ -225,3 +225,53 @@ def test_persist_requires_a_git_commit_sha(tmp_path):
             strategy_config={"top_n": 1},
             backtest_config={"initial_cash": 100_000},
         )
+
+
+
+def test_persist_rejects_combined_ledgers_that_do_not_match_fold_outputs(tmp_path):
+    run = make_run()
+    invalid = WalkForwardMomentumRun(
+        folds=run.folds,
+        fold_table=run.fold_table,
+        oos_daily=run.oos_daily.head(1),
+        oos_orders=run.oos_orders,
+        oos_holdings=run.oos_holdings,
+        aggregate_report=run.aggregate_report,
+    )
+    with pytest.raises(ValueError, match="oos_daily row count"):
+        persist(tmp_path, run=invalid)
+    assert not (tmp_path / "momentum-smoke-001").exists()
+
+
+def test_persist_rejects_missing_source_revision(tmp_path):
+    run = make_run()
+    fold_run = run.folds[0]
+    invalid_provenance = {
+        **fold_run.provenance,
+        "source_revisions": {
+            key: value
+            for key, value in fold_run.provenance["source_revisions"].items()
+            if key != "price_limit_rules"
+        },
+    }
+    invalid_fold = WalkForwardMomentumFoldRun(
+        fold=fold_run.fold,
+        baseline_date=fold_run.baseline_date,
+        baseline_nav=fold_run.baseline_nav,
+        daily=fold_run.daily,
+        orders=fold_run.orders,
+        holdings=fold_run.holdings,
+        report=fold_run.report,
+        provenance=invalid_provenance,
+    )
+    invalid = WalkForwardMomentumRun(
+        folds=[invalid_fold],
+        fold_table=run.fold_table,
+        oos_daily=run.oos_daily,
+        oos_orders=run.oos_orders,
+        oos_holdings=run.oos_holdings,
+        aggregate_report=run.aggregate_report,
+    )
+    with pytest.raises(ValueError, match="price_limit_rules"):
+        persist(tmp_path, run=invalid)
+    assert not (tmp_path / "momentum-smoke-001").exists()
