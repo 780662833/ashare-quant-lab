@@ -95,11 +95,47 @@ def make_inputs(count=12):
     revisions = {
         "daily_bars": "daily-v1",
         "adj_factors": "hfq-v1",
-        "universe": "universe-v1",
+        "instruments": "instruments-v1",
         "trading_status": "status-v1",
         "trading_calendar": "calendar-v1",
         "price_limit_rules": "synthetic-rules-v1",
     }
+    required_sources = (
+        "daily_bars", "adj_factors", "instruments",
+        "trading_status", "trading_calendar", "price_limit_rules",
+    )
+    source_receipts = []
+    coverage_audits = {}
+    for dataset in required_sources:
+        receipt_id = f"synthetic-receipt-{dataset}"
+        fingerprint = f"synthetic-contract-{dataset}"
+        source_receipts.append({
+            "dataset": dataset,
+            "receipt": {
+                "replayable": True,
+                "receipt_id": receipt_id,
+                "coverage": {"completeness": "not_assessed"},
+                "dependencies": {
+                    dataset: {
+                        "revision_id": revisions[dataset],
+                        "contract_fingerprint": fingerprint,
+                    }
+                },
+            },
+        })
+        coverage_audits[dataset] = {
+            "status": "PASS",
+            "window": {"start": sessions[0], "end": sessions[-1]},
+            "scope": f"synthetic full {dataset} test scope",
+            "method": "synthetic deterministic fixture audit",
+            "receipt_id": receipt_id,
+            "revision_id": revisions[dataset],
+            "contract_fingerprint": fingerprint,
+            "expected_rows": 10,
+            "observed_rows": 10,
+            "missing_rows": 0,
+            "duplicate_rows": 0,
+        }
     return {
         "raw_bars": pl.DataFrame(raw),
         "adjusted_bars": pl.DataFrame(adjusted),
@@ -109,6 +145,8 @@ def make_inputs(count=12):
         "acceptance_report": report,
         "acceptance_report_id": "synthetic-acceptance-v1",
         "source_revisions": revisions,
+        "source_receipts": source_receipts,
+        "coverage_audits": coverage_audits,
         "start_date": sessions[0],
         "end_date": sessions[-1],
         "universe_profile": PROFILE,
@@ -271,6 +309,34 @@ def test_bundle_rejects_incomplete_source_revision_metadata():
     inputs = make_inputs()
     inputs["source_revisions"] = {}
     with pytest.raises(ResearchBundleError, match="source_revisions"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_source_revision_not_bound_to_receipt():
+    inputs = make_inputs()
+    inputs["source_revisions"]["daily_bars"] = "caller-invented-revision"
+    with pytest.raises(ResearchBundleError, match="do not match receipt dependencies"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_not_assessed_coverage_without_a_passing_audit():
+    inputs = make_inputs()
+    inputs["coverage_audits"].pop("daily_bars")
+    with pytest.raises(ResearchBundleError, match="Missing dataset-specific coverage audit"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_coverage_audit_with_missing_rows():
+    inputs = make_inputs()
+    inputs["coverage_audits"]["trading_status"]["missing_rows"] = 1
+    with pytest.raises(ResearchBundleError, match="incomplete or inconsistent"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_coverage_audit_bound_to_different_receipt_revision():
+    inputs = make_inputs()
+    inputs["coverage_audits"]["price_limit_rules"]["revision_id"] = "unrelated-revision"
+    with pytest.raises(ResearchBundleError, match="revision mismatch"):
         build_research_data_bundle(**inputs)
 
 
