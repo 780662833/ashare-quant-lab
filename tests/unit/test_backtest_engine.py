@@ -223,3 +223,29 @@ def test_order_ledger_separates_fee_components_and_slippage_without_double_charg
     assert result.daily["cash"].min() >= 0
     assert result.orders["slippage_cost"].sum() == pytest.approx(1000.0)
     assert result.orders["fees"].sum() == pytest.approx(169.5)
+
+
+
+def test_new_signal_recomputes_existing_holding_target_quantity():
+    bars = make_bars(days=4)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "weight": [0.5, 0.25],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, costs=zero_costs),
+    )
+
+    # First signal buys 5,000 shares. The second signal snapshots NAV at
+    # 105,000, so its 25% target at the next open is 2,600 board-lot shares.
+    assert result.orders["date"].to_list() == ["2024-01-02", "2024-01-03"]
+    assert result.orders["side"].to_list() == ["buy", "sell"]
+    assert result.orders["filled_qty"].to_list() == [5000, 2400]
+    assert result.holdings.filter(pl.col("date") == "2024-01-03")["quantity"].item() == 2600
