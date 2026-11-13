@@ -58,6 +58,7 @@ def _validate_bundle_identity(
 ) -> list[str]:
     if not isinstance(bundle, ResearchDataBundle):
         raise TypeError("bundle must be a validated ResearchDataBundle")
+    bundle._require_validated()
     if not isinstance(bundle.adjusted_bars, pl.DataFrame) or not isinstance(bundle.universe_membership, pl.DataFrame):
         raise TypeError("bundle adjusted_bars and universe_membership must be Polars DataFrames")
     if not {"instrument", "date", "adj_close", "adj_is_exact"}.issubset(bundle.adjusted_bars.columns):
