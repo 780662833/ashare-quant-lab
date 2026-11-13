@@ -19,6 +19,7 @@ from ashare_quant.research.experiment_compare import (
 
 from ashare_quant.research.qa import build_research_qa_report, validate_research_qa_report
 from ashare_quant.research.period_regime import build_period_regime_diagnostics
+from ashare_quant.research.fill_stress import build_fill_stress_assessment
 from ashare_quant.research.cost_stress import (
     CostStressScenario,
     build_cost_stress_scenarios,
@@ -47,6 +48,7 @@ __all__ = [
     "build_period_regime_diagnostics",
     "CostStressScenario",
     "build_cost_stress_scenarios",
+    "build_fill_stress_assessment",
     "run_cost_stress_suite",
     "validate_research_qa_report",
     "build_walk_forward_folds",
