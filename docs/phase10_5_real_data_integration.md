@@ -42,6 +42,35 @@ write reports, backfill data, or run experiments. A successful result only narro
 the compatibility investigation; it does not prove that 0.23.0 returns the same
 schemas, semantics, receipts, or historical coverage as 0.21.0.
 
+## CNEquity 0.23.0 source-level compatibility findings (2026-11-13)
+
+The installed runtime report supplied for the research environment confirms that the
+0.23.0 API symbols import and exposes these signatures. Source inspection of the
+official v0.23.0 tag additionally confirms:
+
+- `load_with_receipt()` returns `ReadResult(frame: pl.DataFrame, receipt: dict)`;
+  its receipt distinguishes observed row bounds from completeness and records
+  dependency revisions plus replayability.
+- `traded_status_evidence()` returns a `pl.LazyFrame` with the fields consumed by
+  the current trading-status acceptance gate, including `asset_class`, `exclusion`,
+  `has_status`, `risk_warning_known`, and `contradiction`.
+- The 0.23.0 migration changes `daily_bars` and `adj_factors` partition granularity
+  from day to month while preserving their columns and primary keys. The project
+  adapter reads these datasets through CNEquity's public query API rather than
+  constructing Hive paths itself; the internal trading-status quality API also
+  owns its partition scan. Do not add direct Parquet path assumptions to the assembler.
+- Strict PIT reads retain the canonical `financial_statement_items.item_code`
+  field and add `pit_is_exact` / `pit_quality`. The acceptance implementation had
+  incorrectly checked an `item` column, which would fail closed even when the
+  returned CNEquity PIT rows were valid. The acceptance helper now checks
+  `item_code` and still requires exact strict rows for every requested symbol/item
+  pair.
+
+This is source-level evidence, not an end-to-end test against the user's installed
+package or lake. The declared `cnequity==0.21.0` pin is intentionally unchanged.
+The 0.23.0 runtime remains **unverified** until the adapter and acceptance path are
+exercised against the actual local lake with replayable receipts and coverage checks.
+
 ## Required Phase 10.5 work sequence
 
 1. **Version/API compatibility.** Capture the runtime report from the actual research
