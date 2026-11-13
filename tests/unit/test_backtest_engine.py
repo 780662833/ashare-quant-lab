@@ -326,3 +326,95 @@ def test_target_fill_ratio_below_one_board_lot_is_explicit_no_fill():
 def test_target_fill_ratio_must_be_between_zero_and_one(ratio):
     with pytest.raises(ValueError, match="target_fill_ratio"):
         BacktestConfig(target_fill_ratio=ratio)
+
+
+def test_order_ledger_reconciles_cash_holdings_fees_and_t_plus_one():
+    bars = make_bars(days=4)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "weight": [0.5, 0.0],
+    })
+    costs = CostModel(
+        commission_rate=0.001, minimum_commission=2.0,
+        stamp_duty_sell_rate=0.001, transfer_fee_rate=0.0002,
+        slippage_bps=50.0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=1, costs=costs),
+    )
+
+    buys = result.orders.filter((pl.col("side") == "buy") & (pl.col("filled_qty") > 0))
+    sells = result.orders.filter((pl.col("side") == "sell") & (pl.col("filled_qty") > 0))
+    assert buys.height == sells.height == 1
+    assert buys["date"].item() < sells["date"].item()
+    assert sells["filled_qty"].item() <= buys["filled_qty"].item()
+    assert (result.orders["filled_qty"] <= result.orders["requested_qty"].fill_null(0)).all()
+    assert (
+        result.orders["fees"]
+        - result.orders["commission"]
+        - result.orders["transfer_fee"]
+        - result.orders["stamp_duty"]
+    ).abs().max() == pytest.approx(0.0, abs=1e-8)
+    assert result.daily["cash"].min() >= -1e-6
+    assert result.holdings["quantity"].min() > 0
+    assert result.daily["nav"].to_list() == pytest.approx(
+        (result.daily["cash"] + result.daily["market_value"]).to_list()
+    )
+
+
+def test_accounting_replay_rejects_non_liquidating_odd_lot_sell():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders = pl.DataFrame([{
+        "date": "2024-01-02", "instrument": "600000.SH", "side": "buy",
+        "requested_qty": 200, "filled_qty": 200, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }, {
+        "date": "2024-01-03", "instrument": "600000.SH", "side": "sell",
+        "requested_qty": 150, "filled_qty": 150, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }])
+    daily = pl.DataFrame([
+        {"date": "2024-01-02", "cash": 98000.0, "market_value": 2000.0, "nav": 100000.0, "gross_exposure": 0.02},
+        {"date": "2024-01-03", "cash": 99500.0, "market_value": 500.0, "nav": 100000.0, "gross_exposure": 0.005},
+    ])
+    holdings = pl.DataFrame([
+        {"date": "2024-01-02", "instrument": "600000.SH", "quantity": 200, "mark_price": 10.0, "market_value": 2000.0},
+        {"date": "2024-01-03", "instrument": "600000.SH", "quantity": 50, "mark_price": 10.0, "market_value": 500.0},
+    ])
+    with pytest.raises(AssertionError, match="Odd-lot sell must liquidate"):
+        _validate_result_accounting(
+            orders, daily, holdings, initial_cash=100000.0, board_lot=100,
+        )
+
+
+def test_accounting_replay_rejects_sell_quantity_above_inventory():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders = pl.DataFrame([{
+        "date": "2024-01-02", "instrument": "600000.SH", "side": "buy",
+        "requested_qty": 100, "filled_qty": 100, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }, {
+        "date": "2024-01-03", "instrument": "600000.SH", "side": "sell",
+        "requested_qty": 150, "filled_qty": 150, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }])
+    daily = pl.DataFrame([
+        {"date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0, "nav": 100000.0, "gross_exposure": 0.01},
+        {"date": "2024-01-03", "cash": 100500.0, "market_value": 0.0, "nav": 100500.0, "gross_exposure": 0.0},
+    ])
+    holdings = pl.DataFrame([{
+        "date": "2024-01-02", "instrument": "600000.SH",
+        "quantity": 100, "mark_price": 10.0, "market_value": 1000.0,
+    }])
+    with pytest.raises(AssertionError, match="sell quantity exceeds"):
+        _validate_result_accounting(
+            orders, daily, holdings, initial_cash=100000.0, board_lot=100,
+        )

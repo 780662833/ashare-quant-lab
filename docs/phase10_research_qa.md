@@ -345,6 +345,15 @@ time. The suite does not infer actual commissions, taxes, transfer charges or
 slippage from incomplete data. It does not modify existing experiment
 artifacts, perform CNEquity reads/backfills, train a model, or unlock training.
 
+The backtest engine replays its own order ledger before returning a result. It
+requires exact agreement between requested/filled quantities and order status,
+fee totals and their commission/transfer/stamp components, non-negative cash and
+inventory, board-lot buys, and odd-lot sells only when liquidating the remaining
+position. The replay processes sells before same-session buys and permits sells
+only from inventory carried into that session, enforcing T+1. It also reconciles
+daily cash, holdings, market value and NAV against the order ledger; slippage is
+embedded in fill price and is not deducted as a second cash fee.
+
 ## 10.5 — Fill-stress capability assessment
 
 The shared engine now exposes `BacktestConfig.target_fill_ratio` (0.0–1.0,
