@@ -29,7 +29,9 @@ REQUIRED_BENCHMARK_GATES = {
     "historical_universe", "hfq_adjustment", "trading_status",
 }
 REQUIRED_ACCEPTANCE_GATES = {
-    *REQUIRED_BENCHMARK_GATES, "point_in_time_fundamentals",
+    *REQUIRED_BENCHMARK_GATES,
+    "historical_universe_receipt",
+    "point_in_time_fundamentals",
 }
 ENGINE_COLUMNS = [
     "instrument", "date", "open", "high", "low", "close", "volume", "amount",
@@ -145,7 +147,7 @@ def _require_gates(
     failed = sorted(
         name for name in REQUIRED_BENCHMARK_GATES if gate_map.get(name) != "PASS"
     )
-    if gate_map.get("historical_universe_receipt", "PASS") != "PASS":
+    if gate_map["historical_universe_receipt"] != "PASS":
         failed.append("historical_universe_receipt")
     if failed:
         raise ResearchBundleError(
