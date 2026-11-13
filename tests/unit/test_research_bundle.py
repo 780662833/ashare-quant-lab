@@ -92,13 +92,50 @@ def make_inputs(count=12):
             "hfq": {"revision": "a1", "replayable": True},
         },
     }
+    dependencies = {
+        "daily_bars": {"revision_id": "daily-v1", "contract_fingerprint": "daily-contract"},
+        "adj_factors": {"revision_id": "hfq-v1", "contract_fingerprint": "hfq-contract"},
+        "trading_status": {"revision_id": "status-v1", "contract_fingerprint": "status-contract"},
+        "trading_calendar": {"revision_id": "calendar-v1", "contract_fingerprint": "calendar-contract"},
+    }
     revisions = {
-        "daily_bars": "daily-v1",
-        "adj_factors": "hfq-v1",
-        "universe": "universe-v1",
-        "trading_status": "status-v1",
-        "trading_calendar": "calendar-v1",
-        "price_limit_rules": "synthetic-rules-v1",
+        **dependencies,
+        "universe": dependencies["daily_bars"],
+        "price_limit_rules": {
+            "revision_id": "synthetic-rules-v1",
+            "contract_fingerprint": "synthetic-rules-contract",
+            "source": "synthetic_rule_provider",
+        },
+    }
+    source_receipts = [{
+        "dataset": "daily_bars",
+        "receipt": {
+            "replayable": True,
+            "receipt_id": "synthetic-adapter-receipt",
+            "dependencies": dependencies,
+            "coverage": {"completeness": "not_assessed"},
+        },
+    }]
+    coverage_audits = {
+        name: {
+            "audit_id": f"synthetic-{name}-audit",
+            "status": "PASS",
+            "window": {"start": sessions[0], "end": sessions[-1]},
+            "expected_rows": rows,
+            "observed_rows": rows,
+            "missing_keys": 0,
+            "unexpected_keys": 0,
+            "method": "synthetic fixture exact-key reconciliation",
+            "source": "synthetic test fixture only",
+        }
+        for name, rows in {
+            "daily_bars": len(raw),
+            "adj_factors": len(adjusted),
+            "universe": len(membership),
+            "trading_status": len(status),
+            "trading_calendar": len(sessions),
+            "price_limit_rules": len(status),
+        }.items()
     }
     return {
         "raw_bars": pl.DataFrame(raw),
@@ -109,6 +146,8 @@ def make_inputs(count=12):
         "acceptance_report": report,
         "acceptance_report_id": "synthetic-acceptance-v1",
         "source_revisions": revisions,
+        "source_receipts": source_receipts,
+        "coverage_audits": coverage_audits,
         "start_date": sessions[0],
         "end_date": sessions[-1],
         "universe_profile": PROFILE,
@@ -298,3 +337,42 @@ def test_momentum_orchestration_rejects_top_n_mismatch():
             strategy_config=MomentumConfig(top_n=2, lookback_sessions=2, skip_recent_sessions=1),
             backtest_config=BacktestConfig(top_n=20),
         )
+
+
+def test_bundle_binds_declared_revisions_to_adapter_receipt_dependencies():
+    inputs = make_inputs()
+    inputs["source_revisions"]["daily_bars"] = {
+        "revision_id": "caller-invented",
+        "contract_fingerprint": "daily-contract",
+    }
+    with pytest.raises(ResearchBundleError, match="does not match adapter receipt"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_unstructured_source_revision_strings():
+    inputs = make_inputs()
+    inputs["source_revisions"]["daily_bars"] = "daily-v1"
+    with pytest.raises(ResearchBundleError, match="receipt-bound identity"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_requires_explicit_audit_when_receipt_completeness_is_not_assessed():
+    inputs = make_inputs()
+    inputs["coverage_audits"].pop("daily_bars")
+    with pytest.raises(ResearchBundleError, match="coverage_audits missing"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_coverage_audit_with_missing_keys():
+    inputs = make_inputs()
+    inputs["coverage_audits"]["daily_bars"]["missing_keys"] = 1
+    with pytest.raises(ResearchBundleError, match="key gaps"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_coverage_audit_row_count_that_differs_from_assembled_data():
+    inputs = make_inputs()
+    inputs["coverage_audits"]["daily_bars"]["observed_rows"] += 1
+    inputs["coverage_audits"]["daily_bars"]["expected_rows"] += 1
+    with pytest.raises(ResearchBundleError, match="does not match assembled"):
+        build_research_data_bundle(**inputs)
