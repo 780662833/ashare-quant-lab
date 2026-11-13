@@ -23,7 +23,7 @@ def _distribution(values: list[float], *, missing_count: int) -> dict[str, Any]:
         return {
             "sample_count": 0, "missing_count": missing_count, "mean": None,
             "median": None, "sample_std": None, "q1": None, "q3": None,
-            "iqr": None, "min": None, "max": None, "positive_ratio": None,
+            "iqr": None, "min": None, "max": None,
         }
     ordered = sorted(values)
     q1 = float(pl.Series(ordered).quantile(0.25, interpolation="linear"))
@@ -39,7 +39,6 @@ def _distribution(values: list[float], *, missing_count: int) -> dict[str, Any]:
         "iqr": q3 - q1,
         "min": ordered[0],
         "max": ordered[-1],
-        "positive_ratio": sum(value > 0 for value in values) / len(values),
     }
 
 def _finite_values(frame: pl.DataFrame, column: str) -> tuple[list[float], int]:
@@ -157,11 +156,16 @@ def build_statistical_qa_summary(experiment_path: str | Path) -> dict[str, Any]:
                 continue
             values, missing_count = _finite_values(folds, metric)
             summaries[metric] = _distribution(values, missing_count=missing_count)
-        total_returns, missing_returns = _finite_values(folds, "total_return")
-        worst_index = min(range(len(total_returns)), key=lambda index: total_returns[index]) if total_returns else None
+        total_returns, _missing_returns = _finite_values(folds, "total_return")
+        return_rows = [
+            (str(row["fold_id"]), float(row["total_return"]))
+            for row in folds.select("fold_id", "total_return").iter_rows(named=True)
+            if row["total_return"] is not None
+        ]
         worst_fold = (
-            {"fold_id": str(folds["fold_id"][worst_index]), "total_return": total_returns[worst_index]}
-            if worst_index is not None else None
+            {"fold_id": min(return_rows, key=lambda item: item[1])[0],
+             "total_return": min(return_rows, key=lambda item: item[1])[1]}
+            if return_rows else None
         )
         decision = "DESCRIPTIVE_ONLY"
         limitations = [
@@ -183,7 +187,7 @@ def build_statistical_qa_summary(experiment_path: str | Path) -> dict[str, Any]:
         "fold_metric_distributions": summaries,
         "worst_fold": worst_fold,
         "positive_fold_ratio": (
-            summaries["total_return"]["positive_ratio"] if summaries is not None else None
+            (sum(value > 0 for value in total_returns) / len(total_returns) if total_returns else None) if summaries is not None else None
         ),
         "positive_excess_fold_ratio": {
             "value": None, "status": "NOT_AVAILABLE",
