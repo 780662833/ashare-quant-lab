@@ -216,7 +216,13 @@ def verify_walk_forward_experiment(
         test_ranges.append((test_start, test_end, test_sessions))
 
         fold_provenance = item.get("provenance")
-        wf_provenance = fold_provenance.get("walk_forward") if isinstance(fold_provenance, dict) else None
+        if not isinstance(fold_provenance, dict):
+            raise ValueError(f"{fold_id} is missing fold provenance")
+        common_fold_provenance = dict(fold_provenance)
+        common_fold_provenance.pop("walk_forward", None)
+        if common_fold_provenance != provenance:
+            raise ValueError(f"{fold_id} data provenance does not match experiment manifest")
+        wf_provenance = fold_provenance.get("walk_forward")
         if not isinstance(wf_provenance, dict):
             raise ValueError(f"{fold_id} is missing walk_forward provenance")
         if wf_provenance.get("data_cutoff_date") != test_end:
