@@ -66,7 +66,7 @@ def make_experiment(tmp_path, dates):
     ), provenance
 
 
-def make_bundle(dates, provenance, *, daily_membership=True, rising=True):
+def make_bundle(dates, provenance, *, daily_membership=True, trend=0.1, omit_symbol=None):
     adjusted = []
     membership = []
     for i, day in enumerate(dates):
@@ -75,7 +75,9 @@ def make_bundle(dates, provenance, *, daily_membership=True, rising=True):
             for symbol in symbols:
                 membership.append({"instrument": symbol, "date": day})
         for j, symbol in enumerate(symbols):
-            value = 10.0 + i * (0.1 if rising else -0.1) + j
+            if symbol == omit_symbol:
+                continue
+            value = 10.0 + i * trend + j
             adjusted.append({
                 "instrument": symbol, "date": day,
                 "adj_close": value, "adj_is_exact": True,
@@ -183,3 +185,30 @@ def test_insufficient_calendar_year_is_explicit(tmp_path, monkeypatch):
 
     assert report["periods"][0]["status"] == "INSUFFICIENT_SAMPLE"
     assert all(item["status"] == "INSUFFICIENT_SAMPLE" for item in report["periods"])
+
+
+
+def test_bear_regime_requires_negative_median_and_weak_breadth(tmp_path, monkeypatch):
+    dates = sessions()
+    experiment, provenance = make_experiment(tmp_path, dates)
+    bundle = make_bundle(dates, provenance, trend=-0.2)
+    monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
+
+    report = period_regime.build_period_regime_diagnostics(str(experiment.path), bundle)
+
+    assert {item["regime"] for item in report["regimes"]} == {"BEAR"}
+
+
+def test_market_state_coverage_below_80_percent_is_unknown(tmp_path, monkeypatch):
+    dates = sessions()
+    experiment, provenance = make_experiment(tmp_path, dates)
+    bundle = make_bundle(dates, provenance, omit_symbol="000002.SZ")
+    monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
+
+    report = period_regime.build_period_regime_diagnostics(str(experiment.path), bundle)
+
+    assert report["unknown_market_state_sessions"] == 126
+    assert "valid_universe_coverage_below_80_percent" in report["unknown_reasons"]
+    unknown = next(item for item in report["regimes"] if item["regime"] == "UNKNOWN")
+    assert unknown["mean_median_63_session_return"] is None
+    assert unknown["mean_positive_breadth"] is None
