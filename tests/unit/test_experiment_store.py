@@ -274,6 +274,39 @@ def test_persist_rejects_combined_ledgers_that_do_not_match_fold_outputs(tmp_pat
     assert not (tmp_path / "momentum-smoke-001").exists()
 
 
+def test_persist_rejects_source_revision_not_backed_by_adapter_receipt(tmp_path):
+    run = make_run()
+    fold_run = run.folds[0]
+    invalid_provenance = {
+        **fold_run.provenance,
+        "source_revisions": {
+            **fold_run.provenance["source_revisions"],
+            "daily_bars": {"revision_id": "caller-invented-r9", "contract_fingerprint": "daily-contract"},
+        },
+    }
+    invalid_fold = WalkForwardMomentumFoldRun(
+        fold=fold_run.fold,
+        baseline_date=fold_run.baseline_date,
+        baseline_nav=fold_run.baseline_nav,
+        daily=fold_run.daily,
+        orders=fold_run.orders,
+        holdings=fold_run.holdings,
+        report=fold_run.report,
+        provenance=invalid_provenance,
+    )
+    invalid = WalkForwardMomentumRun(
+        folds=[invalid_fold],
+        fold_table=run.fold_table,
+        oos_daily=run.oos_daily,
+        oos_orders=run.oos_orders,
+        oos_holdings=run.oos_holdings,
+        aggregate_report=run.aggregate_report,
+    )
+    with pytest.raises(ValueError, match="source revision daily_bars does not match retained receipt identity"):
+        persist(tmp_path, run=invalid)
+    assert not (tmp_path / "momentum-smoke-001").exists()
+
+
 def test_persist_rejects_missing_source_revision(tmp_path):
     run = make_run()
     fold_run = run.folds[0]
@@ -451,7 +484,7 @@ def test_compare_rejects_different_source_revisions(tmp_path):
         run=altered_run,
     )
 
-    with pytest.raises(ValueError, match="source revision daily_bars does not match retained receipt identity"):
+    with pytest.raises(ValueError, match="data provenance/revisions"):
         compare_walk_forward_experiments([first, second])
 
 
