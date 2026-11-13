@@ -280,6 +280,9 @@ def run_fill_stress_suite(
     baseline_backtest = _backtest_config_from_manifest(configs["backtest"])
     if baseline_backtest.target_fill_ratio != 1.0:
         raise ValueError("F0 baseline must use target_fill_ratio=1.0")
+    required_fill_columns = {"target_signal_date", "target_requested_qty", "target_fill_cap_qty", "target_fill_ratio"}
+    if not required_fill_columns.issubset(baseline.oos_orders.columns):
+        raise ValueError("F0 baseline predates deterministic target-fill ledger fields; create a new baseline artifact")
     baseline_qa = build_research_qa_report(
         str(baseline.path), qa_id=f"p105-{baseline.manifest['experiment_id']}-F0",
         created_at=datetime.now(timezone.utc).isoformat(),
