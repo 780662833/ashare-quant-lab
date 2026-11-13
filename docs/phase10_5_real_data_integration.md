@@ -79,6 +79,13 @@ DataFrame and a receipt explicitly marked `replayable: true`. Receipts are retai
 on the adapter instance as ordered `source_receipts` entries, including the dataset
 name, so repeated reads of the same dataset are not silently overwritten.
 
+The adapter exposes an explicit `trading_calendar(start_date, end_date)` read
+that filters the receipt-backed `trading_calendar` dataset to rows marked
+`is_trading=true`. It rejects null/duplicate dates, out-of-window rows, and
+windows with no sessions. This provides the official session list and pins the
+calendar dependency in the same adapter read session; it does not certify that
+the returned calendar is complete without the separate coverage audit.
+
 This closes the adapter-level provenance gap; it does **not** complete the assembler.
 The assembler must still map those receipts to the exact input frames and validate
 revision dependencies, date-window support, and cross-dataset consistency. Unit tests
