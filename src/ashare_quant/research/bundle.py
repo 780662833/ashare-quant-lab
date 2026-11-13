@@ -6,7 +6,7 @@ dataset and never unlocks model training.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Mapping
 
@@ -165,7 +165,40 @@ class ResearchDataBundle:
     universe_membership: pl.DataFrame
     trading_dates: list[str]
     provenance: dict[str, Any]
+    _validation_token: object | None = field(default=None, init=False, repr=False, compare=False)
 
+    def _require_validated(self) -> None:
+        if self._validation_token is not _BUNDLE_VALIDATION_TOKEN:
+            raise ValueError(
+                "ResearchDataBundle must be created by build_research_data_bundle; "
+                "direct construction is not an admission path"
+            )
+
+    def _validated_copy(
+        self,
+        *,
+        execution_bars: pl.DataFrame | None = None,
+        adjusted_bars: pl.DataFrame | None = None,
+        universe_membership: pl.DataFrame | None = None,
+        trading_dates: list[str] | None = None,
+        provenance: dict[str, Any] | None = None,
+    ) -> "ResearchDataBundle":
+        """Create an internal derived view while preserving builder validation."""
+        self._require_validated()
+        result = ResearchDataBundle(
+            execution_bars=self.execution_bars if execution_bars is None else execution_bars,
+            adjusted_bars=self.adjusted_bars if adjusted_bars is None else adjusted_bars,
+            universe_membership=(
+                self.universe_membership if universe_membership is None else universe_membership
+            ),
+            trading_dates=self.trading_dates if trading_dates is None else trading_dates,
+            provenance=self.provenance if provenance is None else provenance,
+        )
+        object.__setattr__(result, "_validation_token", _BUNDLE_VALIDATION_TOKEN)
+        return result
+
+
+_BUNDLE_VALIDATION_TOKEN = object()
 
 def _iso_date(value: Any, *, field: str) -> str:
     text = value.isoformat() if hasattr(value, "isoformat") else str(value)
@@ -563,10 +596,12 @@ def build_research_data_bundle(
             "weekly_signal_dates": weekly_dates,
         },
     }
-    return ResearchDataBundle(
+    bundle = ResearchDataBundle(
         execution_bars=execution_bars,
         adjusted_bars=adjusted_out,
         universe_membership=membership_out,
         trading_dates=sessions,
         provenance=provenance,
     )
+    object.__setattr__(bundle, "_validation_token", _BUNDLE_VALIDATION_TOKEN)
+    return bundle
