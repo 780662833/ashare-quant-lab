@@ -364,9 +364,35 @@ def test_order_ledger_reconciles_cash_holdings_fees_and_t_plus_one():
     )
 
 
-def test_accounting_replay_allows_odd_lot_only_for_full_liquidation():
-    # The engine's normal buy path creates board-lot holdings; this test also
-    # exercises the invariant helper's explicit odd-lot liquidation exception.
+def test_accounting_replay_rejects_non_liquidating_odd_lot_sell():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders = pl.DataFrame([{
+        "date": "2024-01-02", "instrument": "600000.SH", "side": "buy",
+        "requested_qty": 200, "filled_qty": 200, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }, {
+        "date": "2024-01-03", "instrument": "600000.SH", "side": "sell",
+        "requested_qty": 150, "filled_qty": 150, "fill_price": 10.0,
+        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+        "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
+    }])
+    daily = pl.DataFrame([
+        {"date": "2024-01-02", "cash": 98000.0, "market_value": 2000.0, "nav": 100000.0, "gross_exposure": 0.02},
+        {"date": "2024-01-03", "cash": 99500.0, "market_value": 500.0, "nav": 100000.0, "gross_exposure": 0.005},
+    ])
+    holdings = pl.DataFrame([
+        {"date": "2024-01-02", "instrument": "600000.SH", "quantity": 200, "mark_price": 10.0, "market_value": 2000.0},
+        {"date": "2024-01-03", "instrument": "600000.SH", "quantity": 50, "mark_price": 10.0, "market_value": 500.0},
+    ])
+    with pytest.raises(AssertionError, match="Odd-lot sell must liquidate"):
+        _validate_result_accounting(
+            orders, daily, holdings, initial_cash=100000.0, board_lot=100,
+        )
+
+
+def test_accounting_replay_rejects_sell_quantity_above_inventory():
     from ashare_quant.backtest.engine import _validate_result_accounting
 
     orders = pl.DataFrame([{
@@ -380,8 +406,6 @@ def test_accounting_replay_allows_odd_lot_only_for_full_liquidation():
         "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
         "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
     }])
-    # An intentionally inconsistent quantity is rejected before a fake NAV
-    # can be accepted; the engine never permits selling more than inventory.
     daily = pl.DataFrame([
         {"date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0, "nav": 100000.0, "gross_exposure": 0.01},
         {"date": "2024-01-03", "cash": 100500.0, "market_value": 0.0, "nav": 100500.0, "gross_exposure": 0.0},
