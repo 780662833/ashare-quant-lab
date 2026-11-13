@@ -150,6 +150,20 @@ def build_statistical_qa_summary(experiment_path: str | Path) -> dict[str, Any]:
         worst_fold = None
         decision = "BLOCKED"
         limitations = list(admission["blockers"])
+        if not limitations:
+            required_gates = experiment.manifest["data_provenance"].get(
+                "required_benchmark_gates", {}
+            )
+            failed_gates = [
+                f"{name}={status}"
+                for name, status in required_gates.items()
+                if status != "PASS"
+            ]
+            limitations = (
+                ["Required benchmark gates failed: " + ", ".join(sorted(failed_gates))]
+                if failed_gates
+                else ["Admission is BLOCKED; descriptive metrics are withheld."]
+            )
     else:
         summaries = {}
         for metric in _METRICS:
