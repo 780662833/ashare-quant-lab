@@ -700,7 +700,7 @@ def test_unfilled_target_at_window_end_is_reported_as_pending():
         "instrument": ["600000.SH"],
         "weight": [0.5],
     })
-    result = run_backtest(bars, targets)
+    result = run_backtest(bars, targets, BacktestConfig(initial_cash=100000))
     assert result.orders["status"].to_list() == ["no_fill"]
     assert result.pending_targets.height == 1
     pending = result.pending_targets.row(0, named=True)
