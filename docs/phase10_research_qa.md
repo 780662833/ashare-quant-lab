@@ -1,8 +1,8 @@
 # Phase 10.1 — Research QA architecture and acceptance criteria
 
-**Status:** P10.1 architecture accepted; P10.2 merged; P10.3 implementation in progress  
+**Status:** P10.1–P10.3 merged (PR #19); P10.4 transaction-cost stress implementation in progress  
 **Date:** 2026-11-13  
-**Scope:** Research QA design only; no new experiment runner, model training, data backfill, or live-trading capability.
+**Scope:** Research QA over verified Phase 8 artifacts; reuse the existing runner/store, with no new backtest engine, model training, data backfill, or live-trading capability.
 
 ## 1. Purpose and non-goals
 
@@ -247,7 +247,7 @@ Phase 10.1 is complete when:
 
 1. **P10.2 — admission guard + report skeleton:** implement read-only gate/identity validation and QA report schema tests; no backtest changes.
 2. **P10.3 — period/regime diagnostics:** derive labels from accepted bundle data and aggregate verified OOS ledgers.
-3. **P10.4 — cost stress:** run pre-registered cost variants through the existing runner/engine and persist immutable artifacts.
+3. **P10.4 — cost stress:** run pre-registered cost variants through the existing runner/engine and persist immutable artifacts. Implemented on `phase10.4-cost-stress-qa`; awaiting CI and review.
 4. **P10.5 — fill stress:** first inspect engine support and accounting tests; extend only the existing execution policy if necessary, otherwise report unsupported.
 5. **P10.6 — parameter and statistical QA:** pre-register variants, preserve untouched test windows, add dependence-aware inference only with explicit methodology.
 6. **P10.7 — integrated acceptance:** evaluate the complete report contract and publish limitations; strategy acceptance remains separate from data admission.
@@ -288,3 +288,43 @@ verified daily membership snapshots. P10.3 only reads verified OOS ledgers
 and the matching bundle; it does not rerun the strategy, read CNEquity, or
 train a model. PIT failure continues to block LightGBM regardless of
 price-only benchmark eligibility.
+
+
+## 10.4 — Transaction-cost stress implementation
+
+The implementation is exposed as `build_cost_stress_scenarios(baseline)`
+and `run_cost_stress_suite(bundle, baseline_experiment_path, ...)`.
+The caller must provide the exact persisted C0 baseline experiment. Its
+artifact verifier and P10.2/P10.3 admission checks run before any stress
+variant is evaluated; the baseline is not rerun or overwritten.
+
+The fixed protocol applies one multiplier to every configured fee and
+slippage component together:
+
+| Scenario | Multiplier |
+|---|---:|
+| C0 — baseline | 1.0x (exact persisted baseline) |
+| C1 — moderate | 1.5x |
+| C2 — severe | 2.0x |
+| C3 — extreme | 3.0x |
+
+C1–C3 are run through `run_walk_forward_momentum` and persisted as separate
+immutable Phase 8 experiments. Each artifact is verified independently.
+Before aggregation, the suite requires identical data provenance/revisions,
+walk-forward config, strategy config and fold windows; only the cost fields
+may differ. The Phase 8 parameter comparator is not weakened or reused for
+these unlike cost configurations.
+
+The summary reports OOS net return, CAGR, worst-fold drawdown, turnover,
+itemized commission/transfer fee/stamp duty/slippage, total costs, order
+counts and deltas versus C0. `excess_return_vs_C0` is explicitly the return
+difference caused by the cost assumption, not market-benchmark excess return.
+When OOS test folds contain gaps, returns/CAGR use the mean fold summaries
+and disclose that gaps are excluded; no continuous portfolio path is implied.
+
+Multipliers are research assumptions, not a representation of current
+broker/exchange fee schedules. Slippage remains embedded in the worse fill
+price and is reported separately; it is never deducted from cash a second
+time. The suite does not infer actual commissions, taxes, transfer charges or
+slippage from incomplete data. It does not modify existing experiment
+artifacts, perform CNEquity reads/backfills, train a model, or unlock training.
