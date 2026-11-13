@@ -188,6 +188,16 @@ def test_assembler_requires_receipt_for_each_required_dependency():
         assemble(fixture)
 
 
+def test_assembler_rejects_adapter_revision_drift_from_receipt():
+    fixture = _fixtures()
+    fixture["dependencies"]["daily_bars"] = {
+        "revision_id": "caller-invented-r9",
+        "contract_fingerprint": "daily-contract",
+    }
+    with pytest.raises(ResearchBundleError, match="does not match adapter receipt dependency identity"):
+        assemble(fixture)
+
+
 def test_assembler_requires_audit_for_every_source():
     fixture = _fixtures()
     fixture["audits"].pop("price_limit_rules")
