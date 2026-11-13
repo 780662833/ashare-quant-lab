@@ -29,6 +29,8 @@
 - Reproducibility metadata: source revisions/receipts, universe profile,
   strategy parameters, repository commit, software versions, execution/cost
   configuration, requested dates, and random seed where applicable.
+- Persist completed walk-forward runs with immutable manifests and checksummed
+  Parquet NAV, order and holdings ledgers; see [experiment_store.md](experiment_store.md).
 
 ## Anti-bias rules
 

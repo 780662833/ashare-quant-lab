@@ -8,6 +8,7 @@ from ashare_quant.research.walk_forward_runner import (
     WalkForwardMomentumRun,
     run_walk_forward_momentum,
 )
+from ashare_quant.research.experiment_store import persist_walk_forward_momentum_run
 
 from ashare_quant.research.walk_forward import (
     WalkForwardConfig,
@@ -25,6 +26,7 @@ __all__ = [
     "WalkForwardMomentumRun",
     "build_research_data_bundle",
     "build_walk_forward_folds",
+    "persist_walk_forward_momentum_run",
     "run_momentum_benchmark",
     "run_walk_forward_momentum",
 ]

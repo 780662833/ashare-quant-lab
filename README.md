@@ -39,6 +39,8 @@ directly. See the system-level architecture before extending a component.
   label-maturity purge, embargo, and non-overlapping test windows.
 - [Walk-forward momentum runner](docs/walk_forward_runner.md) — fold-by-fold
   momentum execution, test-only ledgers, cutoff and aggregate semantics.
+- [Experiment artifact store](docs/experiment_store.md) — immutable manifests,
+  source/config provenance, and Parquet result ledgers.
 - [Canonical research data bundle](docs/research_data_bundle.md) — data assembly,
   acceptance report identity, provenance, and benchmark orchestration.
 - [Data contract](docs/data_contract.md) — CNEquity fields, PIT, four-gate admission.
