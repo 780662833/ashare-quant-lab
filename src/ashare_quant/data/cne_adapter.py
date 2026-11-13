@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import polars as pl
 
@@ -26,6 +26,7 @@ class CNEquityAdapter:
     data_root: str | Path | None = None
     profile: str = RESEARCH_PROFILE
     _config: Any = field(init=False, default=None, repr=False)
+    _source_receipts: list[dict[str, Any]] = field(init=False, default_factory=list, repr=False)
 
     def __post_init__(self) -> None:
         if self.config_path is not None and self.data_root is not None:
@@ -37,13 +38,32 @@ class CNEquityAdapter:
             from cnequity.config import load_config
             self._config = load_config(Path(self.config_path).expanduser())
 
+    @property
+    def source_receipts(self) -> list[dict[str, Any]]:
+        """Return a copy of the replayable source receipts collected by this adapter."""
+        return [dict(item) for item in self._source_receipts]
+
     def _load(self, dataset: str, **kwargs: Any) -> pl.DataFrame:
-        from cnequity.query import load
+        """Read through CNEquity's receipt API; ordinary unprovenanced reads are forbidden."""
+        from cnequity.query import load_with_receipt
         if self._config is not None:
             kwargs["config"] = self._config
         else:
             kwargs["data_root"] = str(Path(self.data_root).expanduser())
-        return load(dataset, **kwargs)
+        kwargs["require_replayable"] = True
+        result = load_with_receipt(dataset, **kwargs)
+        frame = getattr(result, "frame", None)
+        receipt = getattr(result, "receipt", None)
+        if not isinstance(frame, pl.DataFrame):
+            raise CNEquityDataError(
+                f"CNEquity {dataset} receipt read did not return a Polars DataFrame"
+            )
+        if not isinstance(receipt, Mapping) or receipt.get("replayable") is not True:
+            raise CNEquityDataError(
+                f"CNEquity {dataset} did not return a replayable source receipt"
+            )
+        self._source_receipts.append({"dataset": dataset, "receipt": dict(receipt)})
+        return frame
 
     @staticmethod
     def _canonical_bars(frame: pl.DataFrame) -> pl.DataFrame:

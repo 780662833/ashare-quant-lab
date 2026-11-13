@@ -1,5 +1,5 @@
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import polars as pl
 import pytest
@@ -9,7 +9,14 @@ from ashare_quant.data.cne_adapter import CNEquityAdapter, CNEquityDataError
 
 def install_fake_cne(monkeypatch, loader):
     query = ModuleType("cnequity.query")
-    query.load = loader
+    def load_with_receipt(dataset, **kwargs):
+        result = loader(dataset, **kwargs)
+        if isinstance(result, tuple):
+            frame, receipt = result
+        else:
+            frame, receipt = result, {"replayable": True, "revision": "test-revision"}
+        return SimpleNamespace(frame=frame, receipt=receipt)
+    query.load_with_receipt = load_with_receipt
     package = ModuleType("cnequity")
     package.__path__ = []
     monkeypatch.setitem(sys.modules, "cnequity", package)
@@ -137,3 +144,29 @@ def test_adapter_requires_exactly_one_lake_location():
         CNEquityAdapter()
     with pytest.raises(ValueError, match="not both"):
         CNEquityAdapter(config_path="cne.toml", data_root="/tmp/cne")
+
+
+
+def test_adapter_collects_replayable_receipts_for_each_read(monkeypatch):
+    calls = []
+    def fake_load(dataset, **kwargs):
+        calls.append((dataset, kwargs))
+        return bars()
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    adapter.daily_bars(["600000.SH"], "2024-01-01", "2024-01-31")
+    receipts = adapter.source_receipts
+    assert len(receipts) == 1
+    assert receipts[0]["dataset"] == "daily_bars"
+    assert receipts[0]["receipt"]["replayable"] is True
+    assert calls[0][1]["require_replayable"] is True
+
+
+def test_adapter_rejects_non_replayable_receipt(monkeypatch):
+    install_fake_cne(
+        monkeypatch,
+        lambda dataset, **kwargs: (bars(), {"replayable": False}),
+    )
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    with pytest.raises(CNEquityDataError, match="replayable"):
+        adapter.daily_bars(None, "2024-01-01", "2024-01-31")
