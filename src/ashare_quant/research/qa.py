@@ -95,6 +95,14 @@ def _assess_verified_experiment(
         key: _normalize_gate_status(raw_gates.get(key))
         for key in GATE_KEYS
     }
+    unresolved_gates = [
+        key for key, status in gates.items() if status in {"MISSING", "UNKNOWN"}
+    ]
+    if unresolved_gates:
+        blockers.append(
+            "missing or unrecognized independent gate statuses: "
+            + ", ".join(sorted(unresolved_gates))
+        )
 
     required_benchmark = provenance.get("required_benchmark_gates")
     if not isinstance(required_benchmark, Mapping):
