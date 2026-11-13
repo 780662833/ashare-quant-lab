@@ -38,6 +38,8 @@ directly. See the system-level architecture before extending a component.
 - [Phase 10 Research QA architecture](docs/phase10_research_qa.md) — QA layer,
   four-gate admission guard, regime/cost/fill protocols, OOS discipline and
   unified acceptance/report contract.
+- [Research QA admission guard](src/ashare_quant/research/qa.py) — verified
+  Phase 8 artifact admission checks and strict P10.2 report envelope.
 - [Walk-forward split plan](docs/walk_forward.md) — chronological folds,
   label-maturity purge, embargo, and non-overlapping test windows.
 - [Walk-forward momentum runner](docs/walk_forward_runner.md) — fold-by-fold
