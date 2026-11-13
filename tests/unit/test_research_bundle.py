@@ -146,6 +146,7 @@ def test_bundle_preserves_all_four_independent_acceptance_gate_statuses():
     bundle = build()
     assert bundle.provenance["acceptance_gates"] == {
         "historical_universe": "PASS",
+        "historical_universe_receipt": "PASS",
         "hfq_adjustment": "PASS",
         "point_in_time_fundamentals": "FAIL",
         "trading_status": "PASS",
