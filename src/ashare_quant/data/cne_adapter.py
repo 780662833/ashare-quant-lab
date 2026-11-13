@@ -1,4 +1,4 @@
-"""CNEquity 0.21.x adapter with fail-closed research evidence checks.
+"""CNEquity receipt-backed adapter with fail-closed research evidence checks.
 
 Raw OHLC remains the execution-price source. HFQ columns are research-only.
 """
