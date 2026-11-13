@@ -296,6 +296,6 @@ As of 2026-11-13:
 | Unified research data bundle | Merged in PR #10; core builder, momentum orchestration and native CNEquity status normalization have synthetic coverage; direct source assembly, audited historical price-limit evidence and local-lake validation remain pending |
 | Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
 | Walk-forward momentum runner | Merged in PR #13; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
-| Experiment artifact store | Merged in PR #15; immutable manifest, source/config provenance, fold manifests and checksummed Parquet OOS ledgers; 92 synthetic unit tests pass |
+| Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
 | Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
 | Live trading | Out of scope |
