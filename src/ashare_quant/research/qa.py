@@ -10,6 +10,7 @@ import hashlib
 import json
 import re
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Mapping
 
 from ashare_quant.research.experiment_provenance import validate_experiment_provenance
@@ -211,10 +212,13 @@ def validate_research_qa_report(report: Mapping[str, Any]) -> None:
         "repository_commit", "experiment_ids", "admission", "integrity",
         "scenarios", "periods", "regimes", "limitations", "conclusion",
     }
+    protocol = report.get("protocol_version")
+    if protocol == "phase10.7":
+        required.update({"cost_stress", "execution_stress", "statistical_qa"})
     missing = sorted(required.difference(report))
     if missing:
         raise ValueError("Research QA report is missing fields: " + ", ".join(missing))
-    if report.get("schema_version") != 1 or report.get("protocol_version") not in {"phase10.2", "phase10.3"}:
+    if report.get("schema_version") != 1 or protocol not in {"phase10.2", "phase10.3", "phase10.7"}:
         raise ValueError("Unsupported Research QA report schema/protocol version")
     if not isinstance(report.get("qa_id"), str) or not re.fullmatch(
         r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", report["qa_id"]
@@ -275,6 +279,18 @@ def validate_research_qa_report(report: Mapping[str, Any]) -> None:
         raise ValueError("conclusion is invalid")
     if admission.get("decision") == "BLOCKED" and report.get("conclusion") != "BLOCKED":
         raise ValueError("blocked admission requires BLOCKED conclusion")
+    if protocol == "phase10.7":
+        cost_stress = report.get("cost_stress")
+        execution_stress = report.get("execution_stress")
+        statistical_qa = report.get("statistical_qa")
+        if not isinstance(cost_stress, Mapping) or cost_stress.get("status") not in {"VERIFIED", "NOT_PROVIDED"}:
+            raise ValueError("cost_stress status must be VERIFIED or NOT_PROVIDED")
+        if not isinstance(execution_stress, Mapping) or not isinstance(execution_stress.get("scenarios"), list):
+            raise ValueError("execution_stress must include a scenario list")
+        if not isinstance(statistical_qa, Mapping) or statistical_qa.get("decision") not in {"BLOCKED", "DESCRIPTIVE_ONLY"}:
+            raise ValueError("statistical_qa decision is invalid")
+        if report.get("conclusion") not in {"BLOCKED", "INSUFFICIENT_EVIDENCE"}:
+            raise ValueError("P10.7 cannot claim FRAGILE/ROBUST without frozen acceptance thresholds")
     # Enforce strict JSON serializability and reject NaN/Infinity.
     json.dumps(report, ensure_ascii=False, allow_nan=False)
 
