@@ -4,12 +4,14 @@ import polars as pl
 import pytest
 
 from ashare_quant.backtest import BacktestConfig, CostModel
+from ashare_quant.backtest.engine import BacktestResult
 from ashare_quant.research import (
     ResearchDataBundle,
     WalkForwardConfig,
     build_research_data_bundle,
     run_walk_forward_momentum,
 )
+from ashare_quant.research.walk_forward_runner import _fold_report
 from ashare_quant.strategies.momentum import MomentumConfig
 
 
@@ -221,3 +223,45 @@ def test_runner_rejects_panels_outside_the_supplied_calendar(configs):
     )
     with pytest.raises(ValueError, match="outside the supplied trading calendar"):
         run_walk_forward_momentum(shortened, **configs)
+
+
+@pytest.mark.parametrize(
+    ("nav_values", "daily_returns"),
+    [
+        ([90.0], [-0.10]),
+        ([90.0, 95.0], [-0.10, (95.0 / 90.0) - 1.0]),
+    ],
+)
+def test_fold_report_uses_prior_close_without_overwriting_first_test_nav(
+    nav_values, daily_returns
+):
+    dates = ["2020-01-02", "2020-01-03"][: len(nav_values)]
+    daily = pl.DataFrame({
+        "date": dates,
+        "nav": nav_values,
+        "daily_return": daily_returns,
+    })
+    result = BacktestResult(
+        daily=daily,
+        orders=pl.DataFrame(),
+        holdings=pl.DataFrame(),
+    )
+
+    report = _fold_report(
+        result,
+        test_start=dates[0],
+        test_end=dates[-1],
+        baseline_nav=100.0,
+        annualization=252,
+    )
+
+    expected_return = nav_values[-1] / 100.0 - 1.0
+    expected_cagr = (1.0 + expected_return) ** (252 / len(nav_values)) - 1.0
+    assert report["period"]["sessions"] == len(nav_values)
+    assert report["initial_nav"] == pytest.approx(100.0)
+    assert report["final_nav"] == pytest.approx(nav_values[-1])
+    assert report["total_return"] == pytest.approx(expected_return)
+    assert report["cagr"] == pytest.approx(expected_cagr)
+    # The first test close is below the baseline in both cases. It must count
+    # toward drawdown, even when it is the only test observation.
+    assert report["max_drawdown"] == pytest.approx(-0.10)
