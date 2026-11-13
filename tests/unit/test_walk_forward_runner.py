@@ -217,13 +217,7 @@ def test_each_fold_is_truncated_at_its_own_test_end(configs):
         .otherwise(pl.col("adj_close"))
         .alias("adj_close")
     )
-    changed_bundle = ResearchDataBundle(
-        execution_bars=original.execution_bars,
-        adjusted_bars=changed_adjusted,
-        universe_membership=original.universe_membership,
-        trading_dates=original.trading_dates,
-        provenance=original.provenance,
-    )
+    changed_bundle = original._validated_copy(adjusted_bars=changed_adjusted)
     changed_first = run_walk_forward_momentum(changed_bundle, **configs).folds[0]
 
     assert changed_first.daily.equals(first.daily)
@@ -233,12 +227,8 @@ def test_each_fold_is_truncated_at_its_own_test_end(configs):
 
 def test_runner_rejects_bundle_that_claims_training_is_unlocked(configs):
     bundle = make_bundle()
-    invalid = ResearchDataBundle(
-        execution_bars=bundle.execution_bars,
-        adjusted_bars=bundle.adjusted_bars,
-        universe_membership=bundle.universe_membership,
-        trading_dates=bundle.trading_dates,
-        provenance={**bundle.provenance, "training_dataset_unlocked": True},
+    invalid = bundle._validated_copy(
+        provenance={**bundle.provenance, "training_dataset_unlocked": True}
     )
     with pytest.raises(ValueError, match="training_dataset_unlocked=false"):
         run_walk_forward_momentum(invalid, **configs)
@@ -254,13 +244,7 @@ def test_runner_rejects_strategy_and_engine_top_n_mismatch(configs):
 
 def test_runner_rejects_panels_outside_the_supplied_calendar(configs):
     bundle = make_bundle()
-    shortened = ResearchDataBundle(
-        execution_bars=bundle.execution_bars,
-        adjusted_bars=bundle.adjusted_bars,
-        universe_membership=bundle.universe_membership,
-        trading_dates=bundle.trading_dates[1:],
-        provenance=bundle.provenance,
-    )
+    shortened = bundle._validated_copy(trading_dates=bundle.trading_dates[1:])
     with pytest.raises(ValueError, match="outside the supplied trading calendar"):
         run_walk_forward_momentum(shortened, **configs)
 
