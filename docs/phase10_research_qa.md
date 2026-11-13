@@ -347,23 +347,32 @@ artifacts, perform CNEquity reads/backfills, train a model, or unlock training.
 
 ## 10.5 — Fill-stress capability assessment
 
-The current engine records tradability no-fills, cash-affordability partial
-fills and retry attempts, but it has no deterministic target-fill-ratio policy.
-`build_fill_stress_assessment(experiment_path)` verifies the immutable baseline,
-reports its observed share fill ratio and no-fill reason counts, and emits the
-pre-registered 100%/95%/90%/80%/70% target scenarios as `UNSUPPORTED` (or
-`BLOCKED` when admission fails). It does not rerun the engine, delete orders,
-haircut NAV, or fabricate achieved fill ratios. Target-fill scenarios remain
-unsupported until a deterministic order-level cap/retry policy is implemented
-and its cash, holdings, fee, lot-size and retry invariants are tested.
+The shared engine now exposes `BacktestConfig.target_fill_ratio` (0.0–1.0,
+default 1.0). At the first eligible execution session for each signal/instrument
+transition, it freezes the full target difference and a cumulative fill cap.
+For ratios below 100%, the cap is rounded down to the configured board lot.
+Temporary no-fills and cash-affordability partial fills retry only the remaining
+quantity up to that cap; reaching the cap ends execution for that transition.
+A cap below one board lot is explicitly recorded as a no-fill. A new signal
+creates a new transition and cap. The default 1.0 path preserves the full target
+quantity.
 
-The order ledger now distinguishes per-attempt `requested_qty` from the
-signal-transition identity and stable `target_requested_qty`. Retries share
-one (signal date, instrument) transition denominator; cumulative fills are
-checked against that target. New reports identify the fill-ratio basis as
-`target_transition`. Legacy persisted ledgers without these fields retain an
-explicitly labeled `attempt_requested_legacy` ratio and must not be compared
-as if they used the corrected denominator.
+The order ledger distinguishes per-attempt `requested_qty`, full
+`target_requested_qty`, `target_fill_cap_qty`, and `target_fill_ratio`.
+Retries share one (signal date, instrument) denominator. Cumulative fills,
+stable target quantities/caps and configured ratios are validated. Legacy
+persisted ledgers without transition identity retain an explicitly labeled
+`attempt_requested_legacy` ratio and are not comparable to the new denominator.
+
+`build_fill_stress_assessment(experiment_path)` remains a read-only baseline
+capability check; it marks target scenarios `UNSUPPORTED` until an immutable
+scenario suite is supplied. `run_fill_stress_suite(...)` runs F1–F4 through the
+existing walk-forward runner, keeps the exact persisted F0 baseline, verifies
+every artifact and admission decision, checks provenance/config/fold alignment,
+and reports achieved ratios separately from configured caps. Board-lot rounding,
+suspensions, price-limit locks, missing bars and cash constraints can make the
+achieved ratio lower than the requested scenario. It does not delete trades or
+haircut NAV.
 ## 10.7 — Integrated immutable QA report
 
 `build_integrated_research_qa_report(...)` combines the verified P10.2 admission
