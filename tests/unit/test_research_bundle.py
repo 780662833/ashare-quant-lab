@@ -141,6 +141,26 @@ def test_price_only_benchmark_does_not_require_fundamental_pit_pass():
     }
 
 
+def test_bundle_preserves_all_four_independent_acceptance_gate_statuses():
+    bundle = build()
+    assert bundle.provenance["acceptance_gates"] == {
+        "historical_universe": "PASS",
+        "hfq_adjustment": "PASS",
+        "point_in_time_fundamentals": "FAIL",
+        "trading_status": "PASS",
+    }
+
+
+def test_bundle_rejects_missing_independent_pit_gate():
+    inputs = make_inputs()
+    inputs["acceptance_report"]["gates"] = [
+        gate for gate in inputs["acceptance_report"]["gates"]
+        if gate["name"] != "point_in_time_fundamentals"
+    ]
+    with pytest.raises(ResearchBundleError, match="missing independent gates"):
+        build_research_data_bundle(**inputs)
+
+
 def test_bundle_rejects_missing_status_row():
     inputs = make_inputs()
     inputs["execution_evidence"] = inputs["execution_evidence"].slice(1)

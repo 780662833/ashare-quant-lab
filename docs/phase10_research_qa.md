@@ -1,6 +1,6 @@
 # Phase 10.1 — Research QA architecture and acceptance criteria
 
-**Status:** Architecture baseline / implementation not yet started  
+**Status:** P10.1 architecture accepted; P10.2 implementation in progress  
 **Date:** 2026-11-13  
 **Scope:** Research QA design only; no new experiment runner, model training, data backfill, or live-trading capability.
 
