@@ -7,6 +7,11 @@ loading and strategy/backtest code. It normalizes already-read inputs; it does
 not make CNEquity calls, download data, create features/labels, or unlock model
 training.
 
+Only `build_research_data_bundle(...)` creates an admitted bundle. Direct dataclass
+construction is rejected by benchmark and walk-forward entry points. Internal
+walk-forward cutoff views preserve the builder's validation marker without
+reopening provider access or changing the data-admission decision.
+
 The first orchestration path is the price-only momentum benchmark.
 
 ## Builder contract
