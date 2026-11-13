@@ -1,6 +1,6 @@
 # Phase 10.1 — Research QA architecture and acceptance criteria
 
-**Status:** P10.1–P10.7 code/report architecture merged (PR #17–20, #37–39); target-fill execution policy remains UNSUPPORTED, and empirical QA remains blocked pending real-data acceptance  
+**Status:** P10.1–P10.7 code/report architecture merged (PR #17–20, #37–39); deterministic target-quantity fill caps and immutable F0–F4 suite merged in PR #44; empirical QA remains blocked pending real-data acceptance  
 **Date:** 2026-11-13  
 **Scope:** Research QA over verified Phase 8 artifacts; reuse the existing runner/store, with no new backtest engine, model training, data backfill, or live-trading capability.
 
@@ -152,9 +152,9 @@ Different cost configurations are not comparable through the existing Phase 8 pa
 
 Pre-register target fill-ratio scenarios of 100%, 95%, 90%, 80% and 70%. Also report the observed baseline fill ratio and no-fill reasons.
 
-A target fill ratio is a scenario request, not a result. The implementation must achieve it through an explicit, deterministic, order-level execution policy in the existing backtest engine (stable seed or deterministic hash, no future-return dependence), preserving partial/no-fill quantities, cash, holdings, fees and retry behavior. Never haircut a completed NAV series or randomly delete trades after accounting; that would produce invalid results.
+A target fill ratio is a pre-registered execution-sensitivity assumption, not an observed market fill probability. The shared engine implements `BacktestConfig.target_fill_ratio` as a deterministic cumulative quantity cap for each signal/instrument target transition. For ratios below 100%, the cap is rounded down to the configured board lot; retries may fill only the remaining quantity up to that cap. A cap below one board lot is an explicit no-fill. Suspension, limit locks, missing bars and cash constraints remain effective and can make achieved fills lower than the configured cap.
 
-If the current engine cannot represent a requested partial-fill policy without violating its accounting invariants, mark that scenario `UNSUPPORTED` and document the engine gap. Do not manufacture synthetic fill results or describe the current first-slice engine as a full historical exchange simulator. Keep suspension, limit locks, missing bars, lot sizes and blocked sells/buys as explicit reason codes.
+PR #44 implements `run_fill_stress_suite(...)`: retain the exact persisted F0 baseline, run F1–F4 through the existing walk-forward runner, persist immutable artifacts, verify every artifact/admission decision, and require matching provenance, strategy, walk-forward configuration and fold windows. Report configured ratio, board-lot-rounded cap and achieved ratio separately. Never haircut a completed NAV series or delete trades after accounting. These scenarios are deterministic target-quantity caps, not a market-depth, queue-position, volume-participation or broker execution model; they do not establish empirical liquidity. A read-only `build_fill_stress_assessment(...)` remains `UNSUPPORTED` until a verified immutable F0–F4 suite is supplied. Keep the current engine's broader historical exchange-simulation limitations explicit.
 
 ## 7. Parameter sensitivity and out-of-sample discipline
 
@@ -247,10 +247,10 @@ Phase 10.1 is complete when:
 
 1. **P10.2 — admission guard + report skeleton:** implement read-only gate/identity validation and QA report schema tests; no backtest changes.
 2. **P10.3 — period/regime diagnostics:** derive labels from accepted bundle data and aggregate verified OOS ledgers.
-3. **P10.4 — cost stress:** run pre-registered cost variants through the existing runner/engine and persist immutable artifacts. Implemented on `phase10.4-cost-stress-qa`; awaiting CI and review.
-4. **P10.5 — fill stress:** first inspect engine support and accounting tests; extend only the existing execution policy if necessary, otherwise report unsupported.
-5. **P10.6 — parameter and statistical QA:** pre-register variants, preserve untouched test windows, add dependence-aware inference only with explicit methodology.
-6. **P10.7 — integrated acceptance:** evaluate the complete report contract and publish limitations; strategy acceptance remains separate from data admission.
+3. **P10.4 — cost stress:** run pre-registered cost variants through the existing runner/engine and persist immutable artifacts. Implemented and merged in PR #20.
+4. **P10.5 — fill stress:** deterministic target-quantity caps and the immutable F0–F4 runner are implemented in PR #44; remaining work is to supply a verified empirical F0 baseline and accepted data bundle before interpreting results.
+5. **P10.6 — parameter and statistical QA:** descriptive fold statistics are implemented; pre-register any future variants, preserve untouched test windows, and add dependence-aware inference only with explicit methodology.
+6. **P10.7 — integrated acceptance:** immutable integrated report/writer is implemented; supply matching verified period, cost and fill reports and publish limitations. Strategy acceptance remains separate from data admission.
 
 No phase after 10.1 may relax the frozen project scope or four-gate model-training lock.
 
