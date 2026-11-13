@@ -384,3 +384,11 @@ def test_bundle_rejects_price_limit_audit_row_count_that_differs_from_execution_
     inputs["coverage_audits"]["price_limit_rules"]["expected_rows"] -= 1
     with pytest.raises(ResearchBundleError, match="does not match assembled"):
         build_research_data_bundle(**inputs)
+
+def test_bundle_rejects_price_limit_rule_version_that_differs_from_revision_identity():
+    inputs = make_inputs()
+    inputs["execution_evidence"] = inputs["execution_evidence"].with_columns(
+        pl.lit("caller-invented-rules-v9").alias("limit_rule_version")
+    )
+    with pytest.raises(ResearchBundleError, match="revision identity"):
+        build_research_data_bundle(**inputs)
