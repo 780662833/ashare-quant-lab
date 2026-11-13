@@ -212,3 +212,28 @@ def test_market_state_coverage_below_80_percent_is_unknown(tmp_path, monkeypatch
     unknown = next(item for item in report["regimes"] if item["regime"] == "UNKNOWN")
     assert unknown["mean_median_63_session_return"] is None
     assert unknown["mean_positive_breadth"] is None
+
+
+
+def test_qa_report_includes_p10_3_period_and_regime_sections(tmp_path, monkeypatch):
+    dates = sessions()
+    experiment, provenance = make_experiment(tmp_path, dates)
+    bundle = make_bundle(dates, provenance)
+    from ashare_quant.research import qa as qa_module
+
+    monkeypatch.setattr(qa_module, "verify_walk_forward_experiment", lambda _path: experiment)
+    monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
+
+    report = qa_module.build_research_qa_report(
+        str(experiment.path),
+        qa_id="qa-p10-3",
+        created_at="2026-11-13T00:00:00Z",
+        repository_commit="abcdef1234567",
+        bundle=bundle,
+    )
+
+    assert report["protocol_version"] == "phase10.3"
+    assert report["periods"]
+    assert report["regimes"]
+    assert report["integrity"]["period_regime_sha256"]
+    assert report["conclusion"] == "INSUFFICIENT_EVIDENCE"
