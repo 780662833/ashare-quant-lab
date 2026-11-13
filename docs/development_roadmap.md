@@ -37,7 +37,7 @@ branch is not part of `main` until GitHub reports it merged.
 | 5 | Architecture, canonical research bundle and benchmark orchestration | Merged in PR #10 | Canonical bundle, native status normalization and momentum orchestration have synthetic coverage; direct CNEquity assembly, audited historical price-limit evidence and local-lake acceptance remain pending |
 | 6 | Chronological walk-forward fold planner | Merged in PR #11 | Expanding/rolling folds, label-maturity purge, embargo and non-overlapping test windows; no model fitting |
 | 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
-| 8 | Walk-forward experiment runner and artifact persistence | Merged in PR #13 and PR #15; GitHub Actions run #66 passed (92 tests) | Cutoff-isolated momentum folds, immutable run manifest, explicit configs/revisions/commit, checksummed Parquet NAV/order/holding ledgers; no model fitting |
+| 8 | Walk-forward runner, artifact persistence, verification and comparison | Merged in PR #13, #15 and #16; GitHub Actions run #70 passed (97 tests) | Cutoff-isolated momentum folds; immutable, checksummed experiment artifacts; integrity verification; fair parameter comparison only under identical data revisions, folds and execution/cost settings; no model fitting |
 | 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
 | 10 | Robustness and research QA | Planned | Costs/fill/universe/period/regime sensitivities and reproducible comparisons |
 | 11 | Optional report inspection UI | Deferred | Only after research validity is demonstrated |
@@ -109,12 +109,13 @@ close. This phase does not fit a model; any future model runner must use the
 same fold definitions and remain behind the four-gate training admission.
 
 Completed momentum runs can be persisted through
-`persist_walk_forward_momentum_run(...)`. The immutable experiment directory
-contains the effective configs, repository commit, common source revisions and
-receipts, per-fold cutoff manifests, aggregate report, and checksummed Parquet
-fold/NAV/order/holding artifacts. This is an output store only; it does not
-assemble data, compare experiments, run a scheduler, or unlock model training.
-See [experiment_store.md](experiment_store.md).
+`persist_walk_forward_momentum_run(...)`, then checked with
+`verify_walk_forward_experiment(...)`. Parameter variants can be compared with
+`compare_walk_forward_experiments(...)` only when acceptance identity, source
+revisions, universe, fold dates and backtest/cost configuration are identical.
+The comparison reports results; it does not select or tune against OOS test
+windows. No data assembly, scheduler or model-training unlock is added. See
+[experiment_store.md](experiment_store.md).
 
 ## Phase 9 — features, labels and model adapter (gated)
 
