@@ -79,11 +79,17 @@ def cost_report():
         "integrity": {
             "all_artifacts_verified": True,
             "admission_decisions": ["PRICE_ONLY_ELIGIBLE"] * 4,
+            "config_sha256": ["b" * 64] * 4,
+            "data_provenance_sha256": "c" * 64,
         },
         "scenarios": [
-            {"scenario_id": f"C{i}", "cost_multiplier": multiplier,
+            {"scenario_id": f"C{i}", "experiment_id": experiment_id,
+             "cost_multiplier": multiplier,
              "net_return": 0.1 / multiplier, "cagr": 0.08 / multiplier}
-            for i, multiplier in enumerate((1.0, 1.5, 2.0, 3.0))
+            for i, (multiplier, experiment_id) in enumerate(zip(
+                (1.0, 1.5, 2.0, 3.0),
+                ("experiment-001", "experiment-001-C1", "experiment-001-C2", "experiment-001-C3"),
+            ))
         ],
         "limitations": ["Cost multipliers are assumptions."],
     }
@@ -209,3 +215,17 @@ def test_integrated_report_does_not_accept_fill_suite_for_blocked_baseline(monke
     with pytest.raises(ValueError, match="blocked baseline"):
         build(monkeypatch, fill=fill_suite_report(), admission="BLOCKED")
 
+
+
+@pytest.mark.parametrize("mutation, message", [
+    (lambda x: x["experiment_ids"].__setitem__(1, "experiment-001"), "four unique IDs"),
+    (lambda x: x["scenarios"][1].update(experiment_id="wrong-run"), "scenario experiment IDs"),
+    (lambda x: x["scenarios"][2].update(cost_multiplier=9.0), "multipliers"),
+    (lambda x: x["integrity"].update(config_sha256=["bad"] * 4), "config hashes"),
+    (lambda x: x["integrity"].pop("data_provenance_sha256"), "data provenance hash"),
+])
+def test_integrated_report_rejects_misaligned_cost_stress_artifacts(monkeypatch, mutation, message):
+    cost = cost_report()
+    mutation(cost)
+    with pytest.raises(ValueError, match=message):
+        build(monkeypatch, cost=cost)
