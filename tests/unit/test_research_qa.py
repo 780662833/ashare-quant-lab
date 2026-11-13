@@ -142,7 +142,7 @@ def test_missing_fourth_gate_fails_closed(tmp_path, monkeypatch):
         "hfq_adjustment": "PASS",
         "trading_status": "PASS",
     }
-    report = build_report(make_verified_experiment(tmp_path, gates=statuses))
+    report = build_report(make_verified_experiment(tmp_path, gates=statuses), monkeypatch)
 
     assert report["admission"]["decision"] == "BLOCKED"
     assert report["admission"]["gates"]["pit_fundamentals"] == "MISSING"
