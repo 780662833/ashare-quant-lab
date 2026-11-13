@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+from statistics import median
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -72,7 +74,9 @@ def _read_json(path: Path) -> Any:
         raise ValueError(f"Cannot read valid JSON from {path}: {exc}") from exc
 
 
-def _fold_signature(folds: list[dict[str, Any]]) -> list[tuple[str, str, str, str, str]]:
+def _fold_signature(
+    folds: list[dict[str, Any]],
+) -> list[tuple[str, str, str, str, str, str, str, str]]:
     signature = []
     for item in folds:
         fold = item.get("fold")
@@ -81,9 +85,12 @@ def _fold_signature(folds: list[dict[str, Any]]) -> list[tuple[str, str, str, st
         signature.append((
             str(fold.get("fold_id")),
             str(fold.get("train_start")),
+            str(fold.get("train_end")),
             str(fold.get("validation_start")),
+            str(fold.get("validation_end")),
             str(fold.get("test_start")),
             str(fold.get("test_end")),
+            str(fold.get("test_sessions")),
         ))
     return signature
 
@@ -238,10 +245,62 @@ def verify_walk_forward_experiment(
             raise ValueError("Walk-forward test windows overlap")
 
     fold_table = loaded_frames["fold_table"]
-    if "fold_id" not in fold_table.columns:
-        raise ValueError("fold_table is missing fold_id")
-    if fold_table["fold_id"].cast(pl.String).to_list() != fold_ids:
-        raise ValueError("fold_table order/identity does not match folds.json")
+    required_fold_columns = {"fold_id", "test_start", "test_end", "test_sessions"}
+    if not required_fold_columns.issubset(fold_table.columns):
+        raise ValueError("fold_table is missing fold identity/date columns")
+    expected_fold_rows = [
+        (
+            item["fold"]["fold_id"],
+            item["fold"]["test_start"],
+            item["fold"]["test_end"],
+            item["fold"]["test_sessions"],
+        )
+        for item in folds
+    ]
+    actual_fold_rows = [
+        (
+            str(row["fold_id"]),
+            str(row["test_start"]),
+            str(row["test_end"]),
+            int(row["test_sessions"]),
+        )
+        for row in fold_table.to_dicts()
+    ]
+    if actual_fold_rows != expected_fold_rows:
+        raise ValueError("fold_table definitions do not match folds.json")
+
+    aggregate = manifest.get("aggregate_report")
+    if not isinstance(aggregate, dict):
+        raise ValueError("Experiment manifest is missing aggregate_report")
+    fold_reports = [item.get("report") for item in folds]
+    if any(not isinstance(report, dict) for report in fold_reports):
+        raise ValueError("Fold manifest is missing a report")
+    fold_returns = [float(report["total_return"]) for report in fold_reports]
+    fold_cagrs = [float(report["cagr"]) for report in fold_reports]
+    fold_sharpes = [float(report["sharpe_ratio"]) for report in fold_reports]
+    fold_drawdowns = [float(report["max_drawdown"]) for report in fold_reports]
+    expected_aggregate = {
+        "fold_count": len(folds),
+        "out_of_sample_sessions": sum(item["fold"]["test_sessions"] for item in folds),
+        "mean_fold_total_return": sum(fold_returns) / len(fold_returns),
+        "median_fold_total_return": median(fold_returns),
+        "positive_fold_ratio": sum(value > 0 for value in fold_returns) / len(fold_returns),
+        "mean_fold_cagr": sum(fold_cagrs) / len(fold_cagrs),
+        "mean_fold_sharpe": sum(fold_sharpes) / len(fold_sharpes),
+        "worst_fold_max_drawdown": min(fold_drawdowns),
+        "fold_linked_total_return": math.prod(1.0 + value for value in fold_returns) - 1.0,
+    }
+    for key, expected in expected_aggregate.items():
+        actual = aggregate.get(key)
+        if isinstance(expected, int):
+            matches = actual == expected
+        else:
+            matches = (
+                isinstance(actual, (int, float))
+                and math.isclose(float(actual), expected, rel_tol=1e-9, abs_tol=1e-12)
+            )
+        if not matches:
+            raise ValueError(f"Aggregate report metric {key} does not match fold reports")
 
     daily = loaded_frames["oos_daily"]
     if "date" not in daily.columns:
