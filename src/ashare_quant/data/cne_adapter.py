@@ -200,6 +200,52 @@ class CNEquityAdapter:
             .sort("instrument")
         )
 
+    def trading_calendar(self, start_date: str, end_date: str) -> list[str]:
+        """Return official exchange sessions from the receipt-backed calendar dataset."""
+        if start_date > end_date:
+            raise ValueError("start_date must be <= end_date")
+        frame = self._load(
+            "trading_calendar", start=start_date, end=end_date,
+        )
+        required = {"trade_date", "is_trading"}
+        missing = required.difference(frame.columns)
+        if missing:
+            raise CNEquityDataError(
+                f"trading_calendar missing columns: {sorted(missing)}"
+            )
+        if frame.is_empty():
+            raise CNEquityDataError(
+                f"trading_calendar returned no rows for {start_date}..{end_date}"
+            )
+        try:
+            frame = frame.with_columns(
+                pl.col("trade_date").cast(pl.String, strict=True),
+                pl.col("is_trading").cast(pl.Boolean, strict=True),
+            )
+        except Exception as exc:
+            raise CNEquityDataError(f"Invalid trading_calendar value types: {exc}") from exc
+        if frame.select(
+            pl.any_horizontal(pl.col("trade_date").is_null(), pl.col("is_trading").is_null()).any()
+        ).item():
+            raise CNEquityDataError("trading_calendar contains null date/session state")
+        if frame.select(pl.col("trade_date").is_duplicated().any()).item():
+            raise CNEquityDataError("trading_calendar contains duplicate trade_date keys")
+        if frame.filter(
+            (pl.col("trade_date") < start_date) | (pl.col("trade_date") > end_date)
+        ).height:
+            raise CNEquityDataError("trading_calendar returned dates outside requested window")
+        sessions = (
+            frame.filter(pl.col("is_trading"))
+            .select("trade_date")
+            .sort("trade_date")["trade_date"]
+            .to_list()
+        )
+        if not sessions:
+            raise CNEquityDataError(
+                f"trading_calendar has no trading sessions for {start_date}..{end_date}"
+            )
+        return sessions
+
     def trading_status(
         self, instruments: list[str], start_date: str, end_date: str
     ) -> pl.DataFrame:
