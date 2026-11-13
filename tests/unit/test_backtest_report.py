@@ -105,3 +105,25 @@ def test_report_rejects_inconsistent_fee_component_ledger():
     result = BacktestResult(daily=result.daily, orders=orders, holdings=result.holdings)
     with pytest.raises(ValueError, match="do not equal"):
         summarize_backtest(result)
+
+
+
+def test_report_uses_unique_target_transition_denominator_not_retry_attempts():
+    result = make_result()
+    orders = pl.DataFrame({
+        "date": ["2024-01-03", "2024-01-04"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "target_signal_date": ["2024-01-02", "2024-01-02"],
+        "target_requested_qty": [100, 100],
+        "requested_qty": [100, 50],
+        "filled_qty": [50, 50],
+        "fill_price": [10.0, 10.0],
+        "fees": [0.0, 0.0],
+        "status": ["partially_filled", "filled"],
+        "reason": [None, None],
+    })
+    report = summarize_backtest(BacktestResult(daily=result.daily, orders=orders, holdings=result.holdings))
+    assert report["execution"]["share_fill_ratio"] == pytest.approx(1.0)
+    assert report["execution"]["share_fill_ratio_basis"] == "target_transition"
+    assert report["execution"]["target_requested_shares"] == 100
+    assert report["execution"]["filled_shares"] == 100
