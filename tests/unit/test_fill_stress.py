@@ -138,3 +138,56 @@ def test_fill_stress_uses_target_transition_denominator_for_retries(tmp_path, mo
     assert observed["requested_shares"] == 100
     assert observed["filled_shares"] == 100
     assert report["engine_capabilities"]["target_transition_ledger"] is True
+
+
+def test_observed_execution_validates_target_caps_and_counts_retry_fills_once():
+    orders = pl.DataFrame({
+        "target_signal_date": ["2020-03-01", "2020-03-01"],
+        "target_requested_qty": [100, 100],
+        "target_fill_cap_qty": [50, 50],
+        "target_fill_ratio": [0.5, 0.5],
+        "instrument": ["600000.SH", "600000.SH"],
+        "requested_qty": [50, 25],
+        "filled_qty": [25, 25],
+        "status": ["partially_filled", "filled"],
+        "reason": [None, None],
+    })
+    observed = fill_stress._observed_execution(orders)
+    assert observed["requested_shares"] == 100
+    assert observed["target_fill_cap_shares"] == 50
+    assert observed["target_fill_cap_ratio"] == pytest.approx(0.5)
+    assert observed["filled_shares"] == 50
+    assert observed["share_fill_ratio"] == pytest.approx(0.5)
+    assert observed["share_fill_ratio_basis"] == "target_transition"
+
+
+def test_observed_execution_rejects_changed_target_fill_cap_across_retries():
+    orders = pl.DataFrame({
+        "target_signal_date": ["2020-03-01", "2020-03-01"],
+        "target_requested_qty": [100, 100],
+        "target_fill_cap_qty": [50, 60],
+        "target_fill_ratio": [0.5, 0.5],
+        "instrument": ["600000.SH", "600000.SH"],
+        "requested_qty": [50, 50],
+        "filled_qty": [0, 0],
+        "status": ["no_fill", "no_fill"],
+        "reason": ["suspended", "suspended"],
+    })
+    with pytest.raises(ValueError, match="Target fill cap changes"):
+        fill_stress._observed_execution(orders)
+
+
+def test_observed_execution_rejects_cumulative_fill_above_cap():
+    orders = pl.DataFrame({
+        "target_signal_date": ["2020-03-01", "2020-03-01"],
+        "target_requested_qty": [100, 100],
+        "target_fill_cap_qty": [50, 50],
+        "target_fill_ratio": [0.5, 0.5],
+        "instrument": ["600000.SH", "600000.SH"],
+        "requested_qty": [50, 25],
+        "filled_qty": [30, 25],
+        "status": ["partially_filled", "filled"],
+        "reason": [None, None],
+    })
+    with pytest.raises(ValueError, match="exceed target fill cap"):
+        fill_stress._observed_execution(orders)
