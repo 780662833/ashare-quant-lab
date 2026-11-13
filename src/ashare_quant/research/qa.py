@@ -264,6 +264,16 @@ def validate_research_qa_report(report: Mapping[str, Any]) -> None:
         raise ValueError("Research QA must never unlock model training")
     if admission.get("model_training_performed") is not False:
         raise ValueError("Research QA must never perform model training")
+    if (
+        admission.get("model_training_decision") == "MODEL_TRAINING_ELIGIBLE"
+        and any(gates[key] != "PASS" for key in REPORT_GATE_KEYS)
+    ):
+        raise ValueError("model training cannot be gate-eligible unless all four gates PASS")
+    if (
+        admission.get("decision") == "PRICE_ONLY_ELIGIBLE"
+        and any(gates[key] != "PASS" for key in ("historical_universe", "hfq", "trading_status"))
+    ):
+        raise ValueError("price-only eligibility requires all three benchmark gates PASS")
 
     integrity = report.get("integrity")
     if not isinstance(integrity, Mapping) or integrity.get("verified") is not True:
