@@ -237,22 +237,77 @@ def _validate_result_accounting(
     orders: pl.DataFrame, daily: pl.DataFrame, holdings: pl.DataFrame,
     *, initial_cash: float, board_lot: int,
 ) -> None:
-    """Replay the order ledger to enforce cash, inventory, fee and T+1 invariants."""
+    """Replay the order ledger and fail closed on malformed accounting values."""
+    def finite_number(value: Any, label: str, *, non_negative: bool = False) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise AssertionError(f"{label} must be a finite number")
+        number = float(value)
+        if not isfinite(number) or (non_negative and number < 0):
+            qualifier = "finite and non-negative" if non_negative else "finite"
+            raise AssertionError(f"{label} must be {qualifier}")
+        return number
+
+    if not isfinite(float(initial_cash)) or initial_cash <= 0:
+        raise AssertionError("initial_cash must be finite and positive")
+    if isinstance(board_lot, bool) or not isinstance(board_lot, int) or board_lot < 1:
+        raise AssertionError("board_lot must be a positive integer")
+
     inventory: dict[str, int] = {}
-    cash = initial_cash
+    cash = float(initial_cash)
     order_columns = {
         "date", "instrument", "side", "requested_qty", "filled_qty",
         "fill_price", "fees", "commission", "transfer_fee", "stamp_duty",
         "slippage_cost", "status",
     }
+    daily_columns = {"date", "cash", "market_value", "nav", "gross_exposure", "daily_return"}
+    holding_columns = {"date", "instrument", "quantity", "mark_price", "market_value"}
     if not order_columns.issubset(orders.columns):
         raise AssertionError(f"Order ledger is missing accounting fields: {sorted(order_columns - set(orders.columns))}")
-    daily_by_date = {str(row["date"]): row for row in daily.to_dicts()}
+    if not daily_columns.issubset(daily.columns):
+        raise AssertionError(f"Daily ledger is missing accounting fields: {sorted(daily_columns - set(daily.columns))}")
+    if not holding_columns.issubset(holdings.columns):
+        raise AssertionError(f"Holdings ledger is missing accounting fields: {sorted(holding_columns - set(holdings.columns))}")
+
+    daily_rows = daily.to_dicts()
+    daily_by_date: dict[str, dict[str, Any]] = {}
+    for snapshot in daily_rows:
+        day = str(snapshot["date"])
+        if not day or day == "None" or day in daily_by_date:
+            raise AssertionError("Daily ledger dates must be non-empty and unique")
+        for name in ("cash", "market_value", "nav"):
+            finite_number(snapshot[name], f"Daily {name}", non_negative=True)
+        finite_number(snapshot["daily_return"], "Daily return")
+        exposure = finite_number(snapshot["gross_exposure"], "Daily gross exposure", non_negative=True)
+        if exposure > 1.0 + 1e-9:
+            raise AssertionError("Gross exposure exceeds the no-leverage limit")
+        daily_by_date[day] = snapshot
+
     orders_by_date: dict[str, list[dict[str, Any]]] = {}
     for row in orders.to_dicts():
-        orders_by_date.setdefault(str(row["date"]), []).append(row)
-    for date_value in daily["date"].to_list():
-        day = str(date_value)
+        day = str(row["date"])
+        instrument = row["instrument"]
+        if not day or day == "None" or day not in daily_by_date:
+            raise AssertionError("Every order date must match exactly one daily ledger date")
+        if instrument is None or not str(instrument).strip():
+            raise AssertionError("Order instrument must be non-empty")
+        orders_by_date.setdefault(day, []).append(row)
+
+    holdings_by_date: dict[str, list[dict[str, Any]]] = {}
+    for row in holdings.to_dicts():
+        day = str(row["date"])
+        if day not in daily_by_date:
+            raise AssertionError("Every holding date must match exactly one daily ledger date")
+        instrument = row["instrument"]
+        if instrument is None or not str(instrument).strip():
+            raise AssertionError("Holding instrument must be non-empty")
+        quantity = row["quantity"]
+        if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
+            raise AssertionError("Holding quantity must be a positive integer")
+        finite_number(row["mark_price"], "Holding mark_price", non_negative=True)
+        finite_number(row["market_value"], "Holding market_value", non_negative=True)
+        holdings_by_date.setdefault(day, []).append(row)
+
+    for day in daily_by_date:
         rows = sorted(orders_by_date.get(day, []), key=lambda row: (0 if row["side"] == "sell" else 1, row["instrument"]))
         for row in rows:
             side = row["side"]
@@ -262,16 +317,23 @@ def _validate_result_accounting(
                 raise AssertionError("Order side must be buy or sell")
             if isinstance(filled, bool) or not isinstance(filled, int) or filled < 0:
                 raise AssertionError("filled_qty must be a non-negative integer")
+            if requested is not None and (
+                isinstance(requested, bool) or not isinstance(requested, int) or requested < 0
+            ):
+                raise AssertionError("requested_qty must be a non-negative integer or null")
             if requested is None:
                 if filled:
                     raise AssertionError("A fill cannot exist without requested_qty")
-            elif isinstance(requested, bool) or not isinstance(requested, int) or requested < filled:
-                raise AssertionError("filled_qty must not exceed non-negative requested_qty")
-            fee_parts = sum(float(row[name] or 0.0) for name in ("commission", "transfer_fee", "stamp_duty"))
-            if abs(float(row["fees"] or 0.0) - fee_parts) > 1e-8:
+            elif filled > requested:
+                raise AssertionError("filled_qty must not exceed requested_qty")
+
+            fee_values = {
+                name: finite_number(row[name] or 0.0, f"Order {name}", non_negative=True)
+                for name in ("fees", "commission", "transfer_fee", "stamp_duty", "slippage_cost")
+            }
+            fee_parts = fee_values["commission"] + fee_values["transfer_fee"] + fee_values["stamp_duty"]
+            if abs(fee_values["fees"] - fee_parts) > 1e-8:
                 raise AssertionError("Order fees must equal commission + transfer fee + stamp duty")
-            if any(float(row[name] or 0.0) < -1e-10 for name in ("fees", "commission", "transfer_fee", "stamp_duty", "slippage_cost")):
-                raise AssertionError("Order costs must be non-negative")
             expected_status = (
                 "no_fill" if filled == 0 else
                 "filled" if requested is not None and filled == requested else
@@ -279,14 +341,16 @@ def _validate_result_accounting(
             )
             if row["status"] != expected_status:
                 raise AssertionError("Order status does not agree with requested_qty and filled_qty")
+            price_value = row["fill_price"]
+            price = None if price_value is None else finite_number(price_value, "Order fill_price", non_negative=True)
             if filled == 0:
                 continue
-            price = row["fill_price"]
-            if price is None or float(price) <= 0:
+            if price is None or price <= 0:
                 raise AssertionError("Filled orders require a positive fill_price")
+
             instrument = str(row["instrument"])
-            notional = filled * float(price)
-            fee = float(row["fees"] or 0.0)
+            notional = filled * price
+            fee = fee_values["fees"]
             if side == "sell":
                 available = inventory.get(instrument, 0)
                 if filled > available:
@@ -302,30 +366,25 @@ def _validate_result_accounting(
                     raise AssertionError("Buy fills must be rounded to board lots")
                 inventory[instrument] = inventory.get(instrument, 0) + filled
                 cash -= notional + fee
-            if cash < -1e-6:
-                raise AssertionError("Order ledger replay produced negative cash")
+            if not isfinite(cash) or cash < -1e-6:
+                raise AssertionError("Order ledger replay produced non-finite or negative cash")
+
         snapshot = daily_by_date[day]
         if abs(float(snapshot["cash"]) - cash) > 1e-6:
             raise AssertionError("Daily cash does not reconcile to the order ledger")
         if any(quantity <= 0 for quantity in inventory.values()):
             raise AssertionError("Holdings quantities must remain positive")
-        day_holdings = {
-            str(row["instrument"]): int(row["quantity"])
-            for row in holdings.filter(pl.col("date").cast(pl.String) == day).to_dicts()
-        }
+        day_holdings_rows = holdings_by_date.get(day, [])
+        day_holdings = {str(row["instrument"]): int(row["quantity"]) for row in day_holdings_rows}
+        if len(day_holdings) != len(day_holdings_rows):
+            raise AssertionError("Daily holdings must not contain duplicate instruments")
         if day_holdings != inventory:
             raise AssertionError("Daily holdings do not reconcile to the order ledger")
-        market_value = sum(
-            float(row["market_value"])
-            for row in holdings.filter(pl.col("date").cast(pl.String) == day).to_dicts()
-        )
+        market_value = sum(float(row["market_value"]) for row in day_holdings_rows)
         if abs(float(snapshot["market_value"]) - market_value) > 1e-6:
             raise AssertionError("Daily market value does not reconcile to holdings")
         if abs(float(snapshot["nav"]) - (cash + market_value)) > 1e-6:
             raise AssertionError("Daily NAV must equal cash plus market value")
-        if float(snapshot["gross_exposure"]) > 1.0 + 1e-9:
-            raise AssertionError("Gross exposure exceeds the no-leverage limit")
-
 
 def run_backtest(
     bars: pl.DataFrame,
