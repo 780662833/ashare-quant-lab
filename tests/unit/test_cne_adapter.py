@@ -93,6 +93,50 @@ def test_universe_uses_strict_official_research_profile(monkeypatch):
     assert calls[0][1]["start"] == calls[0][1]["end"] == "2024-01-02"
 
 
+def test_trading_calendar_returns_only_official_sessions_and_retains_receipt(monkeypatch):
+    calls = []
+    frame = pl.DataFrame({
+        "trade_date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+        "is_trading": [False, True, True],
+        "source": ["exchange"] * 3,
+    })
+
+    def fake_load(dataset, **kwargs):
+        calls.append((dataset, kwargs))
+        return frame
+
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    assert adapter.trading_calendar("2024-01-01", "2024-01-03") == [
+        "2024-01-02", "2024-01-03",
+    ]
+    assert calls[0][0] == "trading_calendar"
+    assert calls[0][1]["start"] == "2024-01-01"
+    assert calls[0][1]["end"] == "2024-01-03"
+    assert calls[0][1]["require_replayable"] is True
+    assert adapter.source_receipts[0]["dataset"] == "trading_calendar"
+
+
+@pytest.mark.parametrize("frame, message", [
+    (pl.DataFrame({"trade_date": ["2024-01-02"], "is_trading": [None]}), "null"),
+    (pl.DataFrame({"trade_date": ["2024-01-02", "2024-01-02"], "is_trading": [True, True]}), "duplicate"),
+    (pl.DataFrame({"trade_date": ["2024-02-01"], "is_trading": [True]}), "outside requested window"),
+    (pl.DataFrame({"trade_date": ["2024-01-02"], "is_trading": [False]}), "no trading sessions"),
+])
+def test_trading_calendar_rejects_invalid_or_empty_session_evidence(monkeypatch, frame, message):
+    install_fake_cne(monkeypatch, lambda dataset, **kwargs: frame)
+    with pytest.raises(CNEquityDataError, match=message):
+        CNEquityAdapter(data_root="/tmp/cne").trading_calendar(
+            "2024-01-01", "2024-01-31"
+        )
+
+
+def test_trading_calendar_rejects_reversed_window():
+    adapter = CNEquityAdapter(data_root="/tmp/cne")
+    with pytest.raises(ValueError, match="start_date"):
+        adapter.trading_calendar("2024-02-01", "2024-01-01")
+
+
 def test_trading_status_rejects_null_risk_warning(monkeypatch):
     frame = pl.DataFrame({
         "symbol": ["600000.SH"], "trade_date": ["2024-01-02"],
