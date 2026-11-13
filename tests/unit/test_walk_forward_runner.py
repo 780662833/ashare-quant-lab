@@ -76,6 +76,7 @@ def make_bundle(count: int = 280) -> ResearchDataBundle:
         "training_dataset_unlocked": False,
         "gates": [
             {"name": "historical_universe", "status": "PASS"},
+            {"name": "historical_universe_receipt", "status": "PASS"},
             {"name": "hfq_adjustment", "status": "PASS"},
             {"name": "point_in_time_fundamentals", "status": "FAIL"},
             {"name": "trading_status", "status": "PASS"},
