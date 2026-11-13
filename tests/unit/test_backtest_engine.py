@@ -63,6 +63,8 @@ def test_limit_up_locked_buy_is_not_filled_and_is_retried():
     assert result.orders["status"].to_list() == ["no_fill", "filled"]
     assert result.orders["reason"].to_list()[0] == "limit_up_locked"
     assert result.orders["date"].to_list() == ["2024-01-02", "2024-01-03"]
+    assert result.orders["target_signal_date"].to_list() == ["2024-01-01", "2024-01-01"]
+    assert result.orders["target_requested_qty"].to_list() == [5000, 5000]
 
 
 def test_suspended_security_is_not_filled():
