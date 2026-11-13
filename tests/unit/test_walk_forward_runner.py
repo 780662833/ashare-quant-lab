@@ -243,7 +243,13 @@ def test_fold_report_uses_prior_close_without_overwriting_first_test_nav(
     })
     result = BacktestResult(
         daily=daily,
-        orders=pl.DataFrame(),
+        orders=pl.DataFrame({
+            "commission": [1.0],
+            "transfer_fee": [0.2],
+            "stamp_duty": [0.0],
+            "fees": [1.2],
+            "slippage_cost": [0.5],
+        }),
         holdings=pl.DataFrame(),
     )
 
@@ -262,6 +268,8 @@ def test_fold_report_uses_prior_close_without_overwriting_first_test_nav(
     assert report["final_nav"] == pytest.approx(nav_values[-1])
     assert report["total_return"] == pytest.approx(expected_return)
     assert report["cagr"] == pytest.approx(expected_cagr)
+    assert report["costs"]["fees_bps_of_initial_nav"] == pytest.approx(120.0)
+    assert report["costs"]["total_costs_bps_of_initial_nav"] == pytest.approx(170.0)
     # The first test close is below the baseline in both cases. It must count
     # toward drawdown, even when it is the only test observation.
     assert report["max_drawdown"] == pytest.approx(-0.10)
