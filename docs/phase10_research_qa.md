@@ -356,3 +356,20 @@ pre-registered 100%/95%/90%/80%/70% target scenarios as `UNSUPPORTED` (or
 haircut NAV, or fabricate achieved fill ratios. Target-fill scenarios remain
 unsupported until a deterministic order-level cap/retry policy is implemented
 and its cash, holdings, fee, lot-size and retry invariants are tested.
+## 10.7 — Integrated immutable QA report
+
+`build_integrated_research_qa_report(...)` combines the verified P10.2 admission
+and integrity report with optional P10.3 period/regime diagnostics, a supplied
+verified P10.4 cost-stress report, P10.5 fill-stress capability assessment and
+P10.6 descriptive statistical QA. It never launches cost scenarios; the P10.4
+report must already contain verified C0-C3 artifacts and match the same baseline
+experiment and repository commit.
+
+`write_research_qa_report(report, output_root=...)` writes `report.json` and
+`report.md` under a new QA-ID directory using exclusive creation. Existing QA
+directories are never overwritten. The writer returns both file hashes.
+
+The integrated conclusion remains `BLOCKED` when admission fails and
+`INSUFFICIENT_EVIDENCE` otherwise until execution fill-ratio scenarios are
+supported and acceptance thresholds are pre-registered. It does not claim
+`FRAGILE` or `ROBUSTNESS_EVIDENCE_ONLY` from descriptive metrics alone.
