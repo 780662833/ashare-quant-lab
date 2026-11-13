@@ -152,7 +152,7 @@ def write_research_qa_report(
     markdown = _render_markdown(report)
     with json_path.open("x", encoding="utf-8", newline="\n") as stream:
         stream.write(payload)
-    with markdown_path.open("x", encoding="utf-8", newline="\\n") as stream:
+    with markdown_path.open("x", encoding="utf-8", newline="\n") as stream:
         stream.write(markdown)
     return {
         "directory": str(destination),
