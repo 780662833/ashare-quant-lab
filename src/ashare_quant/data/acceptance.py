@@ -27,6 +27,31 @@ def _error(exc: Exception) -> str:
     return f"{type(exc).__name__}: {exc}"
 
 
+def _pit_coverage(
+    frame: pl.DataFrame, symbols: list[str], items: list[str]
+) -> tuple[bool, list[dict[str, str]]]:
+    """Validate strict PIT rows against CNEquity's canonical item_code field."""
+    required = {"pit_is_exact", "pit_quality", "symbol", "item_code"}
+    if frame.is_empty() or not required.issubset(frame.columns):
+        return False, []
+    quality_ok = (
+        frame["pit_is_exact"].null_count() == 0
+        and frame["pit_is_exact"].all()
+        and frame["pit_quality"].null_count() == 0
+        and frame.filter(pl.col("pit_quality") != "strict").is_empty()
+    )
+    if not quality_ok:
+        return False, []
+    observed_pairs = set(frame.select("symbol", "item_code").unique().iter_rows())
+    missing_pairs = [
+        {"symbol": symbol, "item": item}
+        for symbol in symbols
+        for item in items
+        if (symbol, item) not in observed_pairs
+    ]
+    return True, missing_pairs
+
+
 def run_acceptance(
     *,
     data_root: str | Path,
@@ -211,23 +236,7 @@ def run_acceptance(
         )
         frame = pit.frame
         columns = set(frame.columns)
-        required = {"pit_is_exact", "pit_quality", "symbol", "item"}
-        quality_ok = (
-            not frame.is_empty()
-            and required.issubset(columns)
-            and frame["pit_is_exact"].null_count() == 0
-            and frame["pit_is_exact"].all()
-            and frame.filter(pl.col("pit_quality") != "strict").is_empty()
-        )
-        missing_pairs: list[dict[str, str]] = []
-        if quality_ok:
-            observed_pairs = set(frame.select("symbol", "item").unique().iter_rows())
-            missing_pairs = [
-                {"symbol": symbol, "item": item}
-                for symbol in symbols
-                for item in items
-                if (symbol, item) not in observed_pairs
-            ]
+        quality_ok, missing_pairs = _pit_coverage(frame, symbols, items)
         pit_ok = quality_ok and not missing_pairs and bool(pit.receipt.get("replayable"))
         report["receipts"]["pit"] = pit.receipt
         report["gates"].append(
