@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 from typing import Any, Mapping
 
-from ashare_quant.research.experiment_compare import VerifiedWalkForwardExperiment
+from ashare_quant.research.experiment_compare import (\n    VerifiedWalkForwardExperiment,\n    verify_walk_forward_experiment,\n)
 
 GATE_KEYS = (
     "historical_universe",
@@ -269,18 +269,20 @@ def validate_research_qa_report(report: Mapping[str, Any]) -> None:
 
 
 def build_research_qa_report(
-    experiment: VerifiedWalkForwardExperiment,
+    experiment_path: str,
     *,
     qa_id: str,
     created_at: str,
     repository_commit: str,
 ) -> dict[str, Any]:
-    """Build a P10.2 report skeleton from a Phase 8 verified artifact.
+    """Verify a Phase 8 artifact, then build its P10.2 report skeleton.
 
-    Callers must pass the object returned by verify_walk_forward_experiment().
-    The report deliberately contains no performance verdict: later P10 phases
-    populate scenarios, periods and regimes from verified ledgers.
+    The verifier is invoked internally; callers cannot supply a raw manifest
+    or bypass the Phase 8 hash, schema, cutoff and ledger checks. The report
+    deliberately contains no performance verdict: later P10 phases populate
+    scenarios, periods and regimes from verified ledgers.
     """
+    experiment = verify_walk_forward_experiment(experiment_path)
     admission = _assess_verified_experiment(experiment)
     manifest_bytes = json.dumps(
         experiment.manifest, sort_keys=True, separators=(",", ":"), allow_nan=False
