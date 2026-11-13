@@ -166,6 +166,23 @@ def test_bundle_source_revision_mismatch_is_rejected(tmp_path, monkeypatch):
         period_regime.build_period_regime_diagnostics(str(experiment.path), bundle)
 
 
+def test_bundle_receipt_identity_mismatch_is_rejected(tmp_path, monkeypatch):
+    dates = sessions()
+    experiment, provenance = make_experiment(tmp_path, dates)
+    changed = {
+        **provenance,
+        "source_receipts": {
+            **provenance["source_receipts"],
+            "historical_universe": {"replayable": True, "receipt_id": "different-receipt"},
+        },
+    }
+    bundle = make_bundle(dates, changed)
+    monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
+
+    with pytest.raises(ValueError, match="source_receipts"):
+        period_regime.build_period_regime_diagnostics(str(experiment.path), bundle)
+
+
 def test_failed_price_gate_blocks_period_regime_analysis(tmp_path, monkeypatch):
     dates = sessions()
     experiment, provenance = make_experiment(tmp_path, dates)
