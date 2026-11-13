@@ -435,6 +435,12 @@ def build_research_data_bundle(
         pl.col("is_limit_up_locked") & pl.col("is_limit_down_locked")
     ).height:
         raise ResearchBundleError("A row cannot be locked at both limit-up and limit-down")
+    declared_limit_source = revisions["price_limit_rules"]["source"]
+    observed_limit_sources = set(state["limit_evidence_source"].cast(pl.String).unique().to_list())
+    if observed_limit_sources != {declared_limit_source}:
+        raise ResearchBundleError(
+            "price_limit_rules source identity does not match row-level limit evidence provenance"
+        )
 
     session_set = set(sessions)
     membership_dates = set(membership["date"].to_list())
@@ -529,6 +535,7 @@ def build_research_data_bundle(
         "training_dataset_unlocked": False,
         "source_revisions": revisions,
         "source_receipts": source_receipts,
+        "acceptance_source_receipts": acceptance_report.get("receipts", {}),
         "receipt_provenance": receipt_provenance,
         "coverage_audits": coverage_audit_provenance,
         "limit_evidence": {
