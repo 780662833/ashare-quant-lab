@@ -514,7 +514,7 @@ def run_backtest(
             "commission": pl.Float64, "transfer_fee": pl.Float64,
             "stamp_duty": pl.Float64, "slippage_cost": pl.Float64,
             "status": pl.String, "reason": pl.String,
-        }),
+        })
     holdings_frame = pl.DataFrame(holding_rows) if holding_rows else pl.DataFrame(schema={
         "date": pl.String, "instrument": pl.String, "quantity": pl.Int64,
         "mark_price": pl.Float64, "market_value": pl.Float64,
