@@ -98,8 +98,8 @@ Before any metric is emitted as research evidence, validate:
 1. Acceptance report ID exists and is bound to the artifact.
 2. Acceptance report window exactly covers the experiment's declared input window; each fold test window is inside it.
 3. Universe profile matches exactly.
-4. All required source revisions are present, non-empty and identical across compared scenarios.
-5. Required receipts are present and replayable.
+4. All required source revisions retain structured revision IDs and contract fingerprints; the adapter receipt dependencies must reproduce those identities, with historical universe bound to daily bars and price-limit rules independently versioned.
+5. Actual adapter receipts, the receipt-provenance summary, and separate replayable historical-universe/HFQ acceptance receipts are retained and cross-checked.
 6. Gate names are unique, known, and have explicit statuses; missing or unknown statuses are not PASS.
 7. `training_dataset_unlocked=false` and `model_training_performed=false` remain true for the Phase 8 momentum artifacts.
 8. Artifact verification succeeds before the manifest, fold table, or Parquet ledgers are used.
