@@ -127,3 +127,27 @@ def test_report_uses_unique_target_transition_denominator_not_retry_attempts():
     assert report["execution"]["share_fill_ratio_basis"] == "target_transition"
     assert report["execution"]["target_requested_shares"] == 100
     assert report["execution"]["filled_shares"] == 100
+
+
+def test_report_uses_full_target_transition_as_denominator_for_capped_fill():
+    result = make_result()
+    orders = pl.DataFrame({
+        "date": ["2024-01-03"],
+        "instrument": ["600000.SH"],
+        "target_signal_date": ["2024-01-02"],
+        "target_requested_qty": [5000],
+        "target_fill_cap_qty": [2500],
+        "target_fill_ratio": [0.5],
+        "requested_qty": [2500],
+        "filled_qty": [2500],
+        "fill_price": [10.0],
+        "fees": [0.0],
+        "status": ["filled"],
+        "reason": [None],
+    })
+    report = summarize_backtest(
+        BacktestResult(daily=result.daily, orders=orders, holdings=result.holdings)
+    )
+    assert report["execution"]["share_fill_ratio"] == pytest.approx(0.5)
+    assert report["execution"]["target_requested_shares"] == 5000
+    assert report["execution"]["filled_shares"] == 2500

@@ -46,6 +46,7 @@ class BacktestConfig:
     board_lot: int = 100
     allow_leverage: bool = False
     costs: CostModel = field(default_factory=CostModel)
+    target_fill_ratio: float = 1.0
 
     def __post_init__(self) -> None:
         if self.initial_cash <= 0:
@@ -54,6 +55,8 @@ class BacktestConfig:
             raise ValueError("top_n and board_lot must be positive")
         if self.allow_leverage:
             raise ValueError("Leverage is out of scope for the v1 MVP")
+        if not 0.0 <= self.target_fill_ratio <= 1.0:
+            raise ValueError("target_fill_ratio must be in [0, 1]")
 
 
 @dataclass(slots=True)
@@ -221,6 +224,8 @@ def run_backtest(
     target_nav = cfg.initial_cash
     desired_quantities: dict[str, int] = {}
     target_requested_quantities: dict[str, int] = {}
+    target_fill_cap_quantities: dict[str, int] = {}
+    execution_target_quantities: dict[str, int] = {}
     active_target_signal_date: str | None = None
     daily_rows: list[dict[str, Any]] = []
     order_rows: list[dict[str, Any]] = []
@@ -238,13 +243,14 @@ def run_backtest(
             weight = active_targets.get(instrument, 0.0)
             if weight <= 0:
                 desired_quantities[instrument] = 0
-                target_requested_quantities.setdefault(instrument, current_qty)
             elif instrument not in desired_quantities:
                 if bar is None:
                     order_rows.append({
                         "date": date_value, "instrument": instrument, "side": "buy",
                         "target_signal_date": active_target_signal_date,
                         "target_requested_qty": None,
+                        "target_fill_cap_qty": None,
+                        "target_fill_ratio": cfg.target_fill_ratio,
                         "requested_qty": None, "filled_qty": 0, "fill_price": None,
                         "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
                         "stamp_duty": 0.0, "slippage_cost": 0.0,
@@ -258,8 +264,35 @@ def run_backtest(
                 target_requested_quantities.setdefault(
                     instrument, abs(desired_quantities[instrument] - current_qty)
                 )
-            desired_qty = desired_quantities[instrument]
-            delta = desired_qty - current_qty
+            if instrument not in execution_target_quantities:
+                target_delta = desired_quantities[instrument] - current_qty
+                target_requested = abs(target_delta)
+                if cfg.target_fill_ratio >= 1.0:
+                    fill_cap = target_requested
+                else:
+                    fill_cap = floor(
+                        target_requested * cfg.target_fill_ratio / cfg.board_lot
+                    ) * cfg.board_lot
+                target_requested_quantities[instrument] = target_requested
+                target_fill_cap_quantities[instrument] = fill_cap
+                execution_target_quantities[instrument] = (
+                    current_qty + (fill_cap if target_delta >= 0 else -fill_cap)
+                )
+                if target_requested > 0 and fill_cap == 0:
+                    order_rows.append({
+                        "date": date_value, "instrument": instrument,
+                        "side": "buy" if target_delta > 0 else "sell",
+                        "target_signal_date": active_target_signal_date,
+                        "target_requested_qty": target_requested,
+                        "target_fill_cap_qty": fill_cap,
+                        "target_fill_ratio": cfg.target_fill_ratio,
+                        "requested_qty": 0, "filled_qty": 0, "fill_price": None,
+                        "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
+                        "stamp_duty": 0.0, "slippage_cost": 0.0,
+                        "status": "no_fill", "reason": "target_fill_cap_below_board_lot",
+                    })
+            executable_target = execution_target_quantities[instrument]
+            delta = executable_target - current_qty
             if delta:
                 attempts.append((instrument, delta, bar))
 
@@ -335,6 +368,8 @@ def run_backtest(
                 "date": date_value, "instrument": instrument, "side": side,
                 "target_signal_date": active_target_signal_date,
                 "target_requested_qty": target_requested_quantities.get(instrument),
+                "target_fill_cap_qty": target_fill_cap_quantities.get(instrument),
+                "target_fill_ratio": cfg.target_fill_ratio,
                 "requested_qty": requested, "filled_qty": filled,
                 "fill_price": fill_price, "fees": fee,
                 **fee_parts, "slippage_cost": slippage_cost,
@@ -371,6 +406,8 @@ def run_backtest(
             # open; retain that quantity only while retrying this same signal.
             desired_quantities = {}
             target_requested_quantities = {}
+            target_fill_cap_quantities = {}
+            execution_target_quantities = {}
             active_target_signal_date = date_value
 
     return BacktestResult(
@@ -378,6 +415,7 @@ def run_backtest(
         orders=pl.DataFrame(order_rows) if order_rows else pl.DataFrame(schema={
             "date": pl.String, "instrument": pl.String, "side": pl.String,
             "target_signal_date": pl.String, "target_requested_qty": pl.Int64,
+            "target_fill_cap_qty": pl.Int64, "target_fill_ratio": pl.Float64,
             "requested_qty": pl.Int64, "filled_qty": pl.Int64,
             "fill_price": pl.Float64, "fees": pl.Float64,
             "commission": pl.Float64, "transfer_fee": pl.Float64,
