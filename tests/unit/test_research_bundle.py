@@ -376,3 +376,11 @@ def test_bundle_rejects_coverage_audit_row_count_that_differs_from_assembled_dat
     inputs["coverage_audits"]["daily_bars"]["expected_rows"] += 1
     with pytest.raises(ResearchBundleError, match="does not match assembled"):
         build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_price_limit_audit_row_count_that_differs_from_execution_evidence():
+    inputs = make_inputs()
+    inputs["coverage_audits"]["price_limit_rules"]["observed_rows"] -= 1
+    inputs["coverage_audits"]["price_limit_rules"]["expected_rows"] -= 1
+    with pytest.raises(ResearchBundleError, match="does not match assembled"):
+        build_research_data_bundle(**inputs)
