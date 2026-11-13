@@ -171,6 +171,8 @@ def summarize_backtest(
             "filled_shares": filled_qty,
             "traded_notional": traded_notional,
             "turnover": turnover,
+            "pending_target_count": result.pending_targets.height,
+            "pending_targets": result.pending_targets.to_dicts(),
         },
         "costs": {
             "commission": commission,

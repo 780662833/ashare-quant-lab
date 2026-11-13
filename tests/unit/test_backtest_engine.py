@@ -674,3 +674,37 @@ def test_constrained_cash_is_allocated_proportionally_across_buy_targets():
     ]
     assert max(fill_ratios) - min(fill_ratios) <= 0.03
     assert result.daily["cash"].min() >= 0
+
+
+def test_signal_on_final_session_is_reported_as_pending_without_fabricated_fill():
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-04"],
+        "instrument": ["600000.SH"],
+        "weight": [0.5],
+    })
+    result = run_backtest(make_bars(days=4), targets)
+    assert result.orders.is_empty()
+    assert result.pending_targets.height == 1
+    pending = result.pending_targets.row(0, named=True)
+    assert pending["signal_date"] == "2024-01-04"
+    assert pending["instrument"] == "600000.SH"
+    assert pending["reason"] == "no_next_session"
+    assert pending["current_quantity"] == 0
+    assert pending["desired_quantity"] is None
+
+
+def test_unfilled_target_at_window_end_is_reported_as_pending():
+    bars = make_bars(days=2, locked_buy_day=1)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01"],
+        "instrument": ["600000.SH"],
+        "weight": [0.5],
+    })
+    result = run_backtest(bars, targets, BacktestConfig(initial_cash=100000))
+    assert result.orders["status"].to_list() == ["no_fill"]
+    assert result.pending_targets.height == 1
+    pending = result.pending_targets.row(0, named=True)
+    assert pending["reason"] == "unfilled_at_end_of_window"
+    assert pending["desired_quantity"] == 5000
+    assert pending["execution_target_quantity"] == 5000
+    assert pending["current_quantity"] == 0

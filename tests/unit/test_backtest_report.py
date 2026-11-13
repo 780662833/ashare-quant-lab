@@ -151,3 +151,30 @@ def test_report_uses_full_target_transition_as_denominator_for_capped_fill():
     assert report["execution"]["share_fill_ratio"] == pytest.approx(0.5)
     assert report["execution"]["target_requested_shares"] == 5000
     assert report["execution"]["filled_shares"] == 2500
+
+
+def test_report_exposes_pending_end_of_window_targets():
+    result = make_result()
+    pending = pl.DataFrame([{
+        "signal_date": "2024-01-05",
+        "instrument": "000001.SZ",
+        "target_weight": 0.05,
+        "current_quantity": 0,
+        "desired_quantity": None,
+        "execution_target_quantity": None,
+        "reason": "no_next_session",
+    }], schema={
+        "signal_date": pl.String,
+        "instrument": pl.String,
+        "target_weight": pl.Float64,
+        "current_quantity": pl.Int64,
+        "desired_quantity": pl.Int64,
+        "execution_target_quantity": pl.Int64,
+        "reason": pl.String,
+    })
+    report = summarize_backtest(BacktestResult(
+        daily=result.daily, orders=result.orders, holdings=result.holdings,
+        pending_targets=pending,
+    ))
+    assert report["execution"]["pending_target_count"] == 1
+    assert report["execution"]["pending_targets"][0]["reason"] == "no_next_session"
