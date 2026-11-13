@@ -1,6 +1,7 @@
 """Canonical research data and benchmark orchestration."""
 
 from ashare_quant.research.benchmark import MomentumBenchmarkRun, run_momentum_benchmark
+from ashare_quant.research.cnequity_assembler import assemble_cnequity_research_bundle
 from ashare_quant.exceptions import ResearchBundleError
 from ashare_quant.research.bundle import ResearchDataBundle, build_research_data_bundle
 from ashare_quant.research.walk_forward_runner import (
@@ -41,6 +42,7 @@ __all__ = [
     "VerifiedWalkForwardExperiment",
     "WalkForwardExperimentComparison",
     "build_research_data_bundle",
+    "assemble_cnequity_research_bundle",
     "build_research_qa_report",
     "build_period_regime_diagnostics",
     "CostStressScenario",

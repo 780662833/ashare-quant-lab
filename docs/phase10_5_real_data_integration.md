@@ -86,10 +86,14 @@ windows with no sessions. This provides the official session list and pins the
 calendar dependency in the same adapter read session; it does not certify that
 the returned calendar is complete without the separate coverage audit.
 
-This closes the adapter-level provenance gap; it does **not** complete the assembler.
-The assembler must still map those receipts to the exact input frames and validate
-revision dependencies, date-window support, and cross-dataset consistency. Unit tests
-use deterministic fake `ReadResult` objects and are not evidence of local-lake behavior.
+The provider-neutral `assemble_cnequity_research_bundle(...)` entry point now
+composes the receipt-backed calendar, strict raw/HFQ daily bars, weekly PIT universe
+snapshots, and historical trading-status reads. It joins those with caller-supplied
+historical price-limit evidence, source identity, and coverage audits, then delegates
+the final fail-closed checks to `build_research_data_bundle(...)`. The assembler
+does not create price-limit facts or fabricate coverage audits. Unit tests use
+deterministic fake adapter reads and synthetic limit evidence; they are not evidence
+of local-lake behavior.
 
 ## Required Phase 10.5 work sequence
 
@@ -106,11 +110,12 @@ use deterministic fake `ReadResult` objects and are not evidence of local-lake b
    for historical limit prices, board/regime rules, and up/down locked states. Evidence
    must cover every execution bar and retain source, rule version, and regime metadata.
    If no provider or coverage exists, fail closed; do not synthesize lock flags.
-4. **Real-data bundle assembler.** Build one explicit assembler that joins the verified
-   source datasets and receipts into the existing `ResearchDataBundle` contract.
-   Validate key uniqueness, session coverage, per-date PIT universe membership,
-   adjustment provenance, execution-state coverage, and replayability before returning
-   a bundle.
+4. **Real-data bundle assembler.** The code-level assembler is implemented and
+   covered by synthetic adapter-contract tests. It joins the receipt-backed calendar,
+   daily bars, weekly PIT membership and trading status with explicit external
+   price-limit evidence and coverage audits. Remaining acceptance is provider-level
+   price-limit provenance/coverage and a read-only compatibility run against the
+   actual installed CNEquity version and lake.
 5. **Unified experiment entry point.** Only after steps 1–4 pass, add a single command
    that runs preflight, assembles the bundle, executes the existing weekly momentum
    walk-forward, and persists the immutable experiment manifest and artifacts.
@@ -133,7 +138,7 @@ use deterministic fake `ReadResult` objects and are not evidence of local-lake b
 
 ## Current status
 
-This phase is **not yet cleared for a real-data experiment**. The runtime preflight
-is the first diagnostic increment. The installed 0.23.0 environment, local lake,
-historical limit-evidence provider, and end-to-end real-data assembler still require
-independent verification.
+This phase is **not yet cleared for a real-data experiment**. The code-level
+assembler and its synthetic contract tests are present, but the installed 0.23.0
+environment, local lake, historical limit-evidence provider and end-to-end
+real-data coverage still require independent verification.
