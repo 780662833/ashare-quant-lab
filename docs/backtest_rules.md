@@ -17,6 +17,10 @@
   differences may be retried on later sessions under the same target.
 - The official exchange calendar must be supplied by the future research
   bundle; dates observed for one selected stock are not a calendar.
+- Targets still requiring execution at the end of the supplied window are
+  exposed separately in `BacktestResult.pending_targets` and the execution
+  report. A signal on the final supplied session is marked `no_next_session`,
+  not silently treated as filled or discarded.
 
 ## Order lifecycle
 
