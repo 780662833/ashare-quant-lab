@@ -54,6 +54,11 @@ official v0.23.0 tag additionally confirms:
 - `traded_status_evidence()` returns a `pl.LazyFrame` with the fields consumed by
   the current trading-status acceptance gate, including `asset_class`, `exclusion`,
   `has_status`, `risk_warning_known`, and `contradiction`.
+- The 0.23.0 migration changes `daily_bars` and `adj_factors` partition granularity
+  from day to month while preserving their columns and primary keys. The project
+  adapter reads these datasets through CNEquity's public query API rather than
+  constructing Hive paths itself; the internal trading-status quality API also
+  owns its partition scan. Do not add direct Parquet path assumptions to the assembler.
 - Strict PIT reads retain the canonical `financial_statement_items.item_code`
   field and add `pit_is_exact` / `pit_quality`. The acceptance implementation had
   incorrectly checked an `item` column, which would fail closed even when the
