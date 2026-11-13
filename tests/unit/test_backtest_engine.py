@@ -613,3 +613,30 @@ def test_accounting_replay_rejects_duplicate_daily_holding_instrument():
     holdings = pl.concat([holdings, holdings])
     with pytest.raises(AssertionError, match="duplicate instruments"):
         _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_duplicate_order_intents():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    orders = pl.concat([orders, orders])
+    with pytest.raises(AssertionError, match="Duplicate order intent"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_gross_exposure_mismatch():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    daily = daily.with_columns(pl.lit(0.02).alias("gross_exposure"))
+    with pytest.raises(AssertionError, match="gross exposure does not reconcile"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_accounting_replay_rejects_holding_market_value_mismatch():
+    from ashare_quant.backtest.engine import _validate_result_accounting
+
+    orders, daily, holdings = _valid_accounting_frames()
+    holdings = holdings.with_columns(pl.lit(900.0).alias("market_value"))
+    with pytest.raises(AssertionError, match="market value must equal"):
+        _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
