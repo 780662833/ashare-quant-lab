@@ -1,4 +1,5 @@
 from pathlib import Path
+from dataclasses import replace
 
 import polars as pl
 import pytest
@@ -125,8 +126,14 @@ def test_statistical_qa_rejects_duplicate_or_incomplete_oos_sessions(tmp_path, m
 
 def test_statistical_qa_rejects_invalid_daily_returns(tmp_path, monkeypatch):
     experiment = make_experiment(tmp_path)
-    experiment.oos_daily = experiment.oos_daily.with_columns(
-        pl.when(pl.col("date") == "2020-03-03").then(float("nan")).otherwise(pl.col("daily_return")).alias("daily_return")
+    experiment = replace(
+        experiment,
+        oos_daily=experiment.oos_daily.with_columns(
+            pl.when(pl.col("date") == "2020-03-03")
+            .then(float("nan"))
+            .otherwise(pl.col("daily_return"))
+            .alias("daily_return")
+        ),
     )
     monkeypatch.setattr(statistical_qa, "verify_walk_forward_experiment", lambda _path: experiment)
 
