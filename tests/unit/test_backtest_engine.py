@@ -708,3 +708,37 @@ def test_unfilled_target_at_window_end_is_reported_as_pending():
     assert pending["desired_quantity"] == 5000
     assert pending["execution_target_quantity"] == 5000
     assert pending["current_quantity"] == 0
+
+
+def test_same_session_sell_proceeds_can_fund_replacement_buy():
+    rows = []
+    for instrument in ("600000.SH", "000001.SZ"):
+        for row in make_bars(days=3).to_dicts():
+            row["instrument"] = instrument
+            row["open"] = 10.0
+            row["high"] = 11.0
+            row["low"] = 9.0
+            row["close"] = 10.0
+            row["limit_up"] = 12.0
+            row["limit_down"] = 8.0
+            rows.append(row)
+    bars = pl.DataFrame(rows)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "000001.SZ"],
+        "weight": [1.0, 1.0],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=1, costs=zero_costs),
+    )
+    replacement = result.orders.filter(pl.col("date") == "2024-01-03")
+    assert replacement["side"].to_list() == ["sell", "buy"]
+    assert replacement["filled_qty"].to_list() == [10000, 10000]
+    assert result.daily.filter(pl.col("date") == "2024-01-03")["cash"].item() == pytest.approx(0.0)
+    assert result.holdings.filter(pl.col("date") == "2024-01-03")["instrument"].to_list() == ["000001.SZ"]
