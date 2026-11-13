@@ -55,7 +55,7 @@ _ALLOWED_CONCLUSIONS = {
 
 
 def _valid_iso_date(value: Any) -> bool:
-    if not isinstance(value, str) or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
         return False
     try:
         return datetime.strptime(value, "%Y-%m-%d").date().isoformat() == value
