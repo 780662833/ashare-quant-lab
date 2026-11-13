@@ -71,6 +71,15 @@ class BacktestResult:
     daily: pl.DataFrame
     orders: pl.DataFrame
     holdings: pl.DataFrame
+    pending_targets: pl.DataFrame = field(default_factory=lambda: pl.DataFrame(schema={
+        "signal_date": pl.String,
+        "instrument": pl.String,
+        "target_weight": pl.Float64,
+        "current_quantity": pl.Int64,
+        "desired_quantity": pl.Int64,
+        "execution_target_quantity": pl.Int64,
+        "reason": pl.String,
+    }))
 
 
 def _date_text(value: Any) -> str:
@@ -685,4 +694,37 @@ def run_backtest(
         orders_frame, daily_frame, holdings_frame,
         initial_cash=cfg.initial_cash, board_lot=cfg.board_lot,
     )
-    return BacktestResult(daily=daily_frame, orders=orders_frame, holdings=holdings_frame)
+
+    pending_rows: list[dict[str, Any]] = []
+    if dates:
+        final_date = dates[-1]
+        for instrument in sorted(set(positions) | set(active_targets)):
+            current_qty = positions.get(instrument, 0)
+            desired_qty = desired_quantities.get(instrument)
+            execution_qty = execution_target_quantities.get(instrument)
+            if execution_qty is None or current_qty != execution_qty:
+                pending_rows.append({
+                    "signal_date": active_target_signal_date,
+                    "instrument": instrument,
+                    "target_weight": active_targets.get(instrument, 0.0),
+                    "current_quantity": current_qty,
+                    "desired_quantity": desired_qty,
+                    "execution_target_quantity": execution_qty,
+                    "reason": (
+                        "no_next_session" if active_target_signal_date == final_date
+                        else "unfilled_at_end_of_window"
+                    ),
+                })
+    pending_frame = pl.DataFrame(pending_rows, schema={
+        "signal_date": pl.String,
+        "instrument": pl.String,
+        "target_weight": pl.Float64,
+        "current_quantity": pl.Int64,
+        "desired_quantity": pl.Int64,
+        "execution_target_quantity": pl.Int64,
+        "reason": pl.String,
+    }) if pending_rows else BacktestResult.__dataclass_fields__["pending_targets"].default_factory()
+    return BacktestResult(
+        daily=daily_frame, orders=orders_frame, holdings=holdings_frame,
+        pending_targets=pending_frame,
+    )
