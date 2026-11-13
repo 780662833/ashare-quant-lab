@@ -39,6 +39,123 @@ ENGINE_COLUMNS = [
 ]
 
 
+
+REQUIRED_RECEIPT_DEPENDENCIES = {"daily_bars", "adj_factors", "trading_status", "trading_calendar"}
+REQUIRED_COVERAGE_AUDITS = {"daily_bars", "adj_factors", "universe", "trading_status", "trading_calendar", "price_limit_rules"}
+
+
+def _validate_source_provenance(source_receipts, source_revisions):
+    """Bind declared source identities to actual adapter receipt dependencies."""
+    if not isinstance(source_receipts, list) or not source_receipts:
+        raise ResearchBundleError("source_receipts must contain adapter receipt records")
+    observed = {}
+    receipt_ids = []
+    completeness = {}
+    for record in source_receipts:
+        if not isinstance(record, Mapping):
+            raise ResearchBundleError("source_receipts contains a malformed adapter record")
+        dataset, receipt = record.get("dataset"), record.get("receipt")
+        if not isinstance(dataset, str) or not dataset.strip() or not isinstance(receipt, Mapping):
+            raise ResearchBundleError("source_receipts record requires dataset and receipt")
+        if receipt.get("replayable") is not True:
+            raise ResearchBundleError(f"Adapter receipt for {dataset} is not replayable")
+        if isinstance(receipt.get("receipt_id"), str) and receipt["receipt_id"]:
+            receipt_ids.append(receipt["receipt_id"])
+        coverage = receipt.get("coverage")
+        if isinstance(coverage, Mapping):
+            completeness[dataset] = coverage.get("completeness", "unknown")
+        dependencies = receipt.get("dependencies")
+        if not isinstance(dependencies, Mapping) or not dependencies:
+            raise ResearchBundleError(f"Adapter receipt for {dataset} has no dependency identities")
+        for name, identity in dependencies.items():
+            if not isinstance(identity, Mapping):
+                raise ResearchBundleError(f"Receipt dependency {name} is malformed")
+            revision_id, fingerprint = identity.get("revision_id"), identity.get("contract_fingerprint")
+            if not isinstance(revision_id, (str, int)) or not str(revision_id):
+                raise ResearchBundleError(f"Receipt dependency {name} has no revision_id")
+            if not isinstance(fingerprint, str) or not fingerprint.strip():
+                raise ResearchBundleError(f"Receipt dependency {name} has no contract_fingerprint")
+            value = {"revision_id": revision_id, "contract_fingerprint": fingerprint}
+            if name in observed and observed[name] != value:
+                raise ResearchBundleError(f"Adapter receipts disagree on dependency identity for {name}")
+            observed[str(name)] = value
+
+    missing = sorted(REQUIRED_RECEIPT_DEPENDENCIES.difference(observed))
+    if missing:
+        raise ResearchBundleError("Adapter receipts do not cover required dependencies: " + ", ".join(missing))
+    if not isinstance(source_revisions, Mapping):
+        raise ResearchBundleError("source_revisions must be structured identity mappings")
+    required = {"daily_bars", "adj_factors", "universe", "trading_status", "trading_calendar", "price_limit_rules"}
+    missing = sorted(required.difference(source_revisions))
+    if missing:
+        raise ResearchBundleError(f"source_revisions missing required datasets: {missing}")
+
+    normalized = {}
+    for name in sorted(required):
+        identity = source_revisions.get(name)
+        if not isinstance(identity, Mapping):
+            raise ResearchBundleError(f"source_revisions[{name}] must be a receipt-bound identity mapping")
+        revision_id, fingerprint = identity.get("revision_id"), identity.get("contract_fingerprint")
+        if not isinstance(revision_id, (str, int)) or not str(revision_id):
+            raise ResearchBundleError(f"source_revisions[{name}] has no revision_id")
+        if not isinstance(fingerprint, str) or not fingerprint.strip():
+            raise ResearchBundleError(f"source_revisions[{name}] has no contract_fingerprint")
+        value = {"revision_id": revision_id, "contract_fingerprint": fingerprint}
+        if name == "universe":
+            actual = observed.get("daily_bars")
+        elif name == "price_limit_rules":
+            value["source"] = str(identity.get("source", "")).strip()
+            if not value["source"]:
+                raise ResearchBundleError("price_limit_rules identity requires a source")
+            actual = None
+        else:
+            actual = observed.get(name)
+        if name != "price_limit_rules" and actual is None:
+            raise ResearchBundleError(f"source_revisions[{name}] has no matching adapter receipt dependency")
+        if actual is not None and value != actual:
+            raise ResearchBundleError(f"source_revisions[{name}] does not match adapter receipt dependency identity")
+        normalized[name] = value
+    return normalized, {
+        "adapter_receipt_ids": sorted(set(receipt_ids)),
+        "dependency_identities": observed,
+        "coverage_completeness": completeness,
+    }
+
+
+def _validate_coverage_audits(audits, *, start_date, end_date, observed_rows):
+    """Require dataset-specific completeness evidence; row presence is insufficient."""
+    if not isinstance(audits, Mapping):
+        raise ResearchBundleError("coverage_audits must be a dataset-keyed mapping")
+    missing = sorted(REQUIRED_COVERAGE_AUDITS.difference(audits))
+    if missing:
+        raise ResearchBundleError(f"coverage_audits missing required datasets: {missing}")
+    normalized = {}
+    for dataset in sorted(REQUIRED_COVERAGE_AUDITS):
+        audit = audits.get(dataset)
+        if not isinstance(audit, Mapping) or audit.get("status") != "PASS":
+            raise ResearchBundleError(f"coverage audit for {dataset} is not PASS")
+        if audit.get("window") != {"start": start_date, "end": end_date}:
+            raise ResearchBundleError(f"coverage audit window mismatch for {dataset}")
+        for field_name in ("expected_rows", "observed_rows", "missing_keys", "unexpected_keys"):
+            value = audit.get(field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ResearchBundleError(f"coverage audit for {dataset} has invalid {field_name}")
+        if audit["expected_rows"] != audit["observed_rows"]:
+            raise ResearchBundleError(f"coverage audit row-count mismatch for {dataset}")
+        if audit["missing_keys"] or audit["unexpected_keys"]:
+            raise ResearchBundleError(f"coverage audit has key gaps for {dataset}")
+        for field_name in ("audit_id", "method", "source"):
+            if not isinstance(audit.get(field_name), str) or not audit[field_name].strip():
+                raise ResearchBundleError(f"coverage audit for {dataset} requires {field_name}")
+        if dataset in observed_rows and audit["observed_rows"] != observed_rows[dataset]:
+            raise ResearchBundleError(f"coverage audit observed_rows does not match assembled {dataset} rows")
+        normalized[dataset] = {key: audit[key] for key in (
+            "audit_id", "status", "window", "expected_rows", "observed_rows",
+            "missing_keys", "unexpected_keys", "method", "source",
+        )}
+    return normalized
+
+
 @dataclass(frozen=True, slots=True)
 class ResearchDataBundle:
     """Validated and provenance-bound data passed to strategies and the engine."""
@@ -179,7 +296,9 @@ def build_research_data_bundle(
     trading_dates: list[Any],
     acceptance_report: Mapping[str, Any],
     acceptance_report_id: str,
-    source_revisions: Mapping[str, str],
+    source_revisions: Mapping[str, Mapping[str, Any]],
+    source_receipts: list[Mapping[str, Any]],
+    coverage_audits: Mapping[str, Mapping[str, Any]],
     start_date: str,
     end_date: str,
     universe_profile: str,
@@ -199,20 +318,9 @@ def build_research_data_bundle(
         raise ResearchBundleError("universe_profile must be non-empty")
     if not acceptance_report_id or not acceptance_report_id.strip():
         raise ResearchBundleError("acceptance_report_id must be non-empty")
-    if not isinstance(source_revisions, Mapping) or not source_revisions:
-        raise ResearchBundleError("source_revisions must be a non-empty mapping")
-    revisions = {str(k): str(v) for k, v in source_revisions.items()}
-    if any(not key.strip() or not value.strip() for key, value in revisions.items()):
-        raise ResearchBundleError("source_revisions keys and values must be non-empty")
-    required_revisions = {
-        "daily_bars", "adj_factors", "universe", "trading_status",
-        "trading_calendar", "price_limit_rules",
-    }
-    missing_revisions = sorted(required_revisions.difference(revisions))
-    if missing_revisions:
-        raise ResearchBundleError(
-            f"source_revisions missing required datasets: {missing_revisions}"
-        )
+    revisions, receipt_provenance = _validate_source_provenance(
+        source_receipts, source_revisions
+    )
 
     required_gate_status = _require_gates(
         acceptance_report,
@@ -327,6 +435,12 @@ def build_research_data_bundle(
         pl.col("is_limit_up_locked") & pl.col("is_limit_down_locked")
     ).height:
         raise ResearchBundleError("A row cannot be locked at both limit-up and limit-down")
+    declared_limit_source = revisions["price_limit_rules"]["source"]
+    observed_limit_sources = set(state["limit_evidence_source"].cast(pl.String).unique().to_list())
+    if observed_limit_sources != {declared_limit_source}:
+        raise ResearchBundleError(
+            "price_limit_rules source identity does not match row-level limit evidence provenance"
+        )
 
     session_set = set(sessions)
     membership_dates = set(membership["date"].to_list())
@@ -394,6 +508,19 @@ def build_research_data_bundle(
     ).sort(["date", "instrument"])
     membership_out = membership.select("instrument", "date").sort(["date", "instrument"])
 
+    coverage_audit_provenance = _validate_coverage_audits(
+        coverage_audits,
+        start_date=start,
+        end_date=end,
+        observed_rows={
+            "daily_bars": raw.height,
+            "adj_factors": adjusted_out.height,
+            "universe": membership_out.height,
+            "trading_status": state.height,
+            "trading_calendar": len(sessions),
+        },
+    )
+
     provenance = {
         "acceptance_report_id": acceptance_report_id,
         "acceptance_report_created_at": acceptance_report.get("created_at"),
@@ -407,12 +534,16 @@ def build_research_data_bundle(
         "pit_fundamentals_used": False,
         "training_dataset_unlocked": False,
         "source_revisions": revisions,
-        "source_receipts": acceptance_report.get("receipts", {}),
+        "source_receipts": source_receipts,
+        "acceptance_source_receipts": acceptance_report.get("receipts", {}),
+        "receipt_provenance": receipt_provenance,
+        "coverage_audits": coverage_audit_provenance,
         "limit_evidence": {
             "sources": sorted(state["limit_evidence_source"].unique().to_list()),
             "rule_versions": sorted(state["limit_rule_version"].unique().to_list()),
             "regimes": sorted(state["limit_regime"].unique().to_list()),
-            "revision": revisions["price_limit_rules"],
+            "revision": revisions["price_limit_rules"]["revision_id"],
+            "source_revision_identity": revisions["price_limit_rules"],
         },
         "scope": {
             "start_date": start,
