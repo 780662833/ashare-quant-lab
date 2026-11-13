@@ -113,7 +113,7 @@ def test_statistical_qa_blocks_metrics_when_data_admission_fails(tmp_path, monke
 
     assert report["decision"] == "BLOCKED"
     assert report["fold_metric_distributions"] is None
-    assert report["limitations"]
+    assert any("historical_universe=FAIL" in item for item in report["limitations"])
 
 
 def test_statistical_qa_rejects_duplicate_or_incomplete_oos_sessions(tmp_path, monkeypatch):
