@@ -108,22 +108,42 @@ performance or empirical research quality.
 
 Use `verify_walk_forward_experiment(path)` before reading or exporting a
 saved experiment. It verifies the manifest schema and config hash, safe
-artifact paths, SHA-256 hashes, Parquet row counts/columns, fold identities,
-per-fold test cutoffs, daily session coverage and training-lock markers. It
-returns the verified manifest, fold table and OOS Parquet frames.
+artifact paths, SHA-256 hashes, Parquet row counts/columns, fold-table identity,
+per-fold test cutoffs, OOS session coverage, aggregate metrics and training
+lock markers. It returns the verified manifest, fold table and OOS Parquet
+frames.
 
 Use `compare_walk_forward_experiments(paths)` for a lightweight parameter
-comparison. It first verifies every experiment, then requires an identical
+comparison:
+
+```python
+from ashare_quant.research import (
+    compare_walk_forward_experiments,
+    verify_walk_forward_experiment,
+)
+
+verified = verify_walk_forward_experiment("reports/experiments/momentum-a")
+comparison = compare_walk_forward_experiments([
+    "reports/experiments/momentum-a",
+    "reports/experiments/momentum-b",
+])
+
+print(verified.manifest["experiment_id"])
+print(comparison.summary)
+print(comparison.by_fold)
+```
+
+Comparison first verifies every experiment. It then requires identical
 acceptance report identity/window, universe profile, source receipts/revisions,
 walk-forward config, fold dates and backtest/cost config. Strategy parameters
-may differ. It returns:
+may differ. The result contains:
 - `summary`: one aggregate row per experiment.
 - `by_fold`: per-fold return, CAGR, volatility, Sharpe, drawdown and cost
   attribution for side-by-side diagnosis.
 
 The comparison API reports results only. It does not automatically select a
-winner or optimize strategy parameters against the test windows. Keep test
-windows untouched for final out-of-sample evaluation.
+winner or optimize strategy parameters against test windows. Keep test windows
+untouched for final out-of-sample evaluation.
 
 This is a local file API for the existing momentum runner. It adds no database,
 scheduler, dashboard, model runner or command-line orchestration.
