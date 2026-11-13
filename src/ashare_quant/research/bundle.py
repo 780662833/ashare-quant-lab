@@ -108,6 +108,137 @@ def _keyed_frame(
     return normalized
 
 
+def _bind_source_provenance(
+    *,
+    source_revisions: Mapping[str, str],
+    source_receipts: list[Mapping[str, Any]],
+    coverage_audits: Mapping[str, Mapping[str, Any]],
+    start_date: str,
+    end_date: str,
+) -> tuple[dict[str, str], dict[str, str], dict[str, Any]]:
+    """Bind caller revision declarations and coverage audits to real receipts."""
+    if not isinstance(source_revisions, Mapping) or not source_revisions:
+        raise ResearchBundleError("source_revisions must be a non-empty mapping")
+    if not isinstance(source_receipts, list) or not source_receipts:
+        raise ResearchBundleError("source_receipts must contain replayable receipt records")
+
+    observed_revisions: dict[str, str] = {}
+    observed_fingerprints: dict[str, str] = {}
+    receipt_ids: dict[str, set[str]] = {}
+    normalized_receipts: list[dict[str, Any]] = []
+    for record in source_receipts:
+        if not isinstance(record, Mapping):
+            raise ResearchBundleError("source_receipts contains a malformed record")
+        dataset = record.get("dataset")
+        receipt = record.get("receipt")
+        if not isinstance(dataset, str) or not dataset.strip() or not isinstance(receipt, Mapping):
+            raise ResearchBundleError("source_receipts records require dataset and receipt")
+        if receipt.get("replayable") is not True:
+            raise ResearchBundleError(f"Source receipt for {dataset} is not replayable")
+        receipt_id = receipt.get("receipt_id")
+        if not isinstance(receipt_id, str) or not receipt_id.strip():
+            raise ResearchBundleError(f"Source receipt for {dataset} has no receipt_id")
+        dependencies = receipt.get("dependencies")
+        if not isinstance(dependencies, Mapping) or not dependencies:
+            raise ResearchBundleError(f"Source receipt for {dataset} has no dependency identities")
+        for dependency, identity in dependencies.items():
+            if not isinstance(dependency, str) or not dependency.strip() or not isinstance(identity, Mapping):
+                raise ResearchBundleError(f"Source receipt for {dataset} has malformed dependency identity")
+            revision_id = identity.get("revision_id")
+            fingerprint = identity.get("contract_fingerprint")
+            if not isinstance(revision_id, (str, int)) or not str(revision_id).strip():
+                raise ResearchBundleError(f"Source dependency {dependency} has no revision_id")
+            if not isinstance(fingerprint, str) or not fingerprint.strip():
+                raise ResearchBundleError(f"Source dependency {dependency} has no contract_fingerprint")
+            revision = str(revision_id)
+            prior_revision = observed_revisions.get(dependency)
+            prior_fingerprint = observed_fingerprints.get(dependency)
+            if prior_revision is not None and prior_revision != revision:
+                raise ResearchBundleError(f"Source receipt revision drift for {dependency}")
+            if prior_fingerprint is not None and prior_fingerprint != fingerprint:
+                raise ResearchBundleError(f"Source receipt contract drift for {dependency}")
+            observed_revisions[dependency] = revision
+            observed_fingerprints[dependency] = fingerprint
+            receipt_ids.setdefault(dependency, set()).add(receipt_id)
+        normalized_receipts.append({"dataset": dataset, "receipt": dict(receipt)})
+
+    declared_revisions = {str(key): str(value) for key, value in source_revisions.items()}
+    if any(not key.strip() or not value.strip() for key, value in declared_revisions.items()):
+        raise ResearchBundleError("source_revisions keys and values must be non-empty")
+    if declared_revisions != observed_revisions:
+        missing = sorted(set(observed_revisions).difference(declared_revisions))
+        extra = sorted(set(declared_revisions).difference(observed_revisions))
+        mismatched = sorted(
+            key for key in set(declared_revisions).intersection(observed_revisions)
+            if declared_revisions[key] != observed_revisions[key]
+        )
+        raise ResearchBundleError(
+            "source_revisions do not match receipt dependencies; "
+            f"missing={missing}, extra={extra}, mismatched={mismatched}"
+        )
+
+    required = {
+        "daily_bars", "adj_factors", "instruments",
+        "trading_status", "trading_calendar", "price_limit_rules",
+    }
+    missing_required = sorted(required.difference(observed_revisions))
+    if missing_required:
+        raise ResearchBundleError(
+            f"Source receipts missing required dependencies: {missing_required}"
+        )
+    if not isinstance(coverage_audits, Mapping):
+        raise ResearchBundleError("coverage_audits must be a dataset-keyed mapping")
+
+    audit_summary: dict[str, Any] = {}
+    for dataset in sorted(required):
+        audit = coverage_audits.get(dataset)
+        if not isinstance(audit, Mapping):
+            raise ResearchBundleError(f"Missing dataset-specific coverage audit: {dataset}")
+        if audit.get("status") != "PASS":
+            raise ResearchBundleError(f"Coverage audit did not PASS for {dataset}")
+        if audit.get("window") != {"start": start_date, "end": end_date}:
+            raise ResearchBundleError(f"Coverage audit window mismatch for {dataset}")
+        if not isinstance(audit.get("scope"), str) or not audit["scope"].strip():
+            raise ResearchBundleError(f"Coverage audit has no explicit scope for {dataset}")
+        if not isinstance(audit.get("method"), str) or not audit["method"].strip():
+            raise ResearchBundleError(f"Coverage audit has no method for {dataset}")
+        if str(audit.get("revision_id")) != observed_revisions[dataset]:
+            raise ResearchBundleError(f"Coverage audit revision mismatch for {dataset}")
+        if audit.get("contract_fingerprint") != observed_fingerprints[dataset]:
+            raise ResearchBundleError(f"Coverage audit contract mismatch for {dataset}")
+        if audit.get("receipt_id") not in receipt_ids.get(dataset, set()):
+            raise ResearchBundleError(f"Coverage audit receipt mismatch for {dataset}")
+        expected = audit.get("expected_rows")
+        observed = audit.get("observed_rows")
+        missing = audit.get("missing_rows")
+        duplicates = audit.get("duplicate_rows")
+        if (
+            not isinstance(expected, int) or isinstance(expected, bool) or expected <= 0
+            or not isinstance(observed, int) or isinstance(observed, bool) or observed != expected
+            or missing != 0 or duplicates != 0
+        ):
+            raise ResearchBundleError(
+                f"Coverage audit is incomplete or inconsistent for {dataset}"
+            )
+        audit_summary[dataset] = {
+            "status": "PASS",
+            "scope": audit["scope"],
+            "method": audit["method"],
+            "receipt_id": audit["receipt_id"],
+            "revision_id": observed_revisions[dataset],
+            "contract_fingerprint": observed_fingerprints[dataset],
+            "expected_rows": expected,
+            "observed_rows": observed,
+            "missing_rows": missing,
+            "duplicate_rows": duplicates,
+        }
+
+    return observed_revisions, observed_fingerprints, {
+        "receipts": normalized_receipts,
+        "coverage_audits": audit_summary,
+    }
+
+
 def _require_gates(
     report: Mapping[str, Any],
     *,
@@ -180,6 +311,8 @@ def build_research_data_bundle(
     acceptance_report: Mapping[str, Any],
     acceptance_report_id: str,
     source_revisions: Mapping[str, str],
+    source_receipts: list[Mapping[str, Any]],
+    coverage_audits: Mapping[str, Mapping[str, Any]],
     start_date: str,
     end_date: str,
     universe_profile: str,
@@ -199,20 +332,13 @@ def build_research_data_bundle(
         raise ResearchBundleError("universe_profile must be non-empty")
     if not acceptance_report_id or not acceptance_report_id.strip():
         raise ResearchBundleError("acceptance_report_id must be non-empty")
-    if not isinstance(source_revisions, Mapping) or not source_revisions:
-        raise ResearchBundleError("source_revisions must be a non-empty mapping")
-    revisions = {str(k): str(v) for k, v in source_revisions.items()}
-    if any(not key.strip() or not value.strip() for key, value in revisions.items()):
-        raise ResearchBundleError("source_revisions keys and values must be non-empty")
-    required_revisions = {
-        "daily_bars", "adj_factors", "universe", "trading_status",
-        "trading_calendar", "price_limit_rules",
-    }
-    missing_revisions = sorted(required_revisions.difference(revisions))
-    if missing_revisions:
-        raise ResearchBundleError(
-            f"source_revisions missing required datasets: {missing_revisions}"
-        )
+    revisions, fingerprints, source_provenance = _bind_source_provenance(
+        source_revisions=source_revisions,
+        source_receipts=source_receipts,
+        coverage_audits=coverage_audits,
+        start_date=start,
+        end_date=end,
+    )
 
     required_gate_status = _require_gates(
         acceptance_report,
@@ -407,7 +533,9 @@ def build_research_data_bundle(
         "pit_fundamentals_used": False,
         "training_dataset_unlocked": False,
         "source_revisions": revisions,
-        "source_receipts": acceptance_report.get("receipts", {}),
+        "source_contract_fingerprints": fingerprints,
+        "source_receipts": source_provenance["receipts"],
+        "coverage_audits": source_provenance["coverage_audits"],
         "limit_evidence": {
             "sources": sorted(state["limit_evidence_source"].unique().to_list()),
             "rule_versions": sorted(state["limit_rule_version"].unique().to_list()),
