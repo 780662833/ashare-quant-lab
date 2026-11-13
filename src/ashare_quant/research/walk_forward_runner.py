@@ -92,7 +92,7 @@ def _prefix_bundle(
             "model_training_performed": False,
         },
     }
-    return ResearchDataBundle(
+    return bundle._validated_copy(
         execution_bars=_date_frame(bundle.execution_bars, cutoff),
         adjusted_bars=_date_frame(bundle.adjusted_bars, cutoff),
         universe_membership=_date_frame(bundle.universe_membership, cutoff),
@@ -248,6 +248,7 @@ def run_walk_forward_momentum(
     """
     if annualization < 1:
         raise ValueError("annualization must be positive")
+    bundle._require_validated()
     if bundle.provenance.get("training_dataset_unlocked") is not False:
         raise ValueError("Walk-forward benchmark requires training_dataset_unlocked=false")
 
