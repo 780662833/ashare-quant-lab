@@ -30,17 +30,34 @@ def make_verified_experiment(tmp_path, *, gates=None, pit_used=False, scope=None
         "pit_fundamentals_used": pit_used,
         "training_dataset_unlocked": False,
         "source_revisions": {
-            "daily_bars": "daily-r1",
-            "adj_factors": "hfq-r1",
-            "universe": "universe-r1",
-            "trading_status": "status-r1",
-            "trading_calendar": "calendar-r1",
-            "price_limit_rules": "limits-r1",
+            "daily_bars": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+            "adj_factors": {"revision_id": "hfq-r1", "contract_fingerprint": "hfq-contract"},
+            "universe": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+            "trading_status": {"revision_id": "status-r1", "contract_fingerprint": "status-contract"},
+            "trading_calendar": {"revision_id": "calendar-r1", "contract_fingerprint": "calendar-contract"},
+            "price_limit_rules": {"revision_id": "limits-r1", "contract_fingerprint": "limits-contract", "source": "synthetic-provider"},
         },
-        "source_receipts": {
+        "source_receipts": [
+            {"dataset": "daily_bars", "receipt": {"replayable": True, "receipt_id": "adapter-1", "dependencies": {
+                "daily_bars": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+                "adj_factors": {"revision_id": "hfq-r1", "contract_fingerprint": "hfq-contract"},
+                "trading_status": {"revision_id": "status-r1", "contract_fingerprint": "status-contract"},
+                "trading_calendar": {"revision_id": "calendar-r1", "contract_fingerprint": "calendar-contract"},
+            }}},
+        ],
+        "receipt_provenance": {"dependency_identities": {
+            "daily_bars": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+            "adj_factors": {"revision_id": "hfq-r1", "contract_fingerprint": "hfq-contract"},
+            "trading_status": {"revision_id": "status-r1", "contract_fingerprint": "status-contract"},
+            "trading_calendar": {"revision_id": "calendar-r1", "contract_fingerprint": "calendar-contract"},
+        }},
+        "acceptance_source_receipts": {
             "historical_universe": {"replayable": True, "revision": "universe-r1"},
             "hfq": {"replayable": True, "revision": "hfq-r1"},
         },
+        "limit_evidence": {"revision": "limits-r1", "source_revision_identity": {
+            "revision_id": "limits-r1", "contract_fingerprint": "limits-contract", "source": "synthetic-provider",
+        }},
         "scope": scope or {"start_date": window["start"], "end_date": window["end"]},
     }
     manifest = {
