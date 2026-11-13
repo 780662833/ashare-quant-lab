@@ -200,3 +200,17 @@ def test_unverified_manifest_is_not_accepted(monkeypatch):
             created_at="2026-11-13T00:00:00Z",
             repository_commit="abcdef1234567",
         )
+
+
+
+def test_report_schema_rejects_inconsistent_model_training_gate_decision(tmp_path, monkeypatch):
+    report = build_report(make_verified_experiment(tmp_path), monkeypatch)
+    invalid = {
+        **report,
+        "admission": {
+            **report["admission"],
+            "model_training_decision": "MODEL_TRAINING_ELIGIBLE",
+        },
+    }
+    with pytest.raises(ValueError, match="all four gates PASS"):
+        validate_research_qa_report(invalid)
