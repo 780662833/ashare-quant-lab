@@ -23,7 +23,7 @@ PROTOCOL_VERSION = "phase10.5"
 TARGET_FILL_RATIOS = (1.0, 0.95, 0.90, 0.80, 0.70)
 _UNSUPPORTED_REASON = (
     "No verified immutable F0-F4 fill-stress suite was supplied. "
-    "The read-only assessment does not run scenarios or fabricate achieved fills.",
+    "The read-only assessment does not run scenarios or fabricate achieved fills."
 )
 
 def _observed_execution(orders: pl.DataFrame) -> dict[str, Any]:
@@ -129,7 +129,7 @@ def build_fill_stress_assessment(experiment_path: str | Path) -> dict[str, Any]:
 
     This function is deliberately read-only. It does not rerun the engine, change
     order ledgers, delete trades, or haircut NAV. Target ratios remain unsupported
-    until a deterministic order-level policy is implemented and accounting-tested.
+    until the immutable F0-F4 suite is run and its artifacts are verified.
     """
     experiment = verify_walk_forward_experiment(str(experiment_path))
     if not isinstance(experiment, VerifiedWalkForwardExperiment):
@@ -157,7 +157,9 @@ def build_fill_stress_assessment(experiment_path: str | Path) -> dict[str, Any]:
             "tradability_no_fill_reasons": True,
             "cash_affordability_partial_fills": True,
             "retry_unfilled_target_differences": True,
-            "deterministic_target_fill_ratio_policy": False,
+            "deterministic_target_fill_ratio_policy": {
+                "target_fill_cap_qty", "target_fill_ratio"
+            }.issubset(experiment.oos_orders.columns),
             "target_transition_ledger": "target_transition" == observed["share_fill_ratio_basis"],
         },
         "scenarios": scenarios,
