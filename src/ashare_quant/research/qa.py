@@ -100,7 +100,7 @@ def _assess_verified_experiment(
     ]
     if unresolved_gates:
         blockers.append(
-            "missing or unrecognized independent gate statuses: "
+            "missing or unrecognized four-gate acceptance statuses: "
             + ", ".join(sorted(unresolved_gates))
         )
 
