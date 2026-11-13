@@ -251,3 +251,78 @@ def test_new_signal_recomputes_existing_holding_target_quantity():
     assert result.orders["side"].to_list() == ["buy", "sell"]
     assert result.orders["filled_qty"].to_list() == [5000, 2400]
     assert result.holdings.filter(pl.col("date") == "2024-01-03")["quantity"].item() == 2600
+
+ 
+ 
+def test_target_fill_ratio_caps_cumulative_buy_quantity_across_retries():
+    bars = make_bars(days=4, locked_buy_day=1)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01"],
+        "instrument": ["600000.SH"],
+        "weight": [0.5],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(
+            initial_cash=100000, costs=zero_costs, target_fill_ratio=0.5,
+        ),
+    )
+    assert result.orders["status"].to_list() == ["no_fill", "filled"]
+    assert result.orders["requested_qty"].to_list() == [2500, 2500]
+    assert result.orders["filled_qty"].to_list() == [0, 2500]
+    assert result.orders["target_requested_qty"].to_list() == [5000, 5000]
+    assert result.orders["target_fill_cap_qty"].to_list() == [2500, 2500]
+    assert result.holdings.filter(pl.col("date") == "2024-01-03")["quantity"].item() == 2500
+
+
+def test_target_fill_ratio_caps_sell_quantity_without_retries_beyond_cap():
+    bars = make_bars(days=4)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "weight": [0.5, 0.0],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(
+            initial_cash=100000, costs=zero_costs, target_fill_ratio=0.5,
+        ),
+    )
+    assert result.orders["side"].to_list() == ["buy", "sell"]
+    assert result.orders["target_requested_qty"].to_list() == [5000, 5000]
+    assert result.orders["target_fill_cap_qty"].to_list() == [2500, 2500]
+    assert result.orders["filled_qty"].to_list() == [2500, 2500]
+    assert result.holdings.filter(pl.col("date") == "2024-01-04")["quantity"].item() == 2500
+
+
+def test_target_fill_ratio_below_one_board_lot_is_explicit_no_fill():
+    bars = make_bars(days=3)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01"],
+        "instrument": ["600000.SH"],
+        "weight": [0.01],
+    })
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, target_fill_ratio=0.5),
+    )
+    assert result.orders.height == 1
+    assert result.orders["target_requested_qty"].item() == 100
+    assert result.orders["target_fill_cap_qty"].item() == 0
+    assert result.orders["requested_qty"].item() == 0
+    assert result.orders["filled_qty"].item() == 0
+    assert result.orders["reason"].item() == "target_fill_cap_below_board_lot"
+
+
+@pytest.mark.parametrize("ratio", [-0.01, 1.01])
+def test_target_fill_ratio_must_be_between_zero_and_one(ratio):
+    with pytest.raises(ValueError, match="target_fill_ratio"):
+        BacktestConfig(target_fill_ratio=ratio)
