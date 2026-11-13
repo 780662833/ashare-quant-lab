@@ -21,7 +21,9 @@ Call `build_research_data_bundle(...)` with:
 | `execution_evidence` | `instrument,date,is_suspended,is_limit_up_locked,is_limit_down_locked,limit_up,limit_down,risk_warning_known,limit_evidence_source,limit_rule_version` | Joined native status and separate versioned price-limit evidence |
 | `trading_dates` | ordered exchange-local session dates | Session and next-open timing |
 | `acceptance_report` | matching window/profile and named gate results | Evidence admission |
-| `source_revisions` | `daily_bars`, `adj_factors`, `universe`, `trading_status`, `trading_calendar`, `price_limit_rules` | Reproducibility |
+| `source_revisions` | Structured revision ID + contract fingerprint identities; external limit rules also include provider source | Reproducibility, checked against receipts |
+| `source_receipts` | Actual `CNEquityAdapter.source_receipts` records | Committed dependency revisions and contracts |
+| `coverage_audits` | Dataset-keyed explicit completeness audit records | Prove expected/observed key coverage for each required source |
 
 The acceptance report must show PASS for historical universe, the explicit
 historical-universe-receipt sub-gate, HFQ adjustment, and trading status, and
