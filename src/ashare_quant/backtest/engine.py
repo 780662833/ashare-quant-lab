@@ -189,6 +189,95 @@ def _fees(notional: float, side: str, costs: CostModel) -> float:
     return sum(_fee_components(notional, side, costs).values())
 
 
+def _validate_result_accounting(
+    orders: pl.DataFrame, daily: pl.DataFrame, holdings: pl.DataFrame,
+    *, initial_cash: float, board_lot: int,
+) -> None:
+    """Replay the order ledger to enforce cash, inventory, fee and T+1 invariants."""
+    inventory: dict[str, int] = {}
+    cash = initial_cash
+    order_columns = {
+        "date", "instrument", "side", "requested_qty", "filled_qty",
+        "fill_price", "fees", "commission", "transfer_fee", "stamp_duty",
+        "slippage_cost", "status",
+    }
+    if not order_columns.issubset(orders.columns):
+        raise AssertionError(f"Order ledger is missing accounting fields: {sorted(order_columns - set(orders.columns))}")
+    daily_by_date = {str(row["date"]): row for row in daily.to_dicts()}
+    orders_by_date: dict[str, list[dict[str, Any]]] = {}
+    for row in orders.to_dicts():
+        orders_by_date.setdefault(str(row["date"]), []).append(row)
+    for date_value in daily["date"].to_list():
+        day = str(date_value)
+        rows = sorted(orders_by_date.get(day, []), key=lambda row: (0 if row["side"] == "sell" else 1, row["instrument"]))
+        for row in rows:
+            side = row["side"]
+            requested = row["requested_qty"]
+            filled = row["filled_qty"]
+            if side not in {"buy", "sell"}:
+                raise AssertionError("Order side must be buy or sell")
+            if isinstance(filled, bool) or not isinstance(filled, int) or filled < 0:
+                raise AssertionError("filled_qty must be a non-negative integer")
+            if requested is None:
+                if filled:
+                    raise AssertionError("A fill cannot exist without requested_qty")
+            elif isinstance(requested, bool) or not isinstance(requested, int) or requested < filled:
+                raise AssertionError("filled_qty must not exceed non-negative requested_qty")
+            fee_parts = sum(float(row[name] or 0.0) for name in ("commission", "transfer_fee", "stamp_duty"))
+            if abs(float(row["fees"] or 0.0) - fee_parts) > 1e-8:
+                raise AssertionError("Order fees must equal commission + transfer fee + stamp duty")
+            if any(float(row[name] or 0.0) < -1e-10 for name in ("fees", "commission", "transfer_fee", "stamp_duty", "slippage_cost")):
+                raise AssertionError("Order costs must be non-negative")
+            if (row["status"] == "no_fill") != (filled == 0):
+                raise AssertionError("Order status does not agree with filled_qty")
+            if filled == 0:
+                continue
+            price = row["fill_price"]
+            if price is None or float(price) <= 0:
+                raise AssertionError("Filled orders require a positive fill_price")
+            instrument = str(row["instrument"])
+            notional = filled * float(price)
+            fee = float(row["fees"] or 0.0)
+            if side == "sell":
+                available = inventory.get(instrument, 0)
+                if filled > available:
+                    raise AssertionError("T+1 violation: sell quantity exceeds shares held before this session")
+                if filled % board_lot and filled != available:
+                    raise AssertionError("Odd-lot sell must liquidate the entire remaining position")
+                inventory[instrument] = available - filled
+                cash += notional - fee
+                if inventory[instrument] == 0:
+                    inventory.pop(instrument)
+            else:
+                if filled % board_lot:
+                    raise AssertionError("Buy fills must be rounded to board lots")
+                inventory[instrument] = inventory.get(instrument, 0) + filled
+                cash -= notional + fee
+            if cash < -1e-6:
+                raise AssertionError("Order ledger replay produced negative cash")
+        snapshot = daily_by_date[day]
+        if abs(float(snapshot["cash"]) - cash) > 1e-6:
+            raise AssertionError("Daily cash does not reconcile to the order ledger")
+        if any(quantity <= 0 for quantity in inventory.values()):
+            raise AssertionError("Holdings quantities must remain positive")
+        day_holdings = {
+            str(row["instrument"]): int(row["quantity"])
+            for row in holdings.filter(pl.col("date").cast(pl.String) == day).to_dicts()
+        }
+        if day_holdings != inventory:
+            raise AssertionError("Daily holdings do not reconcile to the order ledger")
+        market_value = sum(
+            float(row["market_value"])
+            for row in holdings.filter(pl.col("date").cast(pl.String) == day).to_dicts()
+        )
+        if abs(float(snapshot["market_value"]) - market_value) > 1e-6:
+            raise AssertionError("Daily market value does not reconcile to holdings")
+        if abs(float(snapshot["nav"]) - (cash + market_value)) > 1e-6:
+            raise AssertionError("Daily NAV must equal cash plus market value")
+        if float(snapshot["gross_exposure"]) > 1.0 + 1e-9:
+            raise AssertionError("Gross exposure exceeds the no-leverage limit")
+
+
 def run_backtest(
     bars: pl.DataFrame,
     targets: pl.DataFrame,
@@ -410,9 +499,8 @@ def run_backtest(
             execution_target_quantities = {}
             active_target_signal_date = date_value
 
-    return BacktestResult(
-        daily=pl.DataFrame(daily_rows),
-        orders=pl.DataFrame(order_rows) if order_rows else pl.DataFrame(schema={
+    daily_frame = pl.DataFrame(daily_rows)
+    orders_frame = pl.DataFrame(order_rows) if order_rows else pl.DataFrame(schema={
             "date": pl.String, "instrument": pl.String, "side": pl.String,
             "target_signal_date": pl.String, "target_requested_qty": pl.Int64,
             "target_fill_cap_qty": pl.Int64, "target_fill_ratio": pl.Float64,
@@ -422,8 +510,12 @@ def run_backtest(
             "stamp_duty": pl.Float64, "slippage_cost": pl.Float64,
             "status": pl.String, "reason": pl.String,
         }),
-        holdings=pl.DataFrame(holding_rows) if holding_rows else pl.DataFrame(schema={
-            "date": pl.String, "instrument": pl.String, "quantity": pl.Int64,
-            "mark_price": pl.Float64, "market_value": pl.Float64,
-        }),
+    holdings_frame = pl.DataFrame(holding_rows) if holding_rows else pl.DataFrame(schema={
+        "date": pl.String, "instrument": pl.String, "quantity": pl.Int64,
+        "mark_price": pl.Float64, "market_value": pl.Float64,
+    })
+    _validate_result_accounting(
+        orders_frame, daily_frame, holdings_frame,
+        initial_cash=cfg.initial_cash, board_lot=cfg.board_lot,
     )
+    return BacktestResult(daily=daily_frame, orders=orders_frame, holdings=holdings_frame)
