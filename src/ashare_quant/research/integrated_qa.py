@@ -43,6 +43,8 @@ def build_integrated_research_qa_report(
             raise TypeError("cost_stress_report must be a verified P10.4 report mapping")
         if cost_stress_report.get("protocol_version") != "phase10.4":
             raise ValueError("cost_stress_report protocol_version must be phase10.4")
+        if base["admission"]["decision"] != "PRICE_ONLY_ELIGIBLE":
+            raise ValueError("A blocked baseline cannot be combined with a verified P10.4 cost report")
         if cost_stress_report.get("baseline_experiment_id") != experiment_id:
             raise ValueError("P10.4 cost-stress baseline does not match the QA experiment")
         if cost_stress_report.get("repository_commit") != repository_commit.lower():
@@ -130,7 +132,7 @@ def _render_markdown(report: Mapping[str, Any]) -> str:
     lines.extend(["", "## Limitations", ""])
     lines.extend(f"- {item}" for item in report["limitations"])
     lines.append("")
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def write_research_qa_report(
@@ -146,9 +148,9 @@ def write_research_qa_report(
     destination.mkdir(exist_ok=False)
     json_path = destination / "report.json"
     markdown_path = destination / "report.md"
-    payload = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\\n"
+    payload = json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
     markdown = _render_markdown(report)
-    with json_path.open("x", encoding="utf-8", newline="\\n") as stream:
+    with json_path.open("x", encoding="utf-8", newline="\n") as stream:
         stream.write(payload)
     with markdown_path.open("x", encoding="utf-8", newline="\\n") as stream:
         stream.write(markdown)
