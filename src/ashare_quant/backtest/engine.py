@@ -723,7 +723,7 @@ def run_backtest(
         "desired_quantity": pl.Int64,
         "execution_target_quantity": pl.Int64,
         "reason": pl.String,
-    }) if pending_rows else BacktestResult.__dataclass_fields__["pending_targets"].default_factory()
+    })
     return BacktestResult(
         daily=daily_frame, orders=orders_frame, holdings=holdings_frame,
         pending_targets=pending_frame,
