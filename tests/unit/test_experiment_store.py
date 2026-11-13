@@ -411,6 +411,17 @@ def test_verify_rejects_tampered_artifact(tmp_path):
         verify_walk_forward_experiment(destination)
 
 
+def test_verify_rejects_manifest_provenance_drift_from_fold_receipts(tmp_path):
+    destination = persist(tmp_path)
+    manifest_path = destination / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["data_provenance"]["acceptance_report_id"] = "caller-replaced-acceptance"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="data provenance does not match experiment manifest"):
+        verify_walk_forward_experiment(destination)
+
+
 def test_compare_allows_strategy_variants_on_identical_data_and_execution(tmp_path):
     first = persist_variant(
         tmp_path,
