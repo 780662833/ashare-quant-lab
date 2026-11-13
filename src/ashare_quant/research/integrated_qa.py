@@ -31,6 +31,14 @@ def build_integrated_research_qa_report(
     execution_stress = build_fill_stress_assessment(experiment_path)
     statistical_qa = build_statistical_qa_summary(experiment_path)
     experiment_id = base["experiment_ids"][0]
+    if execution_stress.get("experiment_id") != experiment_id:
+        raise ValueError("Fill-stress assessment experiment identity does not match QA baseline")
+    if statistical_qa.get("experiment_id") != experiment_id:
+        raise ValueError("Statistical QA experiment identity does not match QA baseline")
+    if execution_stress.get("admission_decision") != base["admission"]["decision"]:
+        raise ValueError("Fill-stress admission does not match integrated QA admission")
+    if statistical_qa.get("admission_decision") != base["admission"]["decision"]:
+        raise ValueError("Statistical QA admission does not match integrated QA admission")
 
     if cost_stress_report is None:
         cost_section = {
@@ -55,11 +63,17 @@ def build_integrated_research_qa_report(
         if cost_stress_report.get("training_dataset_unlocked") is not False or cost_stress_report.get("model_training_performed") is not False:
             raise ValueError("P10.4 cost-stress report violates the training lock")
         scenarios = cost_stress_report.get("scenarios")
-        if not isinstance(scenarios, list) or [item.get("scenario_id") for item in scenarios] != ["C0", "C1", "C2", "C3"]:
+        if not isinstance(scenarios, list) or not all(isinstance(item, Mapping) for item in scenarios):
+            raise ValueError("P10.4 cost-stress scenarios must be structured records")
+        if [item.get("scenario_id") for item in scenarios] != ["C0", "C1", "C2", "C3"]:
             raise ValueError("P10.4 cost-stress report must contain verified C0-C3 scenarios")
         decisions = integrity.get("admission_decisions")
-        if not isinstance(decisions, list) or any(item != "PRICE_ONLY_ELIGIBLE" for item in decisions):
+        if not isinstance(decisions, list) or len(decisions) != 4 or any(item != "PRICE_ONLY_ELIGIBLE" for item in decisions):
             raise ValueError("P10.4 cost-stress admission was not PRICE_ONLY_ELIGIBLE for every scenario")
+        if cost_stress_report.get("experiment_ids", [experiment_id])[0] != experiment_id:
+            raise ValueError("P10.4 cost-stress experiment IDs do not include the QA baseline")
+        if not isinstance(integrity.get("report_sha256"), str) or len(integrity["report_sha256"]) != 64:
+            raise ValueError("P10.4 cost-stress report hash is missing or invalid")
         cost_section = {
             "status": "VERIFIED", "baseline_experiment_id": experiment_id,
             "scenarios": list(scenarios),
