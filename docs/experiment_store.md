@@ -90,6 +90,15 @@ Do not use the example SHA as a real repository revision.
 - Folds must share one acceptance identity, universe profile and exact source
   revision map. Required market, factor, universe, trading-status, calendar
   and price-limit revision identifiers must be present.
+- Source revisions are structured `(revision_id, contract_fingerprint)` identities,
+  not free-form labels. Persist/verify recomputes dependency identities from the
+  retained adapter receipts and checks them against the declared revision map;
+  the historical-universe identity must alias the receipt-bound daily-bars
+  identity. The separate price-limit identity must match the row-level evidence
+  provenance. Acceptance receipts for historical universe and HFQ remain
+  separately retained and replayable.
+- Each fold's common provenance must exactly match the experiment manifest;
+  the per-fold walk-forward cutoff is validated separately.
 - Every fold must retain its own test-end cutoff and have test-only daily,
   order and holdings ledgers.
 - A run that claims model training was performed or training was unlocked is
