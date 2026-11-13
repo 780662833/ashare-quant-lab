@@ -166,6 +166,19 @@ def _common_provenance(run: WalkForwardMomentumRun) -> dict[str, Any]:
     for name, expected in expected_rows.items():
         if getattr(run, name).height != expected:
             raise ValueError(f"run.{name} row count does not match its fold ledgers")
+
+    combined_sort_columns = {
+        "oos_daily": ["date"],
+        "oos_orders": ["date", "instrument"],
+        "oos_holdings": ["date", "instrument"],
+    }
+    for name, sort_columns in combined_sort_columns.items():
+        fold_frames = [getattr(item, name.replace("oos_", "")) for item in run.folds]
+        expected_frame = pl.concat(fold_frames, how="vertical_relaxed").sort(sort_columns)
+        actual_frame = getattr(run, name).sort(sort_columns)
+        if not actual_frame.equals(expected_frame):
+            raise ValueError(f"run.{name} contents do not match its fold ledgers")
+
     if "date" not in run.oos_daily.columns:
         raise ValueError("Combined OOS daily ledger must contain date")
     if run.oos_daily["date"].cast(pl.String).n_unique() != run.oos_daily.height:
