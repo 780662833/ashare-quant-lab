@@ -742,3 +742,29 @@ def test_same_session_sell_proceeds_can_fund_replacement_buy():
     assert replacement["filled_qty"].to_list() == [10000, 10000]
     assert result.daily.filter(pl.col("date") == "2024-01-03")["cash"].item() == pytest.approx(0.0)
     assert result.holdings.filter(pl.col("date") == "2024-01-03")["instrument"].to_list() == ["000001.SZ"]
+
+
+def test_new_signal_replaces_prior_blocked_target_transition():
+    bars = make_bars(days=4, locked_sell_day=2)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02", "2024-01-03"],
+        "instrument": ["600000.SH", "600000.SH", "600000.SH"],
+        "weight": [0.5, 0.0, 0.5],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=1, costs=zero_costs),
+    )
+    assert result.orders["date"].to_list() == [
+        "2024-01-02", "2024-01-03", "2024-01-04",
+    ]
+    assert result.orders["side"].to_list() == ["buy", "sell", "buy"]
+    assert result.orders["status"].to_list() == ["filled", "no_fill", "filled"]
+    assert result.orders["filled_qty"].to_list() == [5000, 0, 500]
+    assert result.holdings.filter(pl.col("date") == "2024-01-04")["quantity"].item() == 5500
+    assert result.pending_targets.is_empty()
