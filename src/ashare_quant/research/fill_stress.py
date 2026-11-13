@@ -52,8 +52,21 @@ def _observed_execution(orders: pl.DataFrame) -> dict[str, Any]:
     if has_transition_identity:
         target_requests = (
             orders.group_by(["target_signal_date", "instrument"])
-            .agg(pl.col("target_requested_qty").max().alias("target_requested_qty"))
+            .agg(
+                pl.col("target_requested_qty").min().alias("_min_target_requested"),
+                pl.col("target_requested_qty").max().alias("target_requested_qty"),
+                pl.col("filled_qty").sum().alias("_transition_filled"),
+            )
         )
+        if target_requests.filter(
+            pl.col("_min_target_requested").is_not_null()
+            & (pl.col("_min_target_requested") != pl.col("target_requested_qty"))
+        ).height:
+            raise ValueError("Target requested quantity changes across retry attempts")
+        if target_requests.filter(
+            pl.col("_transition_filled") > pl.col("target_requested_qty").fill_null(0)
+        ).height:
+            raise ValueError("Cumulative fills exceed target transition quantity")
         requested_total = int(target_requests["target_requested_qty"].sum() or 0)
         fill_ratio_basis = "target_transition"
     else:
