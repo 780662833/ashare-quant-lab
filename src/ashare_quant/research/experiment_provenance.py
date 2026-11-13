@@ -10,8 +10,11 @@ def validate_experiment_provenance(provenance: Any) -> None:
     if not isinstance(provenance, Mapping):
         raise ValueError("Experiment data provenance must be a mapping")
     revisions = provenance.get("source_revisions")
-    if not isinstance(revisions, Mapping) or not _REQUIRED_REVISIONS.issubset(revisions):
-        raise ValueError("Experiment data provenance is missing required source revisions")
+    if not isinstance(revisions, Mapping):
+        raise ValueError("Experiment data provenance source_revisions must be a mapping")
+    missing_revisions = _REQUIRED_REVISIONS.difference(revisions)
+    if missing_revisions:
+        raise ValueError(f"Experiment data provenance is missing source revisions: {sorted(missing_revisions)}")
     normalized = {}
     for name in _REQUIRED_REVISIONS:
         identity = revisions[name]
