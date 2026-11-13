@@ -41,8 +41,9 @@ branch is not part of `main` until GitHub reports it merged.
 | 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 | Preserve all four independent gate statuses; verify Phase 8 artifacts before report creation; fail-closed identity checks and strict report schema; CI passed (110 tests) |
-| 10.3 | Historical-period and market-regime diagnostics | In progress on `phase10.3-period-regime-qa` | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; strict bundle identity and UNKNOWN for missing daily PIT membership/coverage |
-| 10.4–10.7 | Research QA stress and acceptance | Planned | Cost/fill stress, parameter/statistical QA and integrated acceptance; no backfill or model training |
+| 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 (`edf0365`) | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; strict bundle identity and UNKNOWN for missing daily PIT membership/coverage |
+| 10.4 | Transaction-cost stress | In progress on `phase10.4-cost-stress-qa` | C0 exact persisted baseline plus 1.5x/2x/3x fee-and-slippage variants; immutable verified runs; aligned provenance/folds; cost deltas vs C0 |
+| 10.5–10.7 | Execution, parameter/statistical QA and integrated acceptance | Planned | Fill stress, parameter/statistical QA and integrated acceptance; no backfill or model training |
 | 11 | Optional report inspection UI | Deferred | Only after research validity is demonstrated |
 
 ## Phase 5 — canonical research data bundle
