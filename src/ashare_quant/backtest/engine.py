@@ -506,6 +506,60 @@ def run_backtest(
                 attempts.append((instrument, delta, bar))
 
         attempts.sort(key=lambda item: (0 if item[1] < 0 else 1, item[0]))
+
+        # Estimate cash available after all executable sells, then allocate
+        # that budget proportionally across eligible buys. This avoids letting
+        # ticker sort order decide which equal-weight targets receive fills.
+        projected_cash = cash
+        slip = costs.slippage_bps / 10_000.0
+        for instrument, delta, bar in attempts:
+            if delta >= 0 or bar is None:
+                continue
+            if (
+                bar["is_suspended"] or bar["is_limit_down_locked"]
+                or (bar["limit_down"] is not None
+                    and float(bar["open"]) < float(bar["limit_down"]) - 1e-8)
+            ):
+                continue
+            sell_qty = min(abs(delta), positions.get(instrument, 0))
+            if sell_qty:
+                sell_price = float(bar["open"]) * (1.0 - slip)
+                sell_notional = sell_qty * sell_price
+                projected_cash += sell_notional - _fees(sell_notional, "sell", costs)
+
+        eligible_buys: list[tuple[str, int, float]] = []
+        for instrument, delta, bar in attempts:
+            if delta <= 0 or bar is None:
+                continue
+            if (
+                bar["is_suspended"] or bar["is_limit_up_locked"]
+                or (bar["limit_up"] is not None
+                    and float(bar["open"]) > float(bar["limit_up"]) + 1e-8)
+            ):
+                continue
+            buy_price = float(bar["open"]) * (1.0 + slip)
+            eligible_buys.append((instrument, delta, buy_price))
+
+        buy_allocations: dict[str, int] = {}
+        if eligible_buys and projected_cash > 0:
+            low, high = 0.0, 1.0
+            for _ in range(60):
+                ratio = (low + high) / 2.0
+                required_cash = 0.0
+                for _, requested, price in eligible_buys:
+                    quantity = floor(requested * ratio / cfg.board_lot) * cfg.board_lot
+                    if quantity:
+                        notional = quantity * price
+                        required_cash += notional + _fees(notional, "buy", costs)
+                if required_cash <= projected_cash + 1e-8:
+                    low = ratio
+                else:
+                    high = ratio
+            for instrument, requested, _ in eligible_buys:
+                buy_allocations[instrument] = (
+                    floor(requested * low / cfg.board_lot) * cfg.board_lot
+                )
+
         for instrument, delta, bar in attempts:
             if delta == 0:
                 continue
@@ -550,14 +604,7 @@ def run_backtest(
                         if positions[instrument] == 0:
                             positions.pop(instrument)
                 else:
-                    affordable = requested
-                    while affordable > 0:
-                        notional = affordable * fill_price
-                        fee = _fees(notional, side, costs)
-                        if notional + fee <= cash + 1e-8:
-                            break
-                        affordable -= cfg.board_lot
-                    filled = max(0, affordable)
+                    filled = buy_allocations.get(instrument, 0)
                     if filled:
                         notional = filled * fill_price
                         fee_parts = _fee_components(notional, side, costs)
