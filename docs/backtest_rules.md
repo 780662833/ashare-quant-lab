@@ -42,11 +42,11 @@ simulation session.
 
 ## Explicitly not yet fully modeled
 
-- T+1 share availability and settlement.
+- Exchange settlement cash availability and broker-specific settlement details beyond the ledger's same-session buy/sell prohibition.
 - Full board/date-specific daily price-limit regimes and IPO no-limit windows.
 - Derivation/verification of lock states from authoritative intraday/market data.
 - Corporate-action share/cash adjustments and dividends.
-- Historical odd-lot sell/liquidation rules.
+- Historically authoritative odd-lot sell/liquidation rules.
 - A complete instrument-by-calendar status matrix, including every suspension.
 
 The current engine is a deterministic first slice, not a full historical A-share
