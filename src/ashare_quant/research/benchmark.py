@@ -35,6 +35,7 @@ def run_momentum_benchmark(
     constructor has already required historical-universe, HFQ, and
     trading-status acceptance for the same scope and revisions.
     """
+    bundle._require_validated()
     strategy = strategy_config or MomentumConfig()
     execution = backtest_config or BacktestConfig(top_n=strategy.top_n)
     if execution.top_n != strategy.top_n:
