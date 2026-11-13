@@ -71,6 +71,19 @@ package or lake. The declared `cnequity==0.21.0` pin is intentionally unchanged.
 The 0.23.0 runtime remains **unverified** until the adapter and acceptance path are
 exercised against the actual local lake with replayable receipts and coverage checks.
 
+## Receipt-aware adapter reads (2026-11-13)
+
+The CNEquity adapter now uses `load_with_receipt()` for every dataset read and
+sets `require_replayable=True`. It rejects a result unless it contains a Polars
+DataFrame and a receipt explicitly marked `replayable: true`. Receipts are retained
+on the adapter instance as ordered `source_receipts` entries, including the dataset
+name, so repeated reads of the same dataset are not silently overwritten.
+
+This closes the adapter-level provenance gap; it does **not** complete the assembler.
+The assembler must still map those receipts to the exact input frames and validate
+revision dependencies, date-window support, and cross-dataset consistency. Unit tests
+use deterministic fake `ReadResult` objects and are not evidence of local-lake behavior.
+
 ## Required Phase 10.5 work sequence
 
 1. **Version/API compatibility.** Capture the runtime report from the actual research
