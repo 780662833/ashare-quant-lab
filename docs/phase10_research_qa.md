@@ -1,6 +1,6 @@
 # Phase 10.1 — Research QA architecture and acceptance criteria
 
-**Status:** P10.1 architecture accepted; P10.2 implementation in progress  
+**Status:** P10.1 architecture accepted; P10.2 merged; P10.3 implementation in progress  
 **Date:** 2026-11-13  
 **Scope:** Research QA design only; no new experiment runner, model training, data backfill, or live-trading capability.
 
@@ -253,3 +253,38 @@ Phase 10.1 is complete when:
 6. **P10.7 — integrated acceptance:** evaluate the complete report contract and publish limitations; strategy acceptance remains separate from data admission.
 
 No phase after 10.1 may relax the frozen project scope or four-gate model-training lock.
+
+
+## 10.3 — Period and market-regime diagnostics
+
+The P10.3 implementation is exposed as
+`build_period_regime_diagnostics(experiment_path, bundle)` and is integrated
+into `build_research_qa_report(..., bundle=bundle)`. Without the optional
+bundle argument, the report remains a P10.2 admission skeleton. With it, the
+report includes period/regime summaries and a SHA-256 digest for the P10.3
+diagnostic payload. The P10.3 builder invokes the Phase 8 artifact verifier
+and the P10.2 fail-closed admission assessment.
+The supplied canonical bundle must match the experiment's acceptance report
+ID, requested window, universe profile, four independent gate statuses and
+all source revisions exactly.
+
+Period reporting includes every walk-forward test fold and calendar-year
+summaries. The default minimum for an interpretable period summary is 126
+observed OOS sessions; shorter samples remain present and are marked
+`INSUFFICIENT_SAMPLE`, never merged into another period.
+
+Market-state labels use exact HFQ closes and a trailing 63-exchange-session
+return across the PIT-eligible universe on each session. At least 80% valid
+universe coverage is required. BULL/BEAR thresholds are fixed at median
+63-session return >= +8% with breadth >= 60%, and <= -8% with breadth <= 40%.
+Other sufficiently covered sessions are SIDEWAYS_OR_MIXED. Missing daily
+membership, insufficient lookback, or insufficient price coverage produces
+UNKNOWN; no forward fill or future observations are used.
+
+The canonical bundle may contain weekly-only membership snapshots. P10.3
+deliberately does not carry these snapshots forward to invent daily PIT
+membership. Such sessions remain UNKNOWN until the input bundle contains
+verified daily membership snapshots. P10.3 only reads verified OOS ledgers
+and the matching bundle; it does not rerun the strategy, read CNEquity, or
+train a model. PIT failure continues to block LightGBM regardless of
+price-only benchmark eligibility.

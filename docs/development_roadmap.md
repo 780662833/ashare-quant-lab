@@ -40,8 +40,9 @@ branch is not part of `main` until GitHub reports it merged.
 | 8 | Walk-forward runner, artifact persistence, verification and comparison | Merged in PR #13, #15 and #16; GitHub Actions run #70 passed (97 tests) | Cutoff-isolated momentum folds; immutable, checksummed experiment artifacts; integrity verification; fair parameter comparison only under identical data revisions, folds and execution/cost settings; no model fitting |
 | 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
-| 10.2 | Admission guard and report skeleton | In progress on `phase10.2-admission-guard` | Preserve all four independent gate statuses in bundle provenance; verify Phase 8 artifacts before report creation; fail-closed identity checks and strict report schema |
-| 10.3–10.7 | Research QA analysis and acceptance | Planned | Period/regime diagnostics, cost/fill stress, parameter/statistical QA and integrated acceptance; no backfill or model training |
+| 10.2 | Admission guard and report skeleton | Merged in PR #18 | Preserve all four independent gate statuses; verify Phase 8 artifacts before report creation; fail-closed identity checks and strict report schema; CI passed (110 tests) |
+| 10.3 | Historical-period and market-regime diagnostics | In progress on `phase10.3-period-regime-qa` | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; strict bundle identity and UNKNOWN for missing daily PIT membership/coverage |
+| 10.4–10.7 | Research QA stress and acceptance | Planned | Cost/fill stress, parameter/statistical QA and integrated acceptance; no backfill or model training |
 | 11 | Optional report inspection UI | Deferred | Only after research validity is demonstrated |
 
 ## Phase 5 — canonical research data bundle
