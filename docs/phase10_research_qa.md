@@ -356,6 +356,14 @@ pre-registered 100%/95%/90%/80%/70% target scenarios as `UNSUPPORTED` (or
 haircut NAV, or fabricate achieved fill ratios. Target-fill scenarios remain
 unsupported until a deterministic order-level cap/retry policy is implemented
 and its cash, holdings, fee, lot-size and retry invariants are tested.
+
+The order ledger now distinguishes per-attempt `requested_qty` from the
+signal-transition identity and stable `target_requested_qty`. Retries share
+one (signal date, instrument) transition denominator; cumulative fills are
+checked against that target. New reports identify the fill-ratio basis as
+`target_transition`. Legacy persisted ledgers without these fields retain an
+explicitly labeled `attempt_requested_legacy` ratio and must not be compared
+as if they used the corrected denominator.
 ## 10.7 — Integrated immutable QA report
 
 `build_integrated_research_qa_report(...)` combines the verified P10.2 admission

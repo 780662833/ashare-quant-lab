@@ -121,12 +121,25 @@ def summarize_backtest(
         traded_notional = _safe_float(notionals["_notional"].sum())
     else:
         traded_notional = 0.0
+    if requested_qty > 0 and filled_qty > requested_qty + 1e-8:
+        raise ValueError("Cumulative filled shares exceed target requested shares")
     average_nav = _safe_float(daily["nav"].mean())
     turnover = traded_notional / average_nav if average_nav > 0 else 0.0
     filled_orders = orders.filter(pl.col("filled_qty") > 0).height if orders.height and "filled_qty" in orders.columns else 0
     no_fill_orders = orders.filter(pl.col("filled_qty") == 0).height if orders.height and "filled_qty" in orders.columns else 0
-    requested_qty = _safe_float(orders["requested_qty"].sum()) if orders.height and "requested_qty" in orders.columns else 0.0
     filled_qty = _safe_float(orders["filled_qty"].sum()) if orders.height and "filled_qty" in orders.columns else 0.0
+    if orders.height and {"target_signal_date", "target_requested_qty", "instrument"}.issubset(orders.columns):
+        target_requests = (
+            orders.group_by(["target_signal_date", "instrument"])
+            .agg(pl.col("target_requested_qty").max().alias("target_requested_qty"))
+        )
+        requested_qty = _safe_float(target_requests["target_requested_qty"].sum())
+        fill_ratio_basis = "target_transition"
+    else:
+        # Legacy persisted ledgers lack target-transition identity. Preserve
+        # their attempt-based calculation but disclose its weaker denominator.
+        requested_qty = _safe_float(orders["requested_qty"].sum()) if orders.height and "requested_qty" in orders.columns else 0.0
+        fill_ratio_basis = "attempt_requested_legacy"
 
     first_date = str(daily["date"][0])
     last_date = str(daily["date"][-1])
@@ -142,6 +155,9 @@ def summarize_backtest(
             "filled_order_count": filled_orders,
             "no_fill_order_count": no_fill_orders,
             "share_fill_ratio": filled_qty / requested_qty if requested_qty > 0 else 0.0,
+            "share_fill_ratio_basis": fill_ratio_basis,
+            "target_requested_shares": requested_qty,
+            "filled_shares": filled_qty,
             "traded_notional": traded_notional,
             "turnover": turnover,
         },

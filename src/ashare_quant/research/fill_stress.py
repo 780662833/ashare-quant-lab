@@ -48,6 +48,29 @@ def _observed_execution(orders: pl.DataFrame) -> dict[str, Any]:
         filled_total += filled
         if row["status"] == "no_fill":
             reasons[str(row["reason"] or "unspecified")] += 1
+    has_transition_identity = {"target_signal_date", "target_requested_qty", "instrument"}.issubset(orders.columns)
+    if has_transition_identity:
+        target_requests = (
+            orders.group_by(["target_signal_date", "instrument"])
+            .agg(
+                pl.col("target_requested_qty").min().alias("_min_target_requested"),
+                pl.col("target_requested_qty").max().alias("target_requested_qty"),
+                pl.col("filled_qty").sum().alias("_transition_filled"),
+            )
+        )
+        if target_requests.filter(
+            pl.col("_min_target_requested").is_not_null()
+            & (pl.col("_min_target_requested") != pl.col("target_requested_qty"))
+        ).height:
+            raise ValueError("Target requested quantity changes across retry attempts")
+        if target_requests.filter(
+            pl.col("_transition_filled") > pl.col("target_requested_qty").fill_null(0)
+        ).height:
+            raise ValueError("Cumulative fills exceed target transition quantity")
+        requested_total = int(target_requests["target_requested_qty"].sum() or 0)
+        fill_ratio_basis = "target_transition"
+    else:
+        fill_ratio_basis = "attempt_requested_legacy"
     ratio = filled_total / requested_total if requested_total else None
     if ratio is not None and not 0.0 <= ratio <= 1.0:
         raise ValueError("Observed baseline share fill ratio is outside [0, 1]")
@@ -56,6 +79,7 @@ def _observed_execution(orders: pl.DataFrame) -> dict[str, Any]:
         "requested_shares": requested_total,
         "filled_shares": filled_total,
         "share_fill_ratio": ratio,
+        "share_fill_ratio_basis": fill_ratio_basis,
         "filled_order_count": orders.filter(pl.col("status") == "filled").height,
         "partially_filled_order_count": orders.filter(pl.col("status") == "partially_filled").height,
         "no_fill_order_count": orders.filter(pl.col("status") == "no_fill").height,
@@ -96,6 +120,7 @@ def build_fill_stress_assessment(experiment_path: str | Path) -> dict[str, Any]:
             "cash_affordability_partial_fills": True,
             "retry_unfilled_target_differences": True,
             "deterministic_target_fill_ratio_policy": False,
+            "target_transition_ledger": "target_transition" == observed["share_fill_ratio_basis"],
         },
         "scenarios": scenarios,
         "model_training_performed": False,

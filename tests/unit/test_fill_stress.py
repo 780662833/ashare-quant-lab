@@ -114,3 +114,27 @@ def test_fill_stress_rejects_inconsistent_order_quantities(tmp_path, monkeypatch
 
     with pytest.raises(ValueError, match="cannot exceed requested_qty"):
         fill_stress.build_fill_stress_assessment(str(experiment.path))
+
+
+
+def test_fill_stress_uses_target_transition_denominator_for_retries(tmp_path, monkeypatch):
+    orders = pl.DataFrame({
+        "target_signal_date": ["2020-03-01", "2020-03-01"],
+        "target_requested_qty": [100, 100],
+        "instrument": ["600000.SH", "600000.SH"],
+        "requested_qty": [100, 50],
+        "filled_qty": [50, 50],
+        "status": ["partially_filled", "filled"],
+        "reason": [None, None],
+    })
+    experiment = make_experiment(tmp_path, orders=orders)
+    monkeypatch.setattr(fill_stress, "verify_walk_forward_experiment", lambda _path: experiment)
+
+    report = fill_stress.build_fill_stress_assessment(str(experiment.path))
+
+    observed = report["observed_baseline_execution"]
+    assert observed["share_fill_ratio"] == pytest.approx(1.0)
+    assert observed["share_fill_ratio_basis"] == "target_transition"
+    assert observed["requested_shares"] == 100
+    assert observed["filled_shares"] == 100
+    assert report["engine_capabilities"]["target_transition_ledger"] is True
