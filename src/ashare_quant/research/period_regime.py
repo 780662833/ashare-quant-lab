@@ -82,6 +82,18 @@ def _validate_bundle_identity(
         raise ValueError("P10.3 requires PRICE_ONLY_ELIGIBLE verified experiment admission")
     provenance = bundle.provenance
     expected = experiment.manifest["data_provenance"]
+    expected_window = expected.get("acceptance_report_window", {})
+    if (
+        not isinstance(expected_window, dict)
+        or bundle.trading_dates[0] != expected_window.get("start")
+        or bundle.trading_dates[-1] != expected_window.get("end")
+    ):
+        raise ValueError("P10.3 bundle trading calendar does not exactly match experiment window")
+    calendar_dates = set(bundle.trading_dates)
+    if not set(bundle.adjusted_bars["date"].cast(pl.String).to_list()).issubset(calendar_dates):
+        raise ValueError("bundle adjusted_bars contains dates outside trading calendar")
+    if not set(bundle.universe_membership["date"].cast(pl.String).to_list()).issubset(calendar_dates):
+        raise ValueError("bundle universe_membership contains dates outside trading calendar")
     checks = {
         "acceptance_report_id": expected.get("acceptance_report_id"),
         "universe_profile": expected.get("universe_profile"),
