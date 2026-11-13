@@ -58,6 +58,7 @@ def _validate_bundle_identity(
 ) -> list[str]:
     if not isinstance(bundle, ResearchDataBundle):
         raise TypeError("bundle must be a validated ResearchDataBundle")
+    bundle._require_validated()
     if not isinstance(bundle.adjusted_bars, pl.DataFrame) or not isinstance(bundle.universe_membership, pl.DataFrame):
         raise TypeError("bundle adjusted_bars and universe_membership must be Polars DataFrames")
     if not {"instrument", "date", "adj_close", "adj_is_exact"}.issubset(bundle.adjusted_bars.columns):
@@ -98,8 +99,15 @@ def _validate_bundle_identity(
         "acceptance_report_id": expected.get("acceptance_report_id"),
         "universe_profile": expected.get("universe_profile"),
         "source_revisions": expected.get("source_revisions"),
+        "source_receipts": expected.get("source_receipts"),
+        "receipt_provenance": expected.get("receipt_provenance"),
+        "acceptance_source_receipts": expected.get("acceptance_source_receipts"),
+        "coverage_audits": expected.get("coverage_audits"),
+        "limit_evidence": expected.get("limit_evidence"),
         "acceptance_report_window": expected.get("acceptance_report_window"),
         "acceptance_gates": expected.get("acceptance_gates"),
+        "required_benchmark_gates": expected.get("required_benchmark_gates"),
+        "scope": expected.get("scope"),
     }
     mismatches = [
         key for key, value in checks.items()

@@ -264,9 +264,11 @@ bundle argument, the report remains a P10.2 admission skeleton. With it, the
 report includes period/regime summaries and a SHA-256 digest for the P10.3
 diagnostic payload. The P10.3 builder invokes the Phase 8 artifact verifier
 and the P10.2 fail-closed admission assessment.
-The supplied canonical bundle must match the experiment's acceptance report
-ID, requested window, universe profile, four independent gate statuses and
-all source revisions exactly.
+The supplied builder-validated canonical bundle must match the experiment's
+acceptance report ID, requested window, universe profile, four independent gate
+statuses, structured source revisions, adapter receipts, receipt summary,
+acceptance receipts, coverage audits, limit-evidence identity, benchmark gates
+and declared data scope exactly.
 
 Period reporting includes every walk-forward test fold and calendar-year
 summaries. The default minimum for an interpretable period summary is 126
