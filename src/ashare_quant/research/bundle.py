@@ -441,6 +441,12 @@ def build_research_data_bundle(
         raise ResearchBundleError(
             "price_limit_rules source identity does not match row-level limit evidence provenance"
         )
+    declared_rule_revision = str(revisions["price_limit_rules"]["revision_id"])
+    observed_rule_versions = set(state["limit_rule_version"].cast(pl.String).unique().to_list())
+    if observed_rule_versions != {declared_rule_revision}:
+        raise ResearchBundleError(
+            "price_limit_rules revision identity does not match row-level limit rule version provenance"
+        )
 
     session_set = set(sessions)
     membership_dates = set(membership["date"].to_list())
