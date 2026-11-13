@@ -196,12 +196,37 @@ def equal_weight_targets(scores: pl.DataFrame, top_n: int = 20) -> pl.DataFrame:
     missing = SCORE_COLUMNS.difference(scores.columns)
     if missing:
         raise ValueError(f"Missing score columns: {sorted(missing)}")
-    if top_n < 1:
-        raise ValueError("top_n must be positive")
+    if isinstance(top_n, bool) or not isinstance(top_n, int) or top_n < 1:
+        raise ValueError("top_n must be a positive integer")
+    if scores.is_empty():
+        return pl.DataFrame(schema={
+            "signal_date": pl.String, "instrument": pl.String, "weight": pl.Float64,
+        })
+    if scores.schema["score"] == pl.Boolean:
+        raise ValueError("Scores must be numeric, not boolean")
+    try:
+        checked = scores.select(
+            pl.col("signal_date").cast(pl.String),
+            pl.col("instrument").cast(pl.String),
+            pl.col("score").cast(pl.Float64, strict=True),
+        )
+    except Exception as exc:
+        raise ValueError(f"Scores must contain string keys and numeric values: {exc}") from exc
+    if checked.select(pl.any_horizontal(
+        pl.col("signal_date").is_null(), pl.col("instrument").is_null(),
+        pl.col("score").is_null(),
+        (pl.col("signal_date").str.strip_chars() == ""),
+        (pl.col("instrument").str.strip_chars() == ""),
+    ).any()).item():
+        raise ValueError("Scores contain empty keys or null values")
+    if checked.select((~pl.col("score").is_finite()).any()).item():
+        raise ValueError("Scores must be finite")
+    if checked.select(pl.struct(["signal_date", "instrument"]).is_duplicated().any()).item():
+        raise ValueError("Duplicate (signal_date, instrument) scores")
     rows: list[dict[str, Any]] = []
-    signal_dates = sorted({_date_text(x) for x in scores["signal_date"].to_list()})
+    signal_dates = sorted(checked["signal_date"].unique().to_list())
     for signal_date in signal_dates:
-        group = scores.filter(pl.col("signal_date").cast(pl.String) == signal_date)
+        group = checked.filter(pl.col("signal_date") == signal_date)
         ranked = group.sort(["score", "instrument"], descending=[True, False]).head(top_n)
         count = ranked.height
         if count:
