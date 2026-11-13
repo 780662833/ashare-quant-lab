@@ -5,7 +5,7 @@ bundle. It never reads CNEquity, reruns the strategy, or fits a model.
 """
 from __future__ import annotations
 
-from math import prod, sqrt
+from math import isfinite, prod, sqrt
 from statistics import median, stdev
 from typing import Any
 
@@ -58,6 +58,25 @@ def _validate_bundle_identity(
 ) -> list[str]:
     if not isinstance(bundle, ResearchDataBundle):
         raise TypeError("bundle must be a validated ResearchDataBundle")
+    if not isinstance(bundle.adjusted_bars, pl.DataFrame) or not isinstance(bundle.universe_membership, pl.DataFrame):
+        raise TypeError("bundle adjusted_bars and universe_membership must be Polars DataFrames")
+    if not {"instrument", "date", "adj_close", "adj_is_exact"}.issubset(bundle.adjusted_bars.columns):
+        raise ValueError("bundle adjusted_bars is missing required HFQ columns")
+    if not {"instrument", "date"}.issubset(bundle.universe_membership.columns):
+        raise ValueError("bundle universe_membership is missing instrument/date columns")
+    if not bundle.trading_dates or bundle.trading_dates != sorted(set(bundle.trading_dates)):
+        raise ValueError("bundle trading_dates must be non-empty, unique and chronological")
+    for name, frame in (("adjusted_bars", bundle.adjusted_bars), ("universe_membership", bundle.universe_membership)):
+        if frame.select(pl.struct(["instrument", "date"]).is_duplicated().any()).item():
+            raise ValueError(f"bundle {name} contains duplicate instrument/date keys")
+    if bundle.adjusted_bars.filter(
+        pl.col("adj_is_exact").is_null()
+        | (pl.col("adj_is_exact") != True)
+        | pl.col("adj_close").is_null()
+        | (~pl.col("adj_close").cast(pl.Float64).is_finite())
+        | (pl.col("adj_close").cast(pl.Float64) <= 0)
+    ).height:
+        raise ValueError("bundle adjusted_bars must contain positive, finite, exact HFQ prices")
     admission = _assess_verified_experiment(experiment)
     if admission["decision"] != "PRICE_ONLY_ELIGIBLE":
         raise ValueError("P10.3 requires PRICE_ONLY_ELIGIBLE verified experiment admission")
@@ -163,9 +182,9 @@ def build_period_regime_diagnostics(
     the experiment. Daily membership is required for non-UNKNOWN regime labels;
     weekly-only snapshots are deliberately not carried forward.
     """
-    if isinstance(min_period_sessions, bool) or min_period_sessions < 1:
+    if isinstance(min_period_sessions, bool) or not isinstance(min_period_sessions, int) or min_period_sessions < 1:
         raise ValueError("min_period_sessions must be a positive integer")
-    if isinstance(annualization, bool) or annualization < 1:
+    if isinstance(annualization, bool) or not isinstance(annualization, int) or annualization < 1:
         raise ValueError("annualization must be a positive integer")
 
     experiment = verify_walk_forward_experiment(experiment_path)
@@ -182,8 +201,13 @@ def build_period_regime_diagnostics(
         raise ValueError("OOS daily dates are outside the supplied canonical bundle calendar")
     if any(row["daily_return"] is None for row in daily_rows):
         raise ValueError("OOS daily ledger contains null daily_return")
-    if any(not isinstance(row["daily_return"], (int, float)) for row in daily_rows):
-        raise ValueError("OOS daily ledger contains non-numeric daily_return")
+    if any(
+        not isinstance(row["daily_return"], (int, float))
+        or not isfinite(float(row["daily_return"]))
+        or float(row["daily_return"]) <= -1.0
+        for row in daily_rows
+    ):
+        raise ValueError("OOS daily ledger contains invalid daily_return values")
 
     periods: list[dict[str, Any]] = []
     for item in experiment.folds:
