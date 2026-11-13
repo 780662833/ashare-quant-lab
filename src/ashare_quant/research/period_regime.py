@@ -101,17 +101,27 @@ def _validate_bundle_identity(
     return list(bundle.trading_dates)
 
 
-def _market_states(bundle: ResearchDataBundle) -> dict[str, dict[str, Any]]:
-    """Calculate trailing 63-session cross-sectional labels without forward fill."""
+def _market_states(
+    bundle: ResearchDataBundle, target_dates: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Calculate OOS trailing labels without forward fill or full-panel materialization."""
     sessions = list(bundle.trading_dates)
     position = {session: index for index, session in enumerate(sessions)}
-    adjusted = bundle.adjusted_bars.select(
+    price_dates = set()
+    for session in target_dates:
+        index = position[session]
+        price_dates.add(session)
+        if index >= REGIME_LOOKBACK_SESSIONS:
+            price_dates.add(sessions[index - REGIME_LOOKBACK_SESSIONS])
+    adjusted = bundle.adjusted_bars.filter(pl.col("date").cast(pl.String).is_in(sorted(price_dates))).select(
         pl.col("instrument").cast(pl.String),
         pl.col("date").cast(pl.String),
         pl.col("adj_close").cast(pl.Float64),
         pl.col("adj_is_exact").cast(pl.Boolean),
     )
-    membership = bundle.universe_membership.select(
+    membership = bundle.universe_membership.filter(
+        pl.col("date").cast(pl.String).is_in(target_dates)
+    ).select(
         pl.col("instrument").cast(pl.String),
         pl.col("date").cast(pl.String),
     )
@@ -124,7 +134,7 @@ def _market_states(bundle: ResearchDataBundle) -> dict[str, dict[str, Any]]:
         members_by_date.setdefault(row["date"], []).append(row["instrument"])
 
     output: dict[str, dict[str, Any]] = {}
-    for session in sessions:
+    for session in target_dates:
         index = position[session]
         eligible = sorted(set(members_by_date.get(session, [])))
         record: dict[str, Any] = {
@@ -249,7 +259,7 @@ def build_period_regime_diagnostics(
             **metrics,
         })
 
-    market = _market_states(bundle)
+    market = _market_states(bundle, oos_dates)
     regime_rows = [market[day] for day in oos_dates]
     daily_by_regime: dict[str, list[dict[str, Any]]] = {}
     for row, state in zip(daily_rows, regime_rows):
