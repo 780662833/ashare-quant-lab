@@ -330,3 +330,15 @@ price and is reported separately; it is never deducted from cash a second
 time. The suite does not infer actual commissions, taxes, transfer charges or
 slippage from incomplete data. It does not modify existing experiment
 artifacts, perform CNEquity reads/backfills, train a model, or unlock training.
+
+## 10.5 — Fill-stress capability assessment
+
+The current engine records tradability no-fills, cash-affordability partial
+fills and retry attempts, but it has no deterministic target-fill-ratio policy.
+`build_fill_stress_assessment(experiment_path)` verifies the immutable baseline,
+reports its observed share fill ratio and no-fill reason counts, and emits the
+pre-registered 100%/95%/90%/80%/70% target scenarios as `UNSUPPORTED` (or
+`BLOCKED` when admission fails). It does not rerun the engine, delete orders,
+haircut NAV, or fabricate achieved fill ratios. Target-fill scenarios remain
+unsupported until a deterministic order-level cap/retry policy is implemented
+and its cash, holdings, fee, lot-size and retry invariants are tested.
