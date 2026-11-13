@@ -35,6 +35,9 @@ directly. See the system-level architecture before extending a component.
   boundaries, data/time rules, acceptance gates, simulation limitations.
 - [Development roadmap](docs/development_roadmap.md) — phase status, scope,
   exit criteria, and next engineering work.
+- [Phase 10 Research QA architecture](docs/phase10_research_qa.md) — QA layer,
+  four-gate admission guard, regime/cost/fill protocols, OOS discipline and
+  unified acceptance/report contract.
 - [Walk-forward split plan](docs/walk_forward.md) — chronological folds,
   label-maturity purge, embargo, and non-overlapping test windows.
 - [Walk-forward momentum runner](docs/walk_forward_runner.md) — fold-by-fold
@@ -74,7 +77,7 @@ CI tests use synthetic data and do not certify the local CNEquity lake. See
 - Train/validation/test splits are chronological; no random time-series split.
 - Universe membership is point-in-time, including delisted securities.
 - Costs, execution restrictions, and unfilled orders must remain visible.
-- Model and momentum benchmark use the same universe, schedule, execution,
-  cost model, and report window.
+- Model and benchmark use the same universe, schedule, execution, cost model,
+  and report window.
 - Training remains locked until all four data acceptance gates pass for the
   exact same window and data revisions; a PASS report alone does not unlock it.
