@@ -224,7 +224,7 @@ def validate_research_qa_report(report: Mapping[str, Any]) -> None:
     missing = sorted(required.difference(report))
     if missing:
         raise ValueError("Research QA report is missing fields: " + ", ".join(missing))
-    if report.get("schema_version") != 1 or report.get("protocol_version") != "phase10.2":
+    if report.get("schema_version") != 1 or report.get("protocol_version") not in {"phase10.2", "phase10.3"}:
         raise ValueError("Unsupported Research QA report schema/protocol version")
     if not isinstance(report.get("qa_id"), str) or not re.fullmatch(
         r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}", report["qa_id"]
@@ -295,13 +295,15 @@ def build_research_qa_report(
     qa_id: str,
     created_at: str,
     repository_commit: str,
+    bundle: Any | None = None,
 ) -> dict[str, Any]:
-    """Verify a Phase 8 artifact, then build its P10.2 report skeleton.
+    """Verify a Phase 8 artifact, then build its P10.2/P10.3 QA report.
 
     The verifier is invoked internally; callers cannot supply a raw manifest
     or bypass the Phase 8 hash, schema, cutoff and ledger checks. The report
-    deliberately contains no performance verdict: later P10 phases populate
-    scenarios, periods and regimes from verified ledgers.
+    without a bundle, the report remains a P10.2 skeleton. Supplying the exact
+    matching canonical bundle adds P10.3 period/regime diagnostics. Neither
+    path produces a strategy acceptance verdict or unlocks training.
     """
     experiment = verify_walk_forward_experiment(experiment_path)
     admission = _assess_verified_experiment(experiment)
@@ -342,5 +344,17 @@ def build_research_qa_report(
         )
     if admission["blockers"]:
         report["limitations"].extend(admission["blockers"])
+    if bundle is not None:
+        from ashare_quant.research.period_regime import build_period_regime_diagnostics
+
+        diagnostics = build_period_regime_diagnostics(experiment_path, bundle)
+        report["protocol_version"] = "phase10.3"
+        report["periods"] = diagnostics["periods"]
+        report["regimes"] = diagnostics["regimes"]
+        report["limitations"].extend(diagnostics["limitations"])
+        report["integrity"]["period_regime_sha256"] = hashlib.sha256(
+            json.dumps(diagnostics, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            .encode("utf-8")
+        ).hexdigest()
     validate_research_qa_report(report)
     return report
