@@ -66,7 +66,7 @@ def make_experiment(tmp_path, dates):
     ), provenance
 
 
-def make_bundle(dates, provenance, *, daily_membership=True, trend=0.1, omit_symbol=None):
+def make_bundle(dates, provenance, *, daily_membership=True, trend=0.2, omit_symbol=None):
     adjusted = []
     membership = []
     for i, day in enumerate(dates):
@@ -77,7 +77,7 @@ def make_bundle(dates, provenance, *, daily_membership=True, trend=0.1, omit_sym
         for j, symbol in enumerate(symbols):
             if symbol == omit_symbol:
                 continue
-            value = 10.0 + i * trend + j
+            value = 100.0 + i * trend + j
             adjusted.append({
                 "instrument": symbol, "date": day,
                 "adj_close": value, "adj_is_exact": True,
