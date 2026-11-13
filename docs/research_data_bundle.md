@@ -56,6 +56,24 @@ benchmark**; it still blocks all model-training work. The builder never sets
 
 No status flag, adjusted price, or universe row is inferred or forward-filled.
 
+## CNEquity read-session provenance
+
+`CNEquityAdapter` keeps a per-instance read session. The first
+receipt for a dependency pins its `dependencies[dataset].revision_id`
+and `contract_fingerprint`; later reads pass the accumulated
+per-dataset map through `revision_map` and reject any revision or
+contract drift for dependencies already seen. The adapter exposes the observed
+`source_revision_map` and `source_contract_fingerprints`
+alongside the ordered source receipts.
+
+This is a **dependency-consistent read session**, not a lake-wide atomic
+snapshot. CNEquity receipts cover only the dependencies of each individual
+query. A dependency first encountered by a later query is pinned at that
+query's read time; no atomic cross-dataset instant is claimed. The accumulated
+map and every receipt must be retained in the experiment manifest. The
+`coverage.completeness` field remains `not_assessed`
+unless a separate dataset-specific coverage audit proves completeness.
+
 ## Output separation
 
 - `bundle.execution_bars` contains raw OHLCV and the engine's explicit
