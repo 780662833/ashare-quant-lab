@@ -518,6 +518,7 @@ def build_research_data_bundle(
             "universe": membership_out.height,
             "trading_status": state.height,
             "trading_calendar": len(sessions),
+            "price_limit_rules": state.height,
         },
     )
 
