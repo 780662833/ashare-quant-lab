@@ -15,14 +15,34 @@ def make_experiment(tmp_path, dates):
         "acceptance_report_window": {"start": dates[0], "end": dates[-1]},
         "universe_profile": "profile-v1",
         "source_revisions": {
-            "daily_bars": "d1", "adj_factors": "a1", "universe": "u1",
-            "trading_status": "s1", "trading_calendar": "c1",
-            "price_limit_rules": "p1",
+            "daily_bars": {"revision_id": "d1", "contract_fingerprint": "daily-contract"},
+            "adj_factors": {"revision_id": "a1", "contract_fingerprint": "adjusted-contract"},
+            "universe": {"revision_id": "d1", "contract_fingerprint": "daily-contract"},
+            "trading_status": {"revision_id": "s1", "contract_fingerprint": "status-contract"},
+            "trading_calendar": {"revision_id": "c1", "contract_fingerprint": "calendar-contract"},
+            "price_limit_rules": {"revision_id": "p1", "contract_fingerprint": "limits-contract", "source": "synthetic-provider"},
         },
-        "source_receipts": {
-            "historical_universe": {"replayable": True},
-            "hfq": {"replayable": True},
+        "source_receipts": [
+            {"dataset": "daily_bars", "receipt": {"replayable": True, "receipt_id": "adapter-1", "dependencies": {
+                "daily_bars": {"revision_id": "d1", "contract_fingerprint": "daily-contract"},
+                "adj_factors": {"revision_id": "a1", "contract_fingerprint": "adjusted-contract"},
+                "trading_status": {"revision_id": "s1", "contract_fingerprint": "status-contract"},
+                "trading_calendar": {"revision_id": "c1", "contract_fingerprint": "calendar-contract"},
+            }}},
+        ],
+        "receipt_provenance": {"dependency_identities": {
+            "daily_bars": {"revision_id": "d1", "contract_fingerprint": "daily-contract"},
+            "adj_factors": {"revision_id": "a1", "contract_fingerprint": "adjusted-contract"},
+            "trading_status": {"revision_id": "s1", "contract_fingerprint": "status-contract"},
+            "trading_calendar": {"revision_id": "c1", "contract_fingerprint": "calendar-contract"},
+        }},
+        "acceptance_source_receipts": {
+            "historical_universe": {"replayable": True, "receipt_id": "universe-acceptance"},
+            "hfq": {"replayable": True, "receipt_id": "hfq-acceptance"},
         },
+        "limit_evidence": {"revision": "p1", "source_revision_identity": {
+            "revision_id": "p1", "contract_fingerprint": "limits-contract", "source": "synthetic-provider",
+        }},
         "acceptance_gates": {
             "historical_universe": "PASS",
             "hfq_adjustment": "PASS",
@@ -158,7 +178,10 @@ def test_period_regime_rejects_directly_constructed_bundle(tmp_path, monkeypatch
 def test_bundle_source_revision_mismatch_is_rejected(tmp_path, monkeypatch):
     dates = sessions()
     experiment, provenance = make_experiment(tmp_path, dates)
-    changed = {**provenance, "source_revisions": {**provenance["source_revisions"], "adj_factors": "other"}}
+    changed = {**provenance, "source_revisions": {
+        **provenance["source_revisions"],
+        "adj_factors": {"revision_id": "other", "contract_fingerprint": "adjusted-contract"},
+    }}
     bundle = make_bundle(dates, changed)
     monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
 
@@ -171,10 +194,10 @@ def test_bundle_receipt_identity_mismatch_is_rejected(tmp_path, monkeypatch):
     experiment, provenance = make_experiment(tmp_path, dates)
     changed = {
         **provenance,
-        "source_receipts": {
-            **provenance["source_receipts"],
-            "historical_universe": {"replayable": True, "receipt_id": "different-receipt"},
-        },
+        "source_receipts": [{
+            **record,
+            "receipt": {**record["receipt"], "receipt_id": "different-receipt"},
+        } for record in provenance["source_receipts"]],
     }
     bundle = make_bundle(dates, changed)
     monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
