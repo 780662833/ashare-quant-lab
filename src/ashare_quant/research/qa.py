@@ -10,7 +10,6 @@ import hashlib
 import json
 import re
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Mapping
 
 from ashare_quant.research.experiment_provenance import validate_experiment_provenance
