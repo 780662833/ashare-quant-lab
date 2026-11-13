@@ -82,6 +82,7 @@ def make_inputs(count=12):
         "training_dataset_unlocked": False,
         "gates": [
             {"name": "historical_universe", "status": "PASS"},
+            {"name": "historical_universe_receipt", "status": "PASS"},
             {"name": "hfq_adjustment", "status": "PASS"},
             {"name": "point_in_time_fundamentals", "status": "FAIL"},
             {"name": "trading_status", "status": "PASS"},
@@ -149,6 +150,27 @@ def test_bundle_preserves_all_four_independent_acceptance_gate_statuses():
         "point_in_time_fundamentals": "FAIL",
         "trading_status": "PASS",
     }
+
+
+def test_bundle_rejects_missing_historical_universe_receipt_gate():
+    inputs = make_inputs()
+    inputs["acceptance_report"]["gates"] = [
+        gate for gate in inputs["acceptance_report"]["gates"]
+        if gate["name"] != "historical_universe_receipt"
+    ]
+    with pytest.raises(ResearchBundleError, match="missing independent gates"):
+        build_research_data_bundle(**inputs)
+
+
+def test_bundle_rejects_failed_historical_universe_receipt_gate():
+    inputs = make_inputs()
+    inputs["acceptance_report"]["gates"] = [
+        {**gate, "status": "FAIL"}
+        if gate["name"] == "historical_universe_receipt" else gate
+        for gate in inputs["acceptance_report"]["gates"]
+    ]
+    with pytest.raises(ResearchBundleError, match="historical_universe_receipt"):
+        build_research_data_bundle(**inputs)
 
 
 def test_bundle_rejects_missing_independent_pit_gate():
