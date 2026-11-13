@@ -300,10 +300,10 @@ def build_research_qa_report(
     """Verify a Phase 8 artifact, then build its P10.2/P10.3 QA report.
 
     The verifier is invoked internally; callers cannot supply a raw manifest
-    or bypass the Phase 8 hash, schema, cutoff and ledger checks. The report
-    without a bundle, the report remains a P10.2 skeleton. Supplying the exact
-    matching canonical bundle adds P10.3 period/regime diagnostics. Neither
-    path produces a strategy acceptance verdict or unlocks training.
+    or bypass the Phase 8 hash, schema, cutoff and ledger checks. Without a
+    bundle, the report remains a P10.2 skeleton. Supplying the exact matching
+    canonical bundle adds P10.3 period/regime diagnostics. Neither path
+    produces a strategy acceptance verdict or unlocks training.
     """
     experiment = verify_walk_forward_experiment(experiment_path)
     admission = _assess_verified_experiment(experiment)
