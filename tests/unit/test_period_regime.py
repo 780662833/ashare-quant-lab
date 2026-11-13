@@ -4,7 +4,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from ashare_quant.research.bundle import ResearchDataBundle
+from ashare_quant.research.bundle import ResearchDataBundle, _BUNDLE_VALIDATION_TOKEN
 from ashare_quant.research.experiment_compare import VerifiedWalkForwardExperiment
 from ashare_quant.research import period_regime
 
@@ -82,7 +82,7 @@ def make_bundle(dates, provenance, *, daily_membership=True, trend=0.2, omit_sym
                 "instrument": symbol, "date": day,
                 "adj_close": value, "adj_is_exact": True,
             })
-    return ResearchDataBundle(
+    bundle = ResearchDataBundle(
         execution_bars=pl.DataFrame(),
         adjusted_bars=pl.DataFrame(adjusted),
         universe_membership=pl.DataFrame(membership) if membership else pl.DataFrame(
@@ -91,6 +91,10 @@ def make_bundle(dates, provenance, *, daily_membership=True, trend=0.2, omit_sym
         trading_dates=dates,
         provenance=provenance,
     )
+    # This fixture isolates period/regime calculations; the builder admission
+    # contract itself is covered by test_research_bundle and runner tests.
+    object.__setattr__(bundle, "_validation_token", _BUNDLE_VALIDATION_TOKEN)
+    return bundle
 
 
 def sessions(count=200):
@@ -132,6 +136,23 @@ def test_weekly_only_membership_is_not_forward_filled(tmp_path, monkeypatch):
     assert report["unknown_market_state_sessions"] > 0
     assert any("UNKNOWN" == item["regime"] for item in report["regimes"])
     assert "missing_daily_pit_universe_membership" in report["unknown_reasons"]
+
+
+def test_period_regime_rejects_directly_constructed_bundle(tmp_path, monkeypatch):
+    dates = sessions()
+    experiment, provenance = make_experiment(tmp_path, dates)
+    trusted = make_bundle(dates, provenance)
+    untrusted = ResearchDataBundle(
+        execution_bars=trusted.execution_bars,
+        adjusted_bars=trusted.adjusted_bars,
+        universe_membership=trusted.universe_membership,
+        trading_dates=trusted.trading_dates,
+        provenance=trusted.provenance,
+    )
+    monkeypatch.setattr(period_regime, "verify_walk_forward_experiment", lambda _path: experiment)
+
+    with pytest.raises(ValueError, match="must be created by build_research_data_bundle"):
+        period_regime.build_period_regime_diagnostics(str(experiment.path), untrusted)
 
 
 def test_bundle_source_revision_mismatch_is_rejected(tmp_path, monkeypatch):
