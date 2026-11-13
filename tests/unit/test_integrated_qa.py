@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 import pytest
@@ -68,7 +69,7 @@ def build(monkeypatch, *, cost=None, admission=None):
     )
 
 def cost_report():
-    return {
+    report = {
         "protocol_version": "phase10.4",
         "repository_commit": "abcdef1234567",
         "baseline_experiment_id": "experiment-001",
@@ -77,7 +78,6 @@ def cost_report():
         "integrity": {
             "all_artifacts_verified": True,
             "admission_decisions": ["PRICE_ONLY_ELIGIBLE"] * 4,
-            "report_sha256": "b" * 64,
         },
         "scenarios": [
             {"scenario_id": f"C{i}", "cost_multiplier": multiplier,
@@ -86,6 +86,10 @@ def cost_report():
         ],
         "limitations": ["Cost multipliers are assumptions."],
     }
+    report["integrity"]["report_sha256"] = hashlib.sha256(
+        json.dumps(report, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+    ).hexdigest()
+    return report
 
 def test_integrated_report_includes_sections_and_fails_closed_without_cost_report(monkeypatch):
     report = build(monkeypatch)
@@ -102,8 +106,14 @@ def test_integrated_report_accepts_only_matching_verified_cost_report(monkeypatc
     report = build(monkeypatch, cost=cost_report())
     assert report["cost_stress"]["status"] == "VERIFIED"
     assert len(report["cost_stress"]["scenarios"]) == 4
-    assert report["integrity"]["cost_stress_sha256"] == "b" * 64
+    assert report["integrity"]["cost_stress_sha256"] == cost_report()["integrity"]["report_sha256"]
 
+
+def test_integrated_report_rejects_tampered_cost_report_hash(monkeypatch):
+    cost = cost_report()
+    cost["scenarios"][0]["net_return"] = 0.99
+    with pytest.raises(ValueError, match="content does not match its SHA-256"):
+        build(monkeypatch, cost=cost)
 
 def test_integrated_report_rejects_cost_report_for_another_baseline(monkeypatch):
     cost = cost_report()
