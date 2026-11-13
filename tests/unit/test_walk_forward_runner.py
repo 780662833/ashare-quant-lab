@@ -225,6 +225,19 @@ def test_each_fold_is_truncated_at_its_own_test_end(configs):
     assert changed_first.report == first.report
 
 
+def test_runner_rejects_directly_constructed_bundle_without_builder_validation(configs):
+    validated = make_bundle()
+    unvalidated = ResearchDataBundle(
+        execution_bars=validated.execution_bars,
+        adjusted_bars=validated.adjusted_bars,
+        universe_membership=validated.universe_membership,
+        trading_dates=validated.trading_dates,
+        provenance=validated.provenance,
+    )
+    with pytest.raises(ValueError, match="must be created by build_research_data_bundle"):
+        run_walk_forward_momentum(unvalidated, **configs)
+
+
 def test_runner_rejects_bundle_that_claims_training_is_unlocked(configs):
     bundle = make_bundle()
     invalid = bundle._validated_copy(
