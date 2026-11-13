@@ -73,8 +73,18 @@ def build_integrated_research_qa_report(
         experiment_ids = cost_stress_report.get("experiment_ids")
         if not isinstance(experiment_ids, list) or not experiment_ids or experiment_ids[0] != experiment_id:
             raise ValueError("P10.4 cost-stress experiment IDs do not include the QA baseline")
-        if not isinstance(integrity.get("report_sha256"), str) or len(integrity["report_sha256"]) != 64:
+        declared_hash = integrity.get("report_sha256")
+        if not isinstance(declared_hash, str) or len(declared_hash) != 64:
             raise ValueError("P10.4 cost-stress report hash is missing or invalid")
+        unhashed = dict(cost_stress_report)
+        unhashed_integrity = dict(integrity)
+        unhashed_integrity.pop("report_sha256", None)
+        unhashed["integrity"] = unhashed_integrity
+        actual_hash = hashlib.sha256(
+            json.dumps(unhashed, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        ).hexdigest()
+        if actual_hash != declared_hash:
+            raise ValueError("P10.4 cost-stress report content does not match its SHA-256")
         cost_section = {
             "status": "VERIFIED", "baseline_experiment_id": experiment_id,
             "scenarios": list(scenarios),
