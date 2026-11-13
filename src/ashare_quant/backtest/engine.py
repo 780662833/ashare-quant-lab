@@ -228,8 +228,13 @@ def _validate_result_accounting(
                 raise AssertionError("Order fees must equal commission + transfer fee + stamp duty")
             if any(float(row[name] or 0.0) < -1e-10 for name in ("fees", "commission", "transfer_fee", "stamp_duty", "slippage_cost")):
                 raise AssertionError("Order costs must be non-negative")
-            if (row["status"] == "no_fill") != (filled == 0):
-                raise AssertionError("Order status does not agree with filled_qty")
+            expected_status = (
+                "no_fill" if filled == 0 else
+                "filled" if requested is not None and filled == requested else
+                "partially_filled"
+            )
+            if row["status"] != expected_status:
+                raise AssertionError("Order status does not agree with requested_qty and filled_qty")
             if filled == 0:
                 continue
             price = row["fill_price"]
