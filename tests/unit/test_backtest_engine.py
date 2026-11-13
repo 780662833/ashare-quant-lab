@@ -379,8 +379,8 @@ def test_accounting_replay_rejects_non_liquidating_odd_lot_sell():
         "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
     }])
     daily = pl.DataFrame([
-        {"date": "2024-01-02", "cash": 98000.0, "market_value": 2000.0, "nav": 100000.0, "gross_exposure": 0.02},
-        {"date": "2024-01-03", "cash": 99500.0, "market_value": 500.0, "nav": 100000.0, "gross_exposure": 0.005},
+        {"date": "2024-01-02", "cash": 98000.0, "market_value": 2000.0, "nav": 100000.0, "gross_exposure": 0.02, "daily_return": 0.0},
+        {"date": "2024-01-03", "cash": 99500.0, "market_value": 500.0, "nav": 100000.0, "gross_exposure": 0.005, "daily_return": 0.0},
     ])
     holdings = pl.DataFrame([
         {"date": "2024-01-02", "instrument": "600000.SH", "quantity": 200, "mark_price": 10.0, "market_value": 2000.0},
@@ -407,8 +407,8 @@ def test_accounting_replay_rejects_sell_quantity_above_inventory():
         "stamp_duty": 0.0, "slippage_cost": 0.0, "status": "filled",
     }])
     daily = pl.DataFrame([
-        {"date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0, "nav": 100000.0, "gross_exposure": 0.01},
-        {"date": "2024-01-03", "cash": 100500.0, "market_value": 0.0, "nav": 100500.0, "gross_exposure": 0.0},
+        {"date": "2024-01-02", "cash": 99000.0, "market_value": 1000.0, "nav": 100000.0, "gross_exposure": 0.01, "daily_return": 0.0},
+        {"date": "2024-01-03", "cash": 100500.0, "market_value": 0.0, "nav": 100500.0, "gross_exposure": 0.0, "daily_return": 0.005},
     ])
     holdings = pl.DataFrame([{
         "date": "2024-01-02", "instrument": "600000.SH",
