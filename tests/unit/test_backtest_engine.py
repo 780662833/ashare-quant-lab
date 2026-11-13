@@ -12,7 +12,7 @@ from ashare_quant.backtest import (
 )
 
 
-def make_bars(days=4, *, locked_buy_day=None, suspended=None):
+def make_bars(days=4, *, locked_buy_day=None, locked_sell_day=None, suspended=None):
     rows = []
     start = date(2024, 1, 1)
     for offset in range(days):
@@ -28,7 +28,7 @@ def make_bars(days=4, *, locked_buy_day=None, suspended=None):
             "amount": 1000000.0,
             "is_suspended": offset in (suspended or set()),
             "is_limit_up_locked": offset == locked_buy_day,
-            "is_limit_down_locked": False,
+            "is_limit_down_locked": offset == locked_sell_day,
             "limit_up": 14.0,
             "limit_down": 9.0,
         })
@@ -418,3 +418,74 @@ def test_accounting_replay_rejects_sell_quantity_above_inventory():
         _validate_result_accounting(
             orders, daily, holdings, initial_cash=100000.0, board_lot=100,
         )
+
+
+def test_limit_down_locked_sell_is_not_filled_and_retries_next_session():
+    bars = make_bars(days=4, locked_sell_day=2)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "weight": [0.5, 0.0],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=1, costs=zero_costs),
+    )
+    sells = result.orders.filter(pl.col("side") == "sell")
+    assert sells["date"].to_list() == ["2024-01-03", "2024-01-04"]
+    assert sells["status"].to_list() == ["no_fill", "filled"]
+    assert sells["reason"].to_list()[0] == "limit_down_locked"
+    assert sells["filled_qty"].to_list() == [0, 5000]
+    assert result.holdings.filter(pl.col("date") == "2024-01-03")["quantity"].item() == 5000
+    assert result.holdings.filter(pl.col("date") == "2024-01-04").is_empty()
+
+
+def test_sell_open_below_limit_down_is_not_filled():
+    rows = make_bars(days=4).to_dicts()
+    rows[2]["open"] = 8.9
+    rows[2]["low"] = 8.8
+    rows[2]["close"] = 8.9
+    bars = pl.DataFrame(rows)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-02"],
+        "instrument": ["600000.SH", "600000.SH"],
+        "weight": [0.5, 0.0],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=1, costs=zero_costs),
+    )
+    blocked = result.orders.filter(pl.col("date") == "2024-01-03")
+    assert blocked["status"].item() == "no_fill"
+    assert blocked["reason"].item() == "open_below_limit_down"
+    assert blocked["filled_qty"].item() == 0
+    assert result.holdings.filter(pl.col("date") == "2024-01-03")["quantity"].item() == 5000
+
+
+def test_default_full_fill_ratio_records_full_transition_cap():
+    bars = make_bars(days=3)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01"],
+        "instrument": ["600000.SH"],
+        "weight": [0.5],
+    })
+    zero_costs = CostModel(
+        commission_rate=0, minimum_commission=0,
+        stamp_duty_sell_rate=0, transfer_fee_rate=0, slippage_bps=0,
+    )
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, costs=zero_costs),
+    )
+    order = result.orders.row(0, named=True)
+    assert order["target_fill_ratio"] == 1.0
+    assert order["target_fill_cap_qty"] == order["target_requested_qty"] == 5000
+    assert order["requested_qty"] == order["filled_qty"] == 5000
