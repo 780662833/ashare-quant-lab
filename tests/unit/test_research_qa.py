@@ -179,7 +179,7 @@ def test_report_schema_rejects_training_unlock_and_missing_gate(tmp_path, monkey
 
 
 def test_report_schema_rejects_non_finite_values_and_invalid_conclusion(tmp_path, monkeypatch):
-    report = build_report(make_verified_experiment(tmp_path))
+    report = build_report(make_verified_experiment(tmp_path), monkeypatch)
     invalid = {**report, "scenarios": [{"net_return": float("nan")}]}
     with pytest.raises(ValueError, match="JSON compliant"):
         validate_research_qa_report(invalid)
