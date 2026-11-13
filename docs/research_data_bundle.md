@@ -23,9 +23,11 @@ Call `build_research_data_bundle(...)` with:
 | `acceptance_report` | matching window/profile and named gate results | Evidence admission |
 | `source_revisions` | `daily_bars`, `adj_factors`, `universe`, `trading_status`, `trading_calendar`, `price_limit_rules` | Reproducibility |
 
-The acceptance report must show PASS for historical universe, HFQ adjustment,
-and trading status, and include replayable receipts for historical universe
-and HFQ. Any failed historical-universe receipt sub-gate is a hard failure. The pure momentum benchmark does not consume fundamental
+The acceptance report must show PASS for historical universe, the explicit
+historical-universe-receipt sub-gate, HFQ adjustment, and trading status, and
+include replayable receipts for historical universe and HFQ. The receipt
+sub-gate must be present (absence is not treated as PASS); any failed
+historical-universe receipt sub-gate is a hard failure. The pure momentum benchmark does not consume fundamental
 PIT fields. A failed PIT gate therefore does not block this **price-only
 benchmark**; it still blocks all model-training work. The builder never sets
 `training_dataset_unlocked` to true.

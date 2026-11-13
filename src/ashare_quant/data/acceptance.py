@@ -134,6 +134,21 @@ def run_acceptance(
             data_root=root,
         )
         report["receipts"]["historical_universe"] = universe_read.receipt
+        universe_receipt_ok = (
+            not universe_read.frame.is_empty()
+            and universe_read.receipt.get("replayable") is True
+        )
+        report["gates"].append(
+            _gate(
+                "historical_universe_receipt",
+                universe_receipt_ok,
+                {
+                    "rows": universe_read.frame.height,
+                    "receipt_id": universe_read.receipt.get("receipt_id"),
+                    "replayable": universe_read.receipt.get("replayable") is True,
+                },
+            )
+        )
         if not universe_read.frame.is_empty():
             symbols = sorted(universe_read.frame["symbol"].unique().to_list())
     except Exception as exc:
