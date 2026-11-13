@@ -86,13 +86,50 @@ def make_bundle(count: int = 280) -> ResearchDataBundle:
             "hfq": {"replayable": True, "revision": "hfq-v1"},
         },
     }
+    dependencies = {
+        "daily_bars": {"revision_id": "daily-v1", "contract_fingerprint": "daily-contract"},
+        "adj_factors": {"revision_id": "hfq-v1", "contract_fingerprint": "hfq-contract"},
+        "trading_status": {"revision_id": "status-v1", "contract_fingerprint": "status-contract"},
+        "trading_calendar": {"revision_id": "calendar-v1", "contract_fingerprint": "calendar-contract"},
+    }
     revisions = {
-        "daily_bars": "daily-v1",
-        "adj_factors": "hfq-v1",
-        "universe": "universe-v1",
-        "trading_status": "status-v1",
-        "trading_calendar": "calendar-v1",
-        "price_limit_rules": "synthetic-v1",
+        **dependencies,
+        "universe": dependencies["daily_bars"],
+        "price_limit_rules": {
+            "revision_id": "synthetic-v1",
+            "contract_fingerprint": "synthetic-rules-contract",
+            "source": "synthetic-test-provider",
+        },
+    }
+    source_receipts = [{
+        "dataset": "daily_bars",
+        "receipt": {
+            "replayable": True,
+            "receipt_id": "synthetic-walk-forward-receipt",
+            "dependencies": dependencies,
+            "coverage": {"completeness": "not_assessed"},
+        },
+    }]
+    coverage_audits = {
+        name: {
+            "audit_id": f"synthetic-{name}-audit",
+            "status": "PASS",
+            "window": {"start": sessions[0], "end": sessions[-1]},
+            "expected_rows": rows,
+            "observed_rows": rows,
+            "missing_keys": 0,
+            "unexpected_keys": 0,
+            "method": "synthetic fixture exact-key reconciliation",
+            "source": "synthetic test fixture only",
+        }
+        for name, rows in {
+            "daily_bars": len(raw_rows),
+            "adj_factors": len(adjusted_rows),
+            "universe": len(membership_rows),
+            "trading_status": len(status_rows),
+            "trading_calendar": len(sessions),
+            "price_limit_rules": len(status_rows),
+        }.items()
     }
     return build_research_data_bundle(
         raw_bars=pl.DataFrame(raw_rows),
@@ -103,6 +140,8 @@ def make_bundle(count: int = 280) -> ResearchDataBundle:
         acceptance_report=report,
         acceptance_report_id="synthetic-acceptance-v1",
         source_revisions=revisions,
+        source_receipts=source_receipts,
+        coverage_audits=coverage_audits,
         start_date=sessions[0],
         end_date=sessions[-1],
         universe_profile=PROFILE,
