@@ -297,10 +297,10 @@ def test_target_fill_ratio_caps_sell_quantity_without_retries_beyond_cap():
         ),
     )
     assert result.orders["side"].to_list() == ["buy", "sell"]
-    assert result.orders["target_requested_qty"].to_list() == [5000, 5000]
-    assert result.orders["target_fill_cap_qty"].to_list() == [2500, 2500]
-    assert result.orders["filled_qty"].to_list() == [2500, 2500]
-    assert result.holdings.filter(pl.col("date") == "2024-01-04")["quantity"].item() == 2500
+    assert result.orders["target_requested_qty"].to_list() == [5000, 2500]
+    assert result.orders["target_fill_cap_qty"].to_list() == [2500, 1200]
+    assert result.orders["filled_qty"].to_list() == [2500, 1200]
+    assert result.holdings.filter(pl.col("date") == "2024-01-04")["quantity"].item() == 1300
 
 
 def test_target_fill_ratio_below_one_board_lot_is_explicit_no_fill():
