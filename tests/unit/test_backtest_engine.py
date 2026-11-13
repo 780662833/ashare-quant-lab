@@ -489,3 +489,52 @@ def test_default_full_fill_ratio_records_full_transition_cap():
     assert order["target_fill_ratio"] == 1.0
     assert order["target_fill_cap_qty"] == order["target_requested_qty"] == 5000
     assert order["requested_qty"] == order["filled_qty"] == 5000
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_cost_model_rejects_non_finite_values(value):
+    with pytest.raises(ValueError, match="finite"):
+        CostModel(slippage_bps=value)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_backtest_config_rejects_non_finite_cash_and_fill_ratio(value):
+    with pytest.raises(ValueError, match="initial_cash"):
+        BacktestConfig(initial_cash=value)
+    with pytest.raises(ValueError, match="target_fill_ratio"):
+        BacktestConfig(target_fill_ratio=value)
+
+
+@pytest.mark.parametrize("kwargs", [{"top_n": True}, {"board_lot": 100.0}, {"top_n": 1.5}])
+def test_backtest_config_requires_integer_count_fields(kwargs):
+    with pytest.raises(ValueError, match="positive integer"):
+        BacktestConfig(**kwargs)
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), float("-inf")])
+def test_engine_rejects_non_finite_ohlcv(bad_value):
+    rows = make_bars(days=2).to_dicts()
+    rows[1]["close"] = bad_value
+    empty_targets = pl.DataFrame(schema={"signal_date": pl.String, "instrument": pl.String, "weight": pl.Float64})
+    with pytest.raises(ValueError, match="finite"):
+        run_backtest(pl.DataFrame(rows), empty_targets)
+
+
+def test_engine_rejects_non_boolean_execution_flags():
+    bars = make_bars(days=2).with_columns(pl.col("is_suspended").cast(pl.Int64))
+    empty_targets = pl.DataFrame(schema={"signal_date": pl.String, "instrument": pl.String, "weight": pl.Float64})
+    with pytest.raises(ValueError, match="Boolean execution-state"):
+        run_backtest(bars, empty_targets)
+
+
+def test_engine_rejects_non_finite_target_weights():
+    targets = pl.DataFrame({"signal_date": ["2024-01-01"], "instrument": ["600000.SH"], "weight": [float("nan")]})
+    with pytest.raises(ValueError, match="finite"):
+        run_backtest(make_bars(days=2), targets)
+
+
+def test_engine_rejects_conflicting_price_limit_lock_flags():
+    bars = make_bars(days=2).with_columns(pl.lit(True).alias("is_limit_up_locked"), pl.lit(True).alias("is_limit_down_locked"))
+    empty_targets = pl.DataFrame(schema={"signal_date": pl.String, "instrument": pl.String, "weight": pl.Float64})
+    with pytest.raises(ValueError, match="both limit-up and limit-down"):
+        run_backtest(bars, empty_targets)
