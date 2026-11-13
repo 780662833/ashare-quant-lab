@@ -12,6 +12,7 @@ import re
 from datetime import datetime
 from typing import Any, Mapping
 
+from ashare_quant.research.experiment_provenance import validate_experiment_provenance
 from ashare_quant.research.experiment_compare import (
     VerifiedWalkForwardExperiment,
     verify_walk_forward_experiment,
@@ -33,14 +34,6 @@ REQUIRED_BENCHMARK_GATES = (
     "historical_universe",
     "hfq_adjustment",
     "trading_status",
-)
-REQUIRED_SOURCE_REVISIONS = (
-    "daily_bars",
-    "adj_factors",
-    "universe",
-    "trading_status",
-    "trading_calendar",
-    "price_limit_rules",
 )
 _ALLOWED_GATE_STATUSES = {"PASS", "FAIL", "WARN", "MISSING", "UNKNOWN"}
 _ALLOWED_DECISIONS = {
@@ -132,24 +125,20 @@ def _assess_verified_experiment(
     if not isinstance(universe_profile, str) or not universe_profile.strip():
         blockers.append("missing universe_profile")
 
+    try:
+        validate_experiment_provenance(provenance)
+    except (TypeError, ValueError) as exc:
+        blockers.append(f"invalid receipt-bound source provenance: {exc}")
+
     revisions = provenance.get("source_revisions")
     if not isinstance(revisions, Mapping):
         revisions = {}
-        blockers.append("missing source_revisions")
-    missing_revisions = [
-        name for name in REQUIRED_SOURCE_REVISIONS
-        if not isinstance(revisions.get(name), str) or not revisions.get(name, "").strip()
-    ]
-    if missing_revisions:
-        blockers.append("missing source revisions: " + ", ".join(sorted(missing_revisions)))
-
     receipts = provenance.get("source_receipts")
-    if not isinstance(receipts, Mapping):
-        receipts = {}
-    for receipt_name in ("historical_universe", "hfq"):
-        receipt = receipts.get(receipt_name)
-        if not isinstance(receipt, Mapping) or receipt.get("replayable") is not True:
-            blockers.append(f"missing replayable {receipt_name} receipt")
+    if not isinstance(receipts, list):
+        receipts = []
+    acceptance_receipts = provenance.get("acceptance_source_receipts")
+    if not isinstance(acceptance_receipts, Mapping):
+        acceptance_receipts = {}
 
     if manifest.get("training_dataset_unlocked") is not False:
         blockers.append("manifest training_dataset_unlocked is not false")
@@ -205,7 +194,8 @@ def _assess_verified_experiment(
         "acceptance_report_window": {"start": start, "end": end},
         "universe_profile": universe_profile,
         "source_revisions": dict(revisions),
-        "source_receipts": dict(receipts),
+        "source_receipts": list(receipts),
+        "acceptance_source_receipts": dict(acceptance_receipts),
         "training_dataset_unlocked": False,
         "model_training_performed": False,
         "blockers": sorted(set(blockers)),
