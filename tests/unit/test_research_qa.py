@@ -128,7 +128,7 @@ def test_model_training_is_only_gate_eligible_when_all_four_pass(tmp_path, monke
         "point_in_time_fundamentals": "PASS",
         "trading_status": "PASS",
     }
-    report = build_report(make_verified_experiment(tmp_path, gates=statuses))
+    report = build_report(make_verified_experiment(tmp_path, gates=statuses), monkeypatch)
 
     assert report["admission"]["decision"] == "PRICE_ONLY_ELIGIBLE"
     assert report["admission"]["model_training_decision"] == "MODEL_TRAINING_ELIGIBLE"
@@ -162,7 +162,7 @@ def test_acceptance_window_must_match_bundle_scope(tmp_path, monkeypatch):
 
 
 def test_report_schema_rejects_training_unlock_and_missing_gate(tmp_path, monkeypatch):
-    report = build_report(make_verified_experiment(tmp_path))
+    report = build_report(make_verified_experiment(tmp_path), monkeypatch)
     invalid = {**report, "admission": {**report["admission"], "training_dataset_unlocked": True}}
     with pytest.raises(ValueError, match="never unlock"):
         validate_research_qa_report(invalid)
