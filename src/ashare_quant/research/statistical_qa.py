@@ -134,6 +134,8 @@ def build_statistical_qa_summary(experiment_path: str | Path) -> dict[str, Any]:
     folds = experiment.fold_table
     if folds.is_empty() or "fold_id" not in folds.columns or "test_sessions" not in folds.columns:
         raise ValueError("Verified fold table is empty or missing fold identity/session fields")
+    if "total_return" not in folds.columns:
+        raise ValueError("Verified fold table is missing total_return")
     if folds["fold_id"].null_count() or folds["fold_id"].n_unique() != folds.height:
         raise ValueError("Verified fold table contains missing/duplicate fold IDs")
     session_values = folds["test_sessions"].to_list()
