@@ -278,11 +278,17 @@ def _validate_result_accounting(
             finite_number(snapshot[name], f"Daily {name}", non_negative=True)
         finite_number(snapshot["daily_return"], "Daily return")
         exposure = finite_number(snapshot["gross_exposure"], "Daily gross exposure", non_negative=True)
+        if float(snapshot["nav"]) <= 0:
+            raise AssertionError("Daily NAV must be positive")
+        expected_exposure = float(snapshot["market_value"]) / float(snapshot["nav"])
+        if abs(exposure - expected_exposure) > 1e-9:
+            raise AssertionError("Daily gross exposure does not reconcile to market value and NAV")
         if exposure > 1.0 + 1e-9:
             raise AssertionError("Gross exposure exceeds the no-leverage limit")
         daily_by_date[day] = snapshot
 
     orders_by_date: dict[str, list[dict[str, Any]]] = {}
+    seen_order_keys: set[tuple[str, str]] = set()
     for row in orders.to_dicts():
         day = str(row["date"])
         instrument = row["instrument"]
@@ -290,6 +296,10 @@ def _validate_result_accounting(
             raise AssertionError("Every order date must match exactly one daily ledger date")
         if instrument is None or not str(instrument).strip():
             raise AssertionError("Order instrument must be non-empty")
+        order_key = (day, str(instrument))
+        if order_key in seen_order_keys:
+            raise AssertionError("Duplicate order intent for the same instrument and session")
+        seen_order_keys.add(order_key)
         orders_by_date.setdefault(day, []).append(row)
 
     holdings_by_date: dict[str, list[dict[str, Any]]] = {}
@@ -303,8 +313,10 @@ def _validate_result_accounting(
         quantity = row["quantity"]
         if isinstance(quantity, bool) or not isinstance(quantity, int) or quantity <= 0:
             raise AssertionError("Holding quantity must be a positive integer")
-        finite_number(row["mark_price"], "Holding mark_price", non_negative=True)
-        finite_number(row["market_value"], "Holding market_value", non_negative=True)
+        mark_price = finite_number(row["mark_price"], "Holding mark_price", non_negative=True)
+        market_value = finite_number(row["market_value"], "Holding market_value", non_negative=True)
+        if mark_price <= 0 or abs(market_value - quantity * mark_price) > 1e-6:
+            raise AssertionError("Holding market value must equal positive mark price times quantity")
         holdings_by_date.setdefault(day, []).append(row)
 
     for day in daily_by_date:
