@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from math import floor
+from math import floor, isfinite
 from typing import Any
 
 import polars as pl
@@ -35,8 +35,9 @@ class CostModel:
             "commission_rate", "minimum_commission", "stamp_duty_sell_rate",
             "transfer_fee_rate", "slippage_bps",
         ):
-            if getattr(self, name) < 0:
-                raise ValueError(f"{name} must be non-negative")
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or value < 0:
+                raise ValueError(f"{name} must be a finite non-negative number")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,14 +50,20 @@ class BacktestConfig:
     target_fill_ratio: float = 1.0
 
     def __post_init__(self) -> None:
-        if self.initial_cash <= 0:
-            raise ValueError("initial_cash must be positive")
-        if self.top_n < 1 or self.board_lot < 1:
-            raise ValueError("top_n and board_lot must be positive")
+        if isinstance(self.initial_cash, bool) or not isinstance(self.initial_cash, (int, float)) or not isfinite(self.initial_cash) or self.initial_cash <= 0:
+            raise ValueError("initial_cash must be a finite positive number")
+        for name in ("top_n", "board_lot"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if not isinstance(self.allow_leverage, bool):
+            raise ValueError("allow_leverage must be a boolean")
         if self.allow_leverage:
             raise ValueError("Leverage is out of scope for the v1 MVP")
-        if not 0.0 <= self.target_fill_ratio <= 1.0:
-            raise ValueError("target_fill_ratio must be in [0, 1]")
+        if not isinstance(self.costs, CostModel):
+            raise ValueError("costs must be a CostModel")
+        if isinstance(self.target_fill_ratio, bool) or not isinstance(self.target_fill_ratio, (int, float)) or not isfinite(self.target_fill_ratio) or not 0.0 <= self.target_fill_ratio <= 1.0:
+            raise ValueError("target_fill_ratio must be a finite number in [0, 1]")
 
 
 @dataclass(slots=True)
@@ -76,11 +83,26 @@ def _validate_bars(bars: pl.DataFrame) -> pl.DataFrame:
         raise ValueError(f"Missing required execution columns: {sorted(missing)}")
     if bars.is_empty():
         raise ValueError("bars must not be empty")
+    if bars.select(pl.any_horizontal(
+        pl.col("instrument").is_null(), pl.col("date").is_null(),
+        (pl.col("instrument").cast(pl.String).str.strip_chars() == ""),
+        (pl.col("date").cast(pl.String).str.strip_chars() == ""),
+    ).any()).item():
+        raise ValueError("Bars contain empty instrument/date keys")
+    for column in ("is_suspended", "is_limit_up_locked", "is_limit_down_locked"):
+        if bars.schema[column] != pl.Boolean:
+            raise ValueError(f"{column} must use Boolean execution-state values")
     if bars.select(pl.struct(["instrument", "date"]).is_duplicated().any()).item():
         raise ValueError("Duplicate (instrument, date) bars")
     numeric = ["open", "high", "low", "close", "volume", "amount"]
+    try:
+        bars = bars.with_columns(pl.col(c).cast(pl.Float64, strict=True) for c in numeric)
+    except Exception as exc:
+        raise ValueError(f"OHLCV values must be numeric: {exc}") from exc
     if bars.select(pl.any_horizontal([pl.col(c).is_null() for c in numeric]).any()).item():
         raise ValueError("OHLCV contains null values")
+    if bars.select(pl.any_horizontal([~pl.col(c).is_finite() for c in numeric]).any()).item():
+        raise ValueError("OHLCV values must be finite")
     invalid = (
         (pl.col("open") <= 0) | (pl.col("high") <= 0) |
         (pl.col("low") <= 0) | (pl.col("close") <= 0) |
@@ -93,11 +115,19 @@ def _validate_bars(bars: pl.DataFrame) -> pl.DataFrame:
     for column in ("is_suspended", "is_limit_up_locked", "is_limit_down_locked"):
         if bars[column].null_count():
             raise ValueError(f"{column} contains unknown execution state")
+    if bars.filter(pl.col("is_limit_up_locked") & pl.col("is_limit_down_locked")).height:
+        raise ValueError("A bar cannot be locked at both limit-up and limit-down")
+    try:
+        bars = bars.with_columns(pl.col("limit_up").cast(pl.Float64, strict=True), pl.col("limit_down").cast(pl.Float64, strict=True))
+    except Exception as exc:
+        raise ValueError(f"Price limits must be numeric when supplied: {exc}") from exc
     if bars.filter(
-        (pl.col("limit_up").is_not_null() & (pl.col("limit_up") <= 0)) |
-        (pl.col("limit_down").is_not_null() & (pl.col("limit_down") <= 0))
+        (pl.col("limit_up").is_not_null() & ((~pl.col("limit_up").is_finite()) | (pl.col("limit_up") <= 0))) |
+        (pl.col("limit_down").is_not_null() & ((~pl.col("limit_down").is_finite()) | (pl.col("limit_down") <= 0)))
     ).height:
-        raise ValueError("Price limits, when supplied, must be positive")
+        raise ValueError("Price limits, when supplied, must be finite and positive")
+    if bars.filter(pl.col("limit_up").is_not_null() & pl.col("limit_down").is_not_null() & (pl.col("limit_up") <= pl.col("limit_down"))).height:
+        raise ValueError("limit_up must be greater than limit_down")
     return bars.sort(["date", "instrument"])
 
 
@@ -107,6 +137,20 @@ def _validate_targets(targets: pl.DataFrame, trading_dates: set[str], top_n: int
         raise ValueError(f"Missing target columns: {sorted(missing)}")
     if targets.is_empty():
         return targets
+    if targets.schema["weight"] == pl.Boolean:
+        raise ValueError("Target weights must be numeric, not boolean")
+    try:
+        targets = targets.with_columns(pl.col("weight").cast(pl.Float64, strict=True))
+    except Exception as exc:
+        raise ValueError(f"Target weights must be numeric: {exc}") from exc
+    if targets.select(pl.any_horizontal(
+        pl.col("signal_date").is_null(), pl.col("instrument").is_null(), pl.col("weight").is_null(),
+        (pl.col("signal_date").cast(pl.String).str.strip_chars() == ""),
+        (pl.col("instrument").cast(pl.String).str.strip_chars() == ""),
+    ).any()).item():
+        raise ValueError("Targets contain empty keys or null values")
+    if targets.select((~pl.col("weight").is_finite()).any()).item():
+        raise ValueError("Target weights must be finite")
     if targets.select(pl.struct(["signal_date", "instrument"]).is_duplicated().any()).item():
         raise ValueError("Duplicate (signal_date, instrument) targets")
     if targets.select(pl.any_horizontal(
