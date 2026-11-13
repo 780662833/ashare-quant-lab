@@ -14,6 +14,7 @@ from typing import Any, Sequence
 import polars as pl
 
 from ashare_quant.research.experiment_store import MANIFEST_SCHEMA_VERSION
+from ashare_quant.research.experiment_provenance import validate_experiment_provenance
 
 _REQUIRED_ARTIFACTS = {
     "fold_table",
@@ -150,18 +151,7 @@ def verify_walk_forward_experiment(
         raise ValueError("Experiment data provenance is missing acceptance_report_id")
     if not isinstance(provenance.get("universe_profile"), str) or not provenance["universe_profile"]:
         raise ValueError("Experiment data provenance is missing universe_profile")
-    revisions = provenance.get("source_revisions")
-    if not isinstance(revisions, dict) or not _REQUIRED_REVISIONS.issubset(revisions):
-        raise ValueError("Experiment data provenance is missing required source revisions")
-    if any(not isinstance(revisions[key], str) or not revisions[key] for key in _REQUIRED_REVISIONS):
-        raise ValueError("Experiment data provenance has empty source revisions")
-    receipts = provenance.get("source_receipts")
-    if not isinstance(receipts, dict) or any(
-        not isinstance(receipts.get(name), dict)
-        or receipts[name].get("replayable") is not True
-        for name in ("historical_universe", "hfq")
-    ):
-        raise ValueError("Experiment data provenance is missing replayable source receipts")
+    validate_experiment_provenance(provenance)
 
     artifacts = manifest.get("artifacts")
     if not isinstance(artifacts, dict) or set(artifacts) != _REQUIRED_ARTIFACTS:
