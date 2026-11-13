@@ -12,7 +12,10 @@ import re
 from datetime import datetime
 from typing import Any, Mapping
 
-from ashare_quant.research.experiment_compare import (\n    VerifiedWalkForwardExperiment,\n    verify_walk_forward_experiment,\n)
+from ashare_quant.research.experiment_compare import (
+    VerifiedWalkForwardExperiment,
+    verify_walk_forward_experiment,
+)
 
 GATE_KEYS = (
     "historical_universe",
