@@ -21,6 +21,7 @@ from typing import Any, Mapping
 import polars as pl
 
 from ashare_quant.research.walk_forward_runner import WalkForwardMomentumRun
+from ashare_quant.research.experiment_provenance import validate_experiment_provenance
 
 MANIFEST_SCHEMA_VERSION = 1
 _REQUIRED_REVISIONS = {
@@ -185,42 +186,17 @@ def _common_provenance(run: WalkForwardMomentumRun) -> dict[str, Any]:
         raise ValueError("Combined OOS daily ledger contains duplicate sessions")
 
     required_provenance = {
-        "acceptance_report_id",
-        "acceptance_report_window",
-        "universe_profile",
-        "source_revisions",
-        "source_receipts",
-        "training_dataset_unlocked",
+        "acceptance_report_id", "acceptance_report_window", "universe_profile",
+        "source_revisions", "source_receipts", "receipt_provenance",
+        "acceptance_source_receipts", "limit_evidence", "training_dataset_unlocked",
     }
     missing = required_provenance.difference(common)
     if missing:
         raise ValueError(f"Experiment provenance missing fields: {sorted(missing)}")
-    revisions = common.get("source_revisions")
-    if not isinstance(revisions, Mapping):
-        raise ValueError("Experiment provenance source_revisions must be a mapping")
-    missing_revisions = _REQUIRED_REVISIONS.difference(revisions)
-    if missing_revisions:
-        raise ValueError(
-            f"Experiment provenance missing source revisions: {sorted(missing_revisions)}"
-        )
-    invalid_revisions = sorted(
-        key for key in _REQUIRED_REVISIONS
-        if not isinstance(revisions[key], str) or not revisions[key].strip()
-    )
-    if invalid_revisions:
-        raise ValueError(
-            f"Experiment provenance has empty/invalid source revisions: {invalid_revisions}"
-        )
     for key in ("acceptance_report_id", "universe_profile"):
         if not isinstance(common.get(key), str) or not common[key].strip():
             raise ValueError(f"Experiment provenance {key} must be non-empty")
-    receipts = common.get("source_receipts")
-    if not isinstance(receipts, Mapping):
-        raise ValueError("Experiment provenance source_receipts must be a mapping")
-    for name in ("historical_universe", "hfq"):
-        receipt = receipts.get(name)
-        if not isinstance(receipt, Mapping) or receipt.get("replayable") is not True:
-            raise ValueError(f"Experiment provenance is missing replayable {name} receipt")
+    validate_experiment_provenance(common)
     return common
 
 

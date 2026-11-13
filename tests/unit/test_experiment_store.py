@@ -62,17 +62,34 @@ def make_run() -> WalkForwardMomentumRun:
         "acceptance_report_window": {"start": "2020-01-02", "end": "2020-01-09"},
         "universe_profile": "synthetic-test-universe",
         "source_revisions": {
-            "daily_bars": "daily-r1",
-            "adj_factors": "hfq-r1",
-            "universe": "universe-r1",
-            "trading_status": "status-r1",
-            "trading_calendar": "calendar-r1",
-            "price_limit_rules": "limits-r1",
+            "daily_bars": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+            "adj_factors": {"revision_id": "hfq-r1", "contract_fingerprint": "hfq-contract"},
+            "universe": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+            "trading_status": {"revision_id": "status-r1", "contract_fingerprint": "status-contract"},
+            "trading_calendar": {"revision_id": "calendar-r1", "contract_fingerprint": "calendar-contract"},
+            "price_limit_rules": {"revision_id": "limits-r1", "contract_fingerprint": "limits-contract", "source": "synthetic-provider"},
         },
-        "source_receipts": {
+        "source_receipts": [
+            {"dataset": "daily_bars", "receipt": {"replayable": True, "receipt_id": "adapter-1", "dependencies": {
+                "daily_bars": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+                "adj_factors": {"revision_id": "hfq-r1", "contract_fingerprint": "hfq-contract"},
+                "trading_status": {"revision_id": "status-r1", "contract_fingerprint": "status-contract"},
+                "trading_calendar": {"revision_id": "calendar-r1", "contract_fingerprint": "calendar-contract"},
+            }}},
+        ],
+        "receipt_provenance": {"dependency_identities": {
+            "daily_bars": {"revision_id": "daily-r1", "contract_fingerprint": "daily-contract"},
+            "adj_factors": {"revision_id": "hfq-r1", "contract_fingerprint": "hfq-contract"},
+            "trading_status": {"revision_id": "status-r1", "contract_fingerprint": "status-contract"},
+            "trading_calendar": {"revision_id": "calendar-r1", "contract_fingerprint": "calendar-contract"},
+        }},
+        "acceptance_source_receipts": {
             "historical_universe": {"replayable": True, "receipt_id": "u1"},
             "hfq": {"replayable": True, "receipt_id": "h1"},
         },
+        "limit_evidence": {"revision": "limits-r1", "source_revision_identity": {
+            "revision_id": "limits-r1", "contract_fingerprint": "limits-contract", "source": "synthetic-provider",
+        }},
         "training_dataset_unlocked": False,
     }
     fold_provenance = {
@@ -164,7 +181,7 @@ def test_persist_writes_manifest_hashes_and_parquet_ledgers(tmp_path):
     assert manifest["repository_commit"] == COMMIT
     assert manifest["random_seed"] == 17
     assert manifest["configs"]["strategy"]["top_n"] == 1
-    assert manifest["data_provenance"]["source_revisions"]["daily_bars"] == "daily-r1"
+    assert manifest["data_provenance"]["source_revisions"]["daily_bars"]["revision_id"] == "daily-r1"
     assert manifest["training_dataset_unlocked"] is False
     assert manifest["model_training_performed"] is False
 
@@ -253,6 +270,39 @@ def test_persist_rejects_combined_ledgers_that_do_not_match_fold_outputs(tmp_pat
         aggregate_report=run.aggregate_report,
     )
     with pytest.raises(ValueError, match="oos_daily row count"):
+        persist(tmp_path, run=invalid)
+    assert not (tmp_path / "momentum-smoke-001").exists()
+
+
+def test_persist_rejects_source_revision_not_backed_by_adapter_receipt(tmp_path):
+    run = make_run()
+    fold_run = run.folds[0]
+    invalid_provenance = {
+        **fold_run.provenance,
+        "source_revisions": {
+            **fold_run.provenance["source_revisions"],
+            "daily_bars": {"revision_id": "caller-invented-r9", "contract_fingerprint": "daily-contract"},
+        },
+    }
+    invalid_fold = WalkForwardMomentumFoldRun(
+        fold=fold_run.fold,
+        baseline_date=fold_run.baseline_date,
+        baseline_nav=fold_run.baseline_nav,
+        daily=fold_run.daily,
+        orders=fold_run.orders,
+        holdings=fold_run.holdings,
+        report=fold_run.report,
+        provenance=invalid_provenance,
+    )
+    invalid = WalkForwardMomentumRun(
+        folds=[invalid_fold],
+        fold_table=run.fold_table,
+        oos_daily=run.oos_daily,
+        oos_orders=run.oos_orders,
+        oos_holdings=run.oos_holdings,
+        aggregate_report=run.aggregate_report,
+    )
+    with pytest.raises(ValueError, match="source revision daily_bars does not match retained receipt identity"):
         persist(tmp_path, run=invalid)
     assert not (tmp_path / "momentum-smoke-001").exists()
 
@@ -361,6 +411,17 @@ def test_verify_rejects_tampered_artifact(tmp_path):
         verify_walk_forward_experiment(destination)
 
 
+def test_verify_rejects_manifest_provenance_drift_from_fold_receipts(tmp_path):
+    destination = persist(tmp_path)
+    manifest_path = destination / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["data_provenance"]["acceptance_report_id"] = "caller-replaced-acceptance"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="data provenance does not match experiment manifest"):
+        verify_walk_forward_experiment(destination)
+
+
 def test_compare_allows_strategy_variants_on_identical_data_and_execution(tmp_path):
     first = persist_variant(
         tmp_path,
@@ -396,9 +457,19 @@ def test_compare_rejects_different_source_revisions(tmp_path):
         **fold_run.provenance,
         "source_revisions": {
             **fold_run.provenance["source_revisions"],
-            "daily_bars": "daily-r2",
+            "daily_bars": {"revision_id": "daily-r2", "contract_fingerprint": "daily-contract"},
+            "universe": {"revision_id": "daily-r2", "contract_fingerprint": "daily-contract"},
         },
     }
+    altered_dependencies = {
+        **fold_run.provenance["receipt_provenance"]["dependency_identities"],
+        "daily_bars": {"revision_id": "daily-r2", "contract_fingerprint": "daily-contract"},
+    }
+    altered_provenance["receipt_provenance"] = {"dependency_identities": altered_dependencies}
+    altered_provenance["source_receipts"] = [{
+        **record,
+        "receipt": {**record["receipt"], "dependencies": altered_dependencies},
+    } for record in fold_run.provenance["source_receipts"]]
     altered_fold = WalkForwardMomentumFoldRun(
         fold=fold_run.fold,
         baseline_date=fold_run.baseline_date,
