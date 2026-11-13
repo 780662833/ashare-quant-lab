@@ -356,9 +356,10 @@ def run_backtest(
         if date_value in targets_by_date:
             active_targets = targets_by_date[date_value]
             target_nav = nav
-            desired_quantities = {
-                instrument: 0 for instrument in positions if instrument not in active_targets
-            }
+            # A new signal defines a new target-NAV snapshot. Recompute every
+            # instrument's desired quantity at its first eligible next-session
+            # open; retain that quantity only while retrying this same signal.
+            desired_quantities = {}
 
     return BacktestResult(
         daily=pl.DataFrame(daily_rows),
