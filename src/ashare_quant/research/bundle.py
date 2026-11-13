@@ -28,6 +28,9 @@ UNIVERSE_COLUMNS = {"instrument", "date"}
 REQUIRED_BENCHMARK_GATES = {
     "historical_universe", "hfq_adjustment", "trading_status",
 }
+REQUIRED_ACCEPTANCE_GATES = {
+    *REQUIRED_BENCHMARK_GATES, "point_in_time_fundamentals",
+}
 ENGINE_COLUMNS = [
     "instrument", "date", "open", "high", "low", "close", "volume", "amount",
     "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "limit_up", "limit_down",
@@ -133,6 +136,12 @@ def _require_gates(
             raise ResearchBundleError(f"Acceptance report has duplicate gate {name!r}")
         gate_map[name] = str(gate.get("status", "FAIL")).upper()
 
+    missing = sorted(REQUIRED_ACCEPTANCE_GATES.difference(gate_map))
+    if missing:
+        raise ResearchBundleError(
+            "Acceptance report is missing independent gates: " + ", ".join(missing)
+        )
+
     failed = sorted(
         name for name in REQUIRED_BENCHMARK_GATES if gate_map.get(name) != "PASS"
     )
@@ -156,7 +165,7 @@ def _require_gates(
             raise ResearchBundleError(
                 f"Acceptance report is missing replayable {receipt_name} receipt"
             )
-    return {name: gate_map[name] for name in sorted(REQUIRED_BENCHMARK_GATES)}
+    return {name: gate_map[name] for name in sorted(REQUIRED_ACCEPTANCE_GATES)}
 
 
 def build_research_data_bundle(
@@ -388,7 +397,11 @@ def build_research_data_bundle(
         "acceptance_report_created_at": acceptance_report.get("created_at"),
         "acceptance_report_window": {"start": start, "end": end},
         "universe_profile": universe_profile,
-        "required_benchmark_gates": required_gate_status,
+        "required_benchmark_gates": {
+            name: required_gate_status[name]
+            for name in sorted(REQUIRED_BENCHMARK_GATES)
+        },
+        "acceptance_gates": required_gate_status,
         "pit_fundamentals_used": False,
         "training_dataset_unlocked": False,
         "source_revisions": revisions,
