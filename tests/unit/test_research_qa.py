@@ -178,6 +178,36 @@ def test_acceptance_window_must_match_bundle_scope(tmp_path, monkeypatch):
     assert any("scope" in item for item in report["admission"]["blockers"])
 
 
+def test_receipt_revision_mismatch_blocks_qa_admission(tmp_path, monkeypatch):
+    experiment = make_verified_experiment(tmp_path)
+    provenance = {
+        **experiment.manifest["data_provenance"],
+        "source_revisions": {
+            **experiment.manifest["data_provenance"]["source_revisions"],
+            "daily_bars": {
+                "revision_id": "caller-invented-r9",
+                "contract_fingerprint": "daily-contract",
+            },
+        },
+    }
+    invalid = VerifiedWalkForwardExperiment(
+        path=experiment.path,
+        manifest={**experiment.manifest, "data_provenance": provenance},
+        folds=experiment.folds,
+        fold_table=experiment.fold_table,
+        oos_daily=experiment.oos_daily,
+        oos_orders=experiment.oos_orders,
+        oos_holdings=experiment.oos_holdings,
+    )
+    report = build_report(invalid, monkeypatch)
+
+    assert report["admission"]["decision"] == "BLOCKED"
+    assert any(
+        "does not match retained receipt identity" in blocker
+        for blocker in report["admission"]["blockers"]
+    )
+
+
 def test_report_schema_rejects_training_unlock_and_missing_gate(tmp_path, monkeypatch):
     report = build_report(make_verified_experiment(tmp_path), monkeypatch)
     invalid = {**report, "admission": {**report["admission"], "training_dataset_unlocked": True}}
