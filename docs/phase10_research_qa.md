@@ -258,8 +258,12 @@ No phase after 10.1 may relax the frozen project scope or four-gate model-traini
 ## 10.3 — Period and market-regime diagnostics
 
 The P10.3 implementation is exposed as
-`build_period_regime_diagnostics(experiment_path, bundle)`. It first invokes
-the Phase 8 artifact verifier and the P10.2 fail-closed admission assessment.
+`build_period_regime_diagnostics(experiment_path, bundle)` and is integrated
+into `build_research_qa_report(..., bundle=bundle)`. Without the optional
+bundle argument, the report remains a P10.2 admission skeleton. With it, the
+report includes period/regime summaries and a SHA-256 digest for the P10.3
+diagnostic payload. The P10.3 builder invokes the Phase 8 artifact verifier
+and the P10.2 fail-closed admission assessment.
 The supplied canonical bundle must match the experiment's acceptance report
 ID, requested window, universe profile, four independent gate statuses and
 all source revisions exactly.
