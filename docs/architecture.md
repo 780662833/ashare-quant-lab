@@ -218,13 +218,17 @@ The current engine implements a deterministic first slice:
 - Existing positions remain when a sell cannot execute.
 - Daily NAV is cash plus marked positions.
 
-This is **not yet a full historical exchange simulator**. Known gaps include
-T+1 availability/settlement enforcement, a validated historical price-limit
-rule/evidence provider for board- and date-specific limits and IPO no-limit
-windows, corporate-action share/cash adjustments, historical odd-lot
-liquidation rules, and a full security-by-calendar status matrix. CNEquity
-0.21.0 native trading_status does not supply the limit prices or lock flags. Do not describe results as production-grade A-share simulation until
-these are implemented and tested.
+This is **not yet a full historical exchange simulator**. The accounting
+ledger enforces the T+1 invariant that shares acquired in a session cannot be
+sold in that same session; it does not model exchange settlement cash
+availability or every broker-specific settlement detail. Remaining gaps
+include a validated historical price-limit rule/evidence provider for
+board- and date-specific limits and IPO no-limit windows, corporate-action
+share/cash adjustments, historically authoritative odd-lot liquidation
+rules, and a full security-by-calendar status matrix. CNEquity 0.21.0 native
+trading_status does not supply the limit prices or lock flags. Do not describe
+results as production-grade A-share simulation until the remaining execution
+evidence and market-rule gaps are implemented and tested.
 
 Configured costs are experiment assumptions, not a statement of current
 broker/exchange schedules. Record the exact configuration for every run.
