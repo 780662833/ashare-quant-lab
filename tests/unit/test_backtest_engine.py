@@ -640,3 +640,37 @@ def test_accounting_replay_rejects_holding_market_value_mismatch():
     holdings = holdings.with_columns(pl.lit(900.0).alias("market_value"))
     with pytest.raises(AssertionError, match="market value must equal"):
         _validate_result_accounting(orders, daily, holdings, initial_cash=100000.0, board_lot=100)
+
+
+def test_constrained_cash_is_allocated_proportionally_across_buy_targets():
+    rows = []
+    for instrument, price in (("600000.SH", 10.0), ("000001.SZ", 20.0)):
+        for row in make_bars(days=2).to_dicts():
+            row["instrument"] = instrument
+            row["open"] = price
+            row["high"] = price * 1.1
+            row["low"] = price * 0.9
+            row["close"] = price
+            row["limit_up"] = price * 1.2
+            row["limit_down"] = price * 0.8
+            rows.append(row)
+    bars = pl.DataFrame(rows)
+    targets = pl.DataFrame({
+        "signal_date": ["2024-01-01", "2024-01-01"],
+        "instrument": ["600000.SH", "000001.SZ"],
+        "weight": [0.5, 0.5],
+    })
+
+    result = run_backtest(
+        bars, targets,
+        BacktestConfig(initial_cash=100000, top_n=2),
+    )
+    buys = result.orders.filter(pl.col("side") == "buy").sort("instrument")
+    assert buys.height == 2
+    assert (buys["filled_qty"] > 0).all()
+    fill_ratios = [
+        row["filled_qty"] / row["requested_qty"]
+        for row in buys.to_dicts()
+    ]
+    assert max(fill_ratios) - min(fill_ratios) <= 0.03
+    assert result.daily["cash"].min() >= 0
