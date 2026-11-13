@@ -121,6 +121,8 @@ def summarize_backtest(
         traded_notional = _safe_float(notionals["_notional"].sum())
     else:
         traded_notional = 0.0
+    if requested_qty > 0 and filled_qty > requested_qty + 1e-8:
+        raise ValueError("Cumulative filled shares exceed target requested shares")
     average_nav = _safe_float(daily["nav"].mean())
     turnover = traded_notional / average_nav if average_nav > 0 else 0.0
     filled_orders = orders.filter(pl.col("filled_qty") > 0).height if orders.height and "filled_qty" in orders.columns else 0
