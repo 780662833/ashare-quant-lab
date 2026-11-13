@@ -191,3 +191,100 @@ def test_observed_execution_rejects_cumulative_fill_above_cap():
     })
     with pytest.raises(ValueError, match="exceed target fill cap"):
         fill_stress._observed_execution(orders)
+
+
+def test_run_fill_stress_suite_persists_and_verifies_f0_to_f4(tmp_path, monkeypatch):
+    from dataclasses import asdict
+    from ashare_quant.backtest import BacktestConfig
+    from ashare_quant.research.walk_forward import WalkForwardConfig
+    from ashare_quant.strategies.momentum import MomentumConfig
+
+    walk_config = WalkForwardConfig(
+        min_train_sessions=2, validation_sessions=1, test_sessions=1,
+        label_horizon_sessions=0, embargo_sessions=0,
+    )
+    strategy_config = MomentumConfig()
+    baseline_config = BacktestConfig()
+    configs = {
+        "walk_forward": asdict(walk_config),
+        "strategy": asdict(strategy_config),
+        "backtest": asdict(baseline_config),
+    }
+    provenance = {"acceptance_report_id": "acceptance-001"}
+    fold = {
+        "fold": {
+            "fold_id": "fold_001", "train_start": "2020-01-01",
+            "train_end": "2020-01-02", "validation_start": "2020-01-03",
+            "validation_end": "2020-01-03", "test_start": "2020-01-04",
+            "test_end": "2020-01-04", "test_sessions": 1,
+        }
+    }
+    created = {"baseline": None}
+    scenario_ratios = {}
+
+    def make_verified(path, ratio, experiment_id):
+        cap = int(1000 * ratio // 100 * 100)
+        orders = pl.DataFrame({
+            "target_signal_date": ["2020-01-03"],
+            "target_requested_qty": [1000],
+            "target_fill_cap_qty": [cap],
+            "target_fill_ratio": [ratio],
+            "instrument": ["600000.SH"],
+            "requested_qty": [cap],
+            "filled_qty": [cap],
+            "status": ["filled" if cap else "no_fill"],
+            "reason": [None if cap else "target_fill_cap_below_board_lot"],
+        })
+        manifest = {
+            "experiment_id": experiment_id,
+            "experiment_type": "walk_forward_momentum",
+            "training_dataset_unlocked": False,
+            "model_training_performed": False,
+            "configs": {
+                **configs,
+                "backtest": {**configs["backtest"], "target_fill_ratio": ratio},
+            },
+            "data_provenance": provenance,
+            "aggregate_report": {
+                "test_windows_contiguous": True,
+                "fold_linked_total_return": 0.1,
+                "fold_linked_cagr": 0.08,
+                "worst_fold_max_drawdown": -0.2,
+            },
+            "config_sha256": "a" * 64,
+        }
+        return VerifiedWalkForwardExperiment(
+            path=Path(path), manifest=manifest, folds=[fold],
+            fold_table=pl.DataFrame(), oos_daily=pl.DataFrame(),
+            oos_orders=orders, oos_holdings=pl.DataFrame(),
+        )
+
+    baseline = make_verified("baseline", 1.0, "baseline-001")
+    monkeypatch.setattr(fill_stress, "verify_walk_forward_experiment", lambda path: (
+        baseline if str(path) == "baseline" else make_verified(
+            path, scenario_ratios[str(path)], Path(path).name,
+        )
+    ))
+    monkeypatch.setattr(
+        fill_stress, "build_research_qa_report",
+        lambda *args, **kwargs: {"admission": {"decision": "PRICE_ONLY_ELIGIBLE"}},
+    )
+    monkeypatch.setattr(fill_stress, "run_walk_forward_momentum", lambda *args, **kwargs: object())
+
+    def persist(_run, *, root, experiment_id, backtest_config, **kwargs):
+        scenario_ratios[str(Path(root) / experiment_id)] = backtest_config.target_fill_ratio
+        return Path(root) / experiment_id
+
+    monkeypatch.setattr(fill_stress, "persist_walk_forward_momentum_run", persist)
+
+    report = fill_stress.run_fill_stress_suite(
+        object(), baseline_experiment_path="baseline",
+        experiment_root=tmp_path, experiment_id_prefix="fill-suite",
+        repository_commit="abcdef1234567",
+    )
+    assert report["protocol_version"] == "phase10.5"
+    assert [item["scenario_id"] for item in report["scenarios"]] == ["F0", "F1", "F2", "F3", "F4"]
+    assert [item["target_fill_ratio"] for item in report["scenarios"]] == [1.0, 0.95, 0.9, 0.8, 0.7]
+    assert [item["achieved_fill_ratio"] for item in report["scenarios"]] == [1.0, 0.9, 0.9, 0.8, 0.7]
+    assert report["integrity"]["all_artifacts_verified"] is True
+    assert report["training_dataset_unlocked"] is False
