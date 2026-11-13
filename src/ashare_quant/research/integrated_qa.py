@@ -85,10 +85,14 @@ def _verified_fill_stress_section(
             ):
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                     raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} has invalid {field}")
-                if abs(float(value) - expected) > 1e-9:
-                    raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} {field} does not match share counts")
             if cap_ratio > item["target_fill_ratio"] + 1e-9 or achieved_ratio > cap_ratio + 1e-9:
                 raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} achieved fills exceed its cap")
+            for field, value, expected in (
+                ("target_fill_cap_ratio", cap_ratio, expected_cap_ratio),
+                ("achieved_fill_ratio", achieved_ratio, expected_achieved_ratio),
+            ):
+                if abs(float(value) - expected) > 1e-9:
+                    raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} {field} does not match share counts")
     experiment_ids = payload.get("experiment_ids")
     if not isinstance(experiment_ids, list) or len(experiment_ids) != 5 or not experiment_ids or experiment_ids[0] != baseline_experiment_id:
         raise ValueError("P10.5 fill-stress experiment IDs do not include the matching F0 baseline")
