@@ -7,7 +7,7 @@ train/tune models, or unlock model training.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from math import prod
+from math import isfinite, prod
 from statistics import mean, median
 from typing import Any
 
@@ -109,12 +109,11 @@ def _fold_report(
     baseline_nav: float,
     annualization: int,
 ) -> dict[str, Any]:
-    """Summarize test returns using the prior session's close as initial NAV.
+    """Summarize test returns against the preceding session's closing NAV.
 
-    The first test-session daily return is measured from the prior session's
-    close. To retain that return and the correct total-return denominator, a
-    private copy of the first test NAV is replaced with baseline_nav before
-    calling the common report layer. The returned daily ledger keeps actual NAV.
+    Keep every actual test-session NAV intact. The preceding close is a
+    separate return/drawdown baseline; daily-return statistics use only the
+    actual test-session returns.
     """
     test_daily = result.daily.sort("date")
     if test_daily.is_empty():
@@ -124,18 +123,32 @@ def _fold_report(
             f"Fold NAV coverage does not match its test window {test_start}..{test_end}"
         )
 
-    metric_daily = test_daily.with_columns(
-        pl.when(pl.col("date").cast(pl.String) == test_start)
-        .then(pl.lit(float(baseline_nav)))
-        .otherwise(pl.col("nav"))
-        .alias("nav")
-    )
+    if not isfinite(baseline_nav) or baseline_nav <= 0:
+        raise ValueError("Walk-forward fold baseline NAV must be finite and positive")
+
+    # Preserve actual test NAV values for the common report's daily-return,
+    # volatility, Sharpe, turnover and cost calculations.
     report = summarize_backtest(
-        BacktestResult(daily=metric_daily, orders=result.orders, holdings=result.holdings),
+        BacktestResult(daily=test_daily, orders=result.orders, holdings=result.holdings),
         annualization=annualization,
     )
     sessions = test_daily.height
-    total_return = float(report["total_return"])
+    final_nav = float(test_daily["nav"][-1])
+    total_return = final_nav / float(baseline_nav) - 1.0
+
+    # Drawdown starts at the prior session's close, then includes every actual
+    # test close. Do not replace the first test NAV with the baseline: that
+    # erases first-session losses and breaks one-session folds.
+    peak = float(baseline_nav)
+    drawdowns = [0.0]
+    for nav_value in test_daily["nav"].to_list():
+        nav = float(nav_value)
+        peak = max(peak, nav)
+        drawdowns.append(nav / peak - 1.0)
+
+    report["final_nav"] = final_nav
+    report["total_return"] = total_return
+    report["max_drawdown"] = min(drawdowns)
     gross_growth = 1.0 + total_return
     report["cagr"] = gross_growth ** (annualization / sessions) - 1.0
     report["period"] = {
