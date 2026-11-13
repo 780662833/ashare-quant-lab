@@ -216,10 +216,13 @@ def build_period_regime_diagnostics(
             row for row in daily_rows
             if fold["test_start"] <= str(row["date"]) <= fold["test_end"]
         ]
+        if len(selected) != int(fold["test_sessions"]):
+            raise ValueError(f"{fold['fold_id']} OOS daily rows do not match declared test_sessions")
         metrics = _daily_metrics(selected, annualization)
         status = "OK" if len(selected) >= min_period_sessions else "INSUFFICIENT_SAMPLE"
         periods.append({
             "period_type": "walk_forward_fold",
+            "return_basis": "contiguous_fold_oos_daily_returns",
             "period_id": fold["fold_id"],
             "start": fold["test_start"],
             "end": fold["test_end"],
@@ -232,9 +235,13 @@ def build_period_regime_diagnostics(
         by_year.setdefault(int(str(row["date"])[:4]), []).append(row)
     for year, rows in sorted(by_year.items()):
         metrics = _daily_metrics(rows, annualization)
+        year = int(year)
+        calendar_sessions = sum(str(day).startswith(f"{year:04d}-") for day in sessions)
         status = "OK" if len(rows) >= min_period_sessions else "INSUFFICIENT_SAMPLE"
         periods.append({
             "period_type": "calendar_year",
+            "return_basis": "observed_oos_sessions_only; gaps_excluded",
+            "observed_session_coverage": len(rows) / calendar_sessions if calendar_sessions else 0.0,
             "period_id": str(year),
             "start": str(rows[0]["date"]),
             "end": str(rows[-1]["date"]),
@@ -257,6 +264,8 @@ def build_period_regime_diagnostics(
         coverage_values = [item["valid_universe_coverage"] for item in states]
         valid = [value for value in coverage_values if value > 0]
         metrics = _daily_metrics(selected, annualization)
+        median_values = [item["median_63_session_return"] for item in states if item["median_63_session_return"] is not None]
+        breadth_values = [item["positive_breadth"] for item in states if item["positive_breadth"] is not None]
         regimes.append({
             "regime": regime,
             "status": (
@@ -268,15 +277,13 @@ def build_period_regime_diagnostics(
             "mean_valid_universe_coverage": (
                 sum(valid) / len(valid) if valid else 0.0
             ),
+            "mean_eligible_universe": sum(item["eligible_universe"] for item in states) / len(states),
+            "mean_valid_universe": sum(item["valid_universe"] for item in states) / len(states),
             "mean_median_63_session_return": (
-                sum(item["median_63_session_return"] for item in states
-                    if item["median_63_session_return"] is not None)
-                / max(1, sum(item["median_63_session_return"] is not None for item in states))
+                sum(median_values) / len(median_values) if median_values else None
             ),
             "mean_positive_breadth": (
-                sum(item["positive_breadth"] for item in states
-                    if item["positive_breadth"] is not None)
-                / max(1, sum(item["positive_breadth"] is not None for item in states))
+                sum(breadth_values) / len(breadth_values) if breadth_values else None
             ),
         })
 
