@@ -59,7 +59,11 @@ portfolio return. Fold-level results remain the primary diagnostic.
 
 The first test-day return is included in each fold's total return and
 annualized-return calculation. The baseline date is not counted as a test
-session.
+session. Cumulative return and maximum drawdown use the prior close as a
+separate baseline followed by every actual test-session NAV; the baseline is
+never substituted for the first test NAV. Daily-return volatility and Sharpe
+use only the actual test-session returns, including the first test day. This
+also keeps one-session test folds' return and drawdown metrics correct.
 
 ## Configuration and use
 

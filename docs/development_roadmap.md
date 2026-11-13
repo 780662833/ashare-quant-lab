@@ -1,11 +1,12 @@
 # Development roadmap
 
-**Baseline:** 2026-11-04  
+**Baseline:** 2026-11-13  
 **Project:** A-share quantitative research MVP v1
 
 This roadmap tracks the research platform, not the volume of downloaded CNEquity
-history. Data acquisition may continue gradually in the background; incomplete
-data must never be disguised as accepted research input.
+history. Historical bulk backfill is paused by user decision; existing gaps stay
+recorded and must never be disguised as accepted research input. Recent IPOs are
+not missing before their listing dates.
 
 ## Frozen v1 objective and scope
 
@@ -36,7 +37,7 @@ branch is not part of `main` until GitHub reports it merged.
 | 5 | Architecture, canonical research bundle and benchmark orchestration | Merged in PR #10 | Canonical bundle, native status normalization and momentum orchestration have synthetic coverage; direct CNEquity assembly, audited historical price-limit evidence and local-lake acceptance remain pending |
 | 6 | Chronological walk-forward fold planner | Merged in PR #11 | Expanding/rolling folds, label-maturity purge, embargo and non-overlapping test windows; no model fitting |
 | 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
-| 8 | Walk-forward experiment runner | PR #13 open; CI pending on current head | Executes the deterministic momentum benchmark fold by fold, with cutoff-isolated inputs and test-only ledgers; model runner remains later work |
+| 8 | Walk-forward experiment runner | Merged in PR #13; GitHub Actions run #60 passed on its PR head | Executes the deterministic momentum benchmark fold by fold, with cutoff-isolated inputs and test-only ledgers; model runner remains later work |
 | 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
 | 10 | Robustness and research QA | Planned | Costs/fill/universe/period/regime sensitivities and reproducible comparisons |
 | 11 | Optional report inspection UI | Deferred | Only after research validity is demonstrated |
@@ -99,11 +100,13 @@ must be saved with each run, not represented as current legal/broker schedules.
 
 ## Phase 8 — walk-forward experiment runner
 
-The next step after the split planner is a reproducible fold runner. It should
-bind data snapshots, strategy outputs, benchmark runs, engine config, and
-report windows to each fold. The model and momentum benchmark must share the
-same fold and out-of-sample test dates. Validation may select a model only;
-test windows remain untouched until the final evaluation.
+The deterministic momentum fold runner is implemented in PR #13. It binds
+each chronological fold to a cutoff-isolated bundle prefix, replays the fixed
+momentum rule, and emits test-only daily NAV, orders, holdings and fold-level
+metrics. A follow-up regression fix preserves actual first-test-session NAV
+values while measuring cumulative return and drawdown from the prior-session
+close. This phase does not fit a model; any future model runner must use the
+same fold definitions and remain behind the four-gate training admission.
 
 ## Phase 9 — features, labels and model adapter (gated)
 
