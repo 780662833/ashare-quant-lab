@@ -39,7 +39,7 @@ branch is not part of `main` until GitHub reports it merged.
 | 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
 | 8 | Walk-forward runner, artifact persistence, verification and comparison | Merged in PR #13, #15 and #16; GitHub Actions run #70 passed (97 tests) | Cutoff-isolated momentum folds; immutable, checksummed experiment artifacts; integrity verification; fair parameter comparison only under identical data revisions, folds and execution/cost settings; no model fitting |
 | 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
-| 10 | Robustness and research QA | Planned | Costs/fill/universe/period/regime sensitivities and reproducible comparisons |
+| 10.1 | Research QA architecture and acceptance criteria | In progress on `phase10.1-research-qa-architecture` | Defines reuse of Phase 8 artifacts, four-gate QA guard, market-state labels, cost/fill matrices, parameter/OOS discipline and unified report contract; docs only, no runtime guard or stress execution implemented yet |\n| 10.2–10.7 | Research QA implementation | Planned | Admission guard/report schema, regime diagnostics, cost/fill stress, parameter/statistical QA and integrated acceptance; no backfill or model training |
 | 11 | Optional report inspection UI | Deferred | Only after research validity is demonstrated |
 
 ## Phase 5 — canonical research data bundle
