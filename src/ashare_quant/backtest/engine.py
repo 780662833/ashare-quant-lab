@@ -220,6 +220,8 @@ def run_backtest(
     active_targets: dict[str, float] = {}
     target_nav = cfg.initial_cash
     desired_quantities: dict[str, int] = {}
+    target_requested_quantities: dict[str, int] = {}
+    active_target_signal_date: str | None = None
     daily_rows: list[dict[str, Any]] = []
     order_rows: list[dict[str, Any]] = []
     holding_rows: list[dict[str, Any]] = []
@@ -236,10 +238,13 @@ def run_backtest(
             weight = active_targets.get(instrument, 0.0)
             if weight <= 0:
                 desired_quantities[instrument] = 0
+                target_requested_quantities.setdefault(instrument, current_qty)
             elif instrument not in desired_quantities:
                 if bar is None:
                     order_rows.append({
                         "date": date_value, "instrument": instrument, "side": "buy",
+                        "target_signal_date": active_target_signal_date,
+                        "target_requested_qty": None,
                         "requested_qty": None, "filled_qty": 0, "fill_price": None,
                         "fees": 0.0, "commission": 0.0, "transfer_fee": 0.0,
                         "stamp_duty": 0.0, "slippage_cost": 0.0,
@@ -249,6 +254,9 @@ def run_backtest(
                 open_price = float(bar["open"])
                 desired_quantities[instrument] = (
                     floor((target_nav * weight / open_price) / cfg.board_lot) * cfg.board_lot
+                )
+                target_requested_quantities.setdefault(
+                    instrument, abs(desired_quantities[instrument] - current_qty)
                 )
             desired_qty = desired_quantities[instrument]
             delta = desired_qty - current_qty
@@ -325,6 +333,8 @@ def run_backtest(
                 reason = "insufficient_cash_or_below_lot"
             order_rows.append({
                 "date": date_value, "instrument": instrument, "side": side,
+                "target_signal_date": active_target_signal_date,
+                "target_requested_qty": target_requested_quantities.get(instrument),
                 "requested_qty": requested, "filled_qty": filled,
                 "fill_price": fill_price, "fees": fee,
                 **fee_parts, "slippage_cost": slippage_cost,
@@ -360,11 +370,14 @@ def run_backtest(
             # instrument's desired quantity at its first eligible next-session
             # open; retain that quantity only while retrying this same signal.
             desired_quantities = {}
+            target_requested_quantities = {}
+            active_target_signal_date = date_value
 
     return BacktestResult(
         daily=pl.DataFrame(daily_rows),
         orders=pl.DataFrame(order_rows) if order_rows else pl.DataFrame(schema={
             "date": pl.String, "instrument": pl.String, "side": pl.String,
+            "target_signal_date": pl.String, "target_requested_qty": pl.Int64,
             "requested_qty": pl.Int64, "filled_qty": pl.Int64,
             "fill_price": pl.Float64, "fees": pl.Float64,
             "commission": pl.Float64, "transfer_fee": pl.Float64,
