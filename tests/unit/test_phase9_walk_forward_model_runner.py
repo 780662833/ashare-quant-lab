@@ -32,6 +32,8 @@ def _synthetic_validation_policy():
         policy_id="synthetic-lenient-v1",
         minimum_fold_count=2,
         minimum_signal_date_count=2,
+        minimum_rank_ic_observation_count=2,
+        minimum_cross_section_size=2,
         minimum_label_coverage_rate=0.0,
         minimum_mean_spearman_rank_ic=-1.0,
         minimum_positive_spearman_rank_ic_ratio=0.0,
