@@ -10,6 +10,7 @@ from ashare_quant.research.missingness_diagnostics import (
 from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
 from ashare_quant.research.security_metadata import (
     audit_security_metadata_coverage,
+    build_security_metadata_source_identity,
     select_security_metadata_as_of,
     validate_security_metadata,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "build_cross_sectional_features",
     "build_forward_return_labels",
     "evaluate_validation_ranking",
+    "build_security_metadata_source_identity",
     "validate_security_metadata",
     "select_security_metadata_as_of",
     "audit_security_metadata_coverage",

@@ -1,4 +1,4 @@
-# Point-in-time security metadata contract (Phase 9.22)
+# Point-in-time security metadata contract (Phase 9.23)
 
 ## Purpose and status
 
@@ -93,11 +93,23 @@ dates are canonical YYYY-MM-DD and all availability timestamps must include a
 timezone. Decision timestamps are interpreted in Asia/Shanghai and must fall
 on the supplied signal date.
 
-The source identity registry must be derived from replayable receipts and must
-also carry validated_evidence_classes. A row cannot self-assert strict PIT or
-immutable-event capability. The metadata adapter must explicitly attest that
-the source's semantics support the requested evidence class after validating
-the pinned dataset contract and its own normalization rules.
+The source identity registry is built by
+build_security_metadata_source_identity(...) from a replayable read receipt,
+the exact revision identity, and one or more field-semantic capability audits.
+A capability audit is not a free-form evidence-class list. Each PASS record
+must carry a unique audit_id, exact dataset, field scope, evidence_class,
+method, timezone-aware audited_at, receipt_id, revision_id and contract
+fingerprint. Every audited field must be registered for that evidence class
+and dataset. The helper and selector re-check that each audit matches the
+receipt's own dependency identity and the observation's exact source identity.
+
+The helper validates structural binding only. It does not cryptographically
+authenticate the reviewer or prove that an external source actually has
+historical PIT records. Audit IDs and methods must therefore refer to an
+independently retained source-qualification record; production capability
+audits must not be fabricated from synthetic fixtures or caller assertions.
+Source-semantic qualification and per-window universe coverage remain
+separate gates.
 
 ## Field-specific policy
 
@@ -133,7 +145,8 @@ select_security_metadata_as_of(...) applies these rules:
 
 1. Validate field typing, timezone-aware availability, quality and exactness.
 2. Verify every row's source revision, contract fingerprint and receipt ID
-   against the pinned source identity map.
+   against the pinned source identity map, and require a PASS field-semantic
+   capability audit scoped to that exact field and dataset.
 3. Ignore rows whose available_at is later than the Shanghai decision time.
 4. Resolve revisions for the same instrument/field/effective_from by the
    latest available_at that was already knowable at the decision time.
@@ -156,7 +169,8 @@ signal-date universe, not only today's survivors.
 
 ## Walk-forward and training boundary
 
-Phase 9.22 adds the pure validation contract and synthetic tests only. The
+Phase 9.23 strengthens the pure validation contract with receipt-bound,
+field-scoped capability audits and synthetic tests only. The
 current ResearchDataBundle, feature builder, admission function and
 walk-forward runner do not consume these fields. Until a source adapter passes
 the contract and a matching coverage audit is bound into bundle provenance,

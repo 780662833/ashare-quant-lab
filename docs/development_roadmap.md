@@ -455,3 +455,29 @@ or empirical market backtest was performed. No dependency or version-lock
 change was made. Merge commit:
 `a93291fb464b89c417de97868da2d42ca200ce17`.
 
+
+
+### Phase 9.23 — bind PIT metadata capabilities to field-semantic audits
+
+The Phase 9.22 metadata source identity previously accepted a flat
+`validated_evidence_classes` list alongside a receipt ID. The list was not
+itself tied to the actual receipt dependencies or scoped to individual fields.
+This phase replaces that shortcut with
+`build_security_metadata_source_identity(...)`: it requires a replayable
+receipt that pins the dataset's exact revision and contract fingerprint,
+plus PASS field-semantic audit records bound to the same receipt and revision.
+Each audit records a unique audit ID, dataset, evidence class, field scope,
+method and timezone-aware audit timestamp. Validation checks that every
+audited field is permitted for that dataset and evidence class, and each
+observation must have a matching field-scoped capability.
+
+This is still a structural contract, not an authenticated external audit:
+the helper does not establish auditor identity or prove a provider's actual
+historical coverage. Production audit IDs must refer to independently retained
+source-qualification evidence. No metadata source has been promoted, and the
+metadata selector remains outside the feature builder, bundle admission and
+walk-forward runner.
+
+Synthetic CI covers missing/legacy capability declarations, receipt/revision
+drift, field-scope mismatch and normal as-of behavior. No local data-lake
+access, CNEquity query/backfill, model fit or empirical backtest is performed.
