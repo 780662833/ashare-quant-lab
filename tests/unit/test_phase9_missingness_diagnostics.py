@@ -2,6 +2,7 @@ import polars as pl
 import pytest
 
 from ashare_quant.research.missingness_diagnostics import (
+    evaluate_feature_coverage,
     evaluate_validation_feature_missingness,
 )
 
@@ -128,3 +129,29 @@ def test_rejects_nonfinite_nonnull_feature_sources(bad_value):
     )
     with pytest.raises(ValueError, match="non-null NaN or infinite source values"):
         evaluate(features, predictions, labels)
+
+
+def test_test_window_coverage_is_label_free_and_reports_top_n_pit_missingness():
+    features, predictions, _ = _frames()
+    coverage, report = evaluate_feature_coverage(
+        features,
+        predictions,
+        top_n=2,
+        start_date="2024-01-05",
+        end_date="2024-01-05",
+    )
+
+    any_missing = coverage.filter(
+        pl.col("pit_feature") == "__any_pit_missing__"
+    ).row(0, named=True)
+    assert any_missing["universe_rows"] == 6
+    assert any_missing["universe_missing_rows"] == 5
+    assert any_missing["eligible_rows"] == 5
+    assert any_missing["prediction_rows"] == 5
+    assert any_missing["top_n_rows"] == 2
+    assert any_missing["top_n_missing_rows"] == 2
+    assert any_missing["top_n_missing_rate"] == pytest.approx(1.0)
+    assert report["status"] == "evaluated"
+    assert report["period"] == {"start": "2024-01-05", "end": "2024-01-05"}
+    assert "labels_mature_before" not in report
+    assert "label" not in report["interpretation"].lower()
