@@ -20,6 +20,12 @@ IDENTITIES = {
         "receipt_id": "industry-receipt",
         "validated_evidence_classes": ["strict_pit"],
     },
+    "sw_industry_history": {
+        "revision_id": "sw-industry-r1",
+        "contract_fingerprint": "sw-industry-contract",
+        "receipt_id": "sw-industry-receipt",
+        "validated_evidence_classes": ["strict_pit"],
+    },
     "valuation_metrics": {
         "revision_id": "valuation-r1",
         "contract_fingerprint": "valuation-contract",
@@ -47,6 +53,7 @@ def observation(
     revision_id=None,
     contract_fingerprint=None,
     receipt_id=None,
+    classification_system=None,
 ):
     defaults = {
         "listing_date": (
@@ -71,9 +78,19 @@ def observation(
     dataset, grade, row_quality, evidence = defaults[field]
     dataset = source_dataset or dataset
     identity = IDENTITIES[dataset]
+    taxonomy = field.startswith("industry_")
+    if taxonomy and classification_system is None:
+        classification_system = "sw" if dataset == "sw_industry_history" else "eastmoney"
+    value_unit = (
+        "classification_code" if taxonomy
+        else "date" if field == "listing_date"
+        else "CNY"
+    )
     return {
         "instrument": instrument,
         "field": field,
+        "classification_system": classification_system,
+        "value_unit": value_unit,
         "value_numeric": value_numeric,
         "value_string": value_string,
         "value_date": value_date,
@@ -96,6 +113,8 @@ def observation(
 
 def frame(*rows):
     return pl.DataFrame(rows, schema_overrides={
+        "classification_system": pl.String,
+        "value_unit": pl.String,
         "value_numeric": pl.Float64,
         "value_string": pl.String,
         "value_date": pl.String,
@@ -104,13 +123,17 @@ def frame(*rows):
 
 
 def select(rows, *, signal_date="2024-01-05", decision_at="2024-01-05T16:00:00+08:00",
-           instruments=("600000.SH",), fields=("industry_l1_code",)):
+           instruments=("600000.SH",), fields=("industry_l1_code",),
+           classification_system=None):
+    if classification_system is None and any(field.startswith("industry_") for field in fields):
+        classification_system = "eastmoney"
     return select_security_metadata_as_of(
         frame(*rows),
         source_identities=IDENTITIES,
         instruments=list(instruments),
         fields=list(fields),
         signal_date=signal_date,
+        classification_system=classification_system,
         decision_at=decision_at,
     )
 
@@ -429,3 +452,63 @@ def test_coverage_audit_passes_only_when_every_requested_pair_is_present():
     assert report["status"] == "PASS"
     assert report["coverage_rate"] == 1.0
     assert report["signal_date"] == "2024-01-05"
+
+
+def test_eastmoney_and_shenwan_taxonomies_are_selected_separately():
+    rows = [
+        observation(
+            "industry_l1_code",
+            source_dataset="industry_members",
+            classification_system="eastmoney",
+            effective_from="2024-01-01",
+            effective_to=None,
+            available_at="2024-01-02T09:00:00+08:00",
+            value_string="EM-01",
+        ),
+        observation(
+            "industry_l1_code",
+            source_dataset="sw_industry_history",
+            classification_system="sw",
+            effective_from="2024-01-01",
+            effective_to=None,
+            available_at="2024-01-02T09:00:00+08:00",
+            value_string="SW-01",
+        ),
+    ]
+    eastmoney = select(rows, classification_system="eastmoney")
+    shenwan = select(rows, classification_system="sw")
+    assert eastmoney["value_string"].item() == "EM-01"
+    assert shenwan["value_string"].item() == "SW-01"
+    assert eastmoney["classification_system"].item() == "eastmoney"
+    assert shenwan["classification_system"].item() == "sw"
+
+
+def test_industry_selection_requires_explicit_classification_system():
+    rows = [observation(
+        "industry_l1_code",
+        effective_from="2024-01-01",
+        effective_to=None,
+        value_string="EM-01",
+    )]
+    with pytest.raises(ValueError, match="requires one explicit classification_system"):
+        select_security_metadata_as_of(
+            frame(*rows),
+            source_identities=IDENTITIES,
+            instruments=["600000.SH"],
+            fields=["industry_l1_code"],
+            signal_date="2024-01-05",
+            decision_at="2024-01-05T16:00:00+08:00",
+        )
+
+
+def test_rejects_wrong_value_unit_for_market_cap():
+    rows = [observation(
+        "market_cap_total",
+        effective_from="2024-01-05",
+        effective_to="2024-01-08",
+        available_at="2024-01-05T15:30:00+08:00",
+        value_numeric=1_000_000.0,
+    )]
+    rows[0]["value_unit"] = "shares"
+    with pytest.raises(ValueError, match="value_unit=CNY"):
+        validate_security_metadata(frame(*rows), source_identities=IDENTITIES)
