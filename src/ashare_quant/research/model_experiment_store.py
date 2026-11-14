@@ -249,15 +249,32 @@ def verify_walk_forward_model_run(root: str | Path) -> dict[str, Any]:
         if relative.is_absolute() or ".." in relative.parts or not relative.parts:
             raise ValueError("Manifest contains an unsafe artifact path")
         path = directory / relative
+        try:
+            path.resolve().relative_to(directory.resolve())
+        except ValueError as exc:
+            raise ValueError("Manifest artifact resolves outside the experiment directory") from exc
         if not path.is_file():
             raise FileNotFoundError(f"Experiment artifact is missing: {relative.as_posix()}")
         if _sha256(path) != item.get("sha256"):
             raise ValueError(f"Experiment artifact checksum mismatch: {relative.as_posix()}")
         verified.append(relative.as_posix())
 
-    for fold in manifest.get("folds", []):
+    folds = manifest.get("folds", [])
+    if not isinstance(folds, list) or len(folds) != manifest.get("fold_count"):
+        raise ValueError("Manifest fold inventory does not match fold_count")
+    for fold in folds:
         metadata_relative = Path(fold["model_metadata_path"])
-        metadata = json.loads((directory / metadata_relative).read_text(encoding="utf-8"))
+        model_relative = Path(fold["model_path"])
+        for relative in (metadata_relative, model_relative):
+            if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+                raise ValueError("Manifest contains an unsafe model artifact path")
+        metadata_path = directory / metadata_relative
+        model_path = directory / model_relative
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        if _sha256(model_path) != metadata.get("model_sha256"):
+            raise ValueError(f"{fold['fold_id']} model checksum does not match metadata")
+        if metadata.get("feature_columns") != manifest.get("feature_columns"):
+            raise ValueError(f"{fold['fold_id']} model feature schema differs from manifest")
         if metadata.get("admission_accepted") is not True:
             raise ValueError(f"{fold['fold_id']} model metadata lacks accepted admission")
         if metadata.get("training_performed") is not True:
