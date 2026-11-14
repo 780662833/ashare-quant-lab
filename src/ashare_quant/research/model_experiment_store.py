@@ -140,6 +140,7 @@ def persist_walk_forward_model_run(
                 "validation_predictions.parquet": fold.validation_predictions,
                 "validation_diagnostics.parquet": fold.validation_diagnostics,
                 "validation_feature_missingness.parquet": fold.validation_feature_missingness,
+                "test_feature_coverage.parquet": fold.test_feature_coverage,
                 "test_predictions.parquet": fold.test_predictions,
                 "model_targets.parquet": fold.targets,
                 "daily.parquet": fold.daily,
@@ -181,6 +182,7 @@ def persist_walk_forward_model_run(
                 },
                 "validation_report": fold.validation_report,
                 "validation_feature_missingness_report": fold.validation_feature_missingness_report,
+                "test_feature_coverage_report": fold.test_feature_coverage_report,
                 "report": fold.report,
                 "benchmark_report": fold.benchmark_report,
                 "provenance": fold.provenance,
@@ -203,6 +205,14 @@ def persist_walk_forward_model_run(
                 ),
                 "validation_any_pit_missing_top_n_rate": (
                     fold.validation_feature_missingness_report["by_feature"]
+                    ["__any_pit_missing__"]["top_n_missing_rate"]
+                ),
+                "test_any_pit_missing_prediction_rate": (
+                    fold.test_feature_coverage_report["by_feature"]
+                    ["__any_pit_missing__"]["prediction_missing_rate"]
+                ),
+                "test_any_pit_missing_top_n_rate": (
+                    fold.test_feature_coverage_report["by_feature"]
                     ["__any_pit_missing__"]["top_n_missing_rate"]
                 ),
             })
