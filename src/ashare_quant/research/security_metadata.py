@@ -141,6 +141,173 @@ def _aware_timestamp(value: Any, name: str) -> datetime:
     return parsed.astimezone(SHANGHAI)
 
 
+def _normalize_source_identity(
+    dataset: str,
+    identity: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate one metadata source identity and its receipt-bound capability audits."""
+    if not isinstance(dataset, str) or not dataset.strip():
+        raise ValueError("source identity dataset names must be non-empty")
+    if not isinstance(identity, Mapping):
+        raise ValueError(f"source identity for {dataset} must be a mapping")
+
+    revision_id = identity.get("revision_id")
+    fingerprint = identity.get("contract_fingerprint")
+    receipt = identity.get("receipt")
+    receipt_id = identity.get("receipt_id")
+    if (
+        not isinstance(revision_id, (str, int))
+        or isinstance(revision_id, bool)
+        or not str(revision_id).strip()
+    ):
+        raise ValueError(f"source identity for {dataset} has no revision_id")
+    if not isinstance(fingerprint, str) or not fingerprint.strip():
+        raise ValueError(f"source identity for {dataset} has no contract_fingerprint")
+    if not isinstance(receipt, Mapping) or receipt.get("replayable") is not True:
+        raise ValueError(f"source identity for {dataset} requires a replayable read receipt")
+    actual_receipt_id = receipt.get("receipt_id")
+    if (
+        not isinstance(actual_receipt_id, (str, int))
+        or isinstance(actual_receipt_id, bool)
+        or not str(actual_receipt_id).strip()
+    ):
+        raise ValueError(f"source identity for {dataset} read receipt has no receipt_id")
+    if str(receipt_id) != str(actual_receipt_id):
+        raise ValueError(f"source identity for {dataset} receipt_id does not match its read receipt")
+
+    dependencies = receipt.get("dependencies")
+    dependency = dependencies.get(dataset) if isinstance(dependencies, Mapping) else None
+    if not isinstance(dependency, Mapping):
+        raise ValueError(f"source receipt for {dataset} does not pin its own dataset revision")
+    if (
+        str(dependency.get("revision_id")) != str(revision_id)
+        or dependency.get("contract_fingerprint") != fingerprint
+    ):
+        raise ValueError(f"source receipt for {dataset} does not match its revision identity")
+
+    audits = identity.get("capability_audits")
+    if not isinstance(audits, (list, tuple)) or not audits:
+        raise ValueError(
+            f"source identity for {dataset} has no receipt-bound field-semantic capability audits"
+        )
+
+    normalized_audits: list[dict[str, Any]] = []
+    audited_fields: set[str] = set()
+    audit_ids: set[str] = set()
+    for audit in audits:
+        if not isinstance(audit, Mapping):
+            raise ValueError(f"source capability audit for {dataset} must be a mapping")
+        audit_id = audit.get("audit_id")
+        if not isinstance(audit_id, str) or not audit_id.strip():
+            raise ValueError(f"source capability audit for {dataset} requires audit_id")
+        if audit_id in audit_ids:
+            raise ValueError(f"source capability audit IDs are duplicated for {dataset}")
+        audit_ids.add(audit_id)
+
+        if audit.get("dataset") != dataset:
+            raise ValueError(f"source capability audit {audit_id} dataset does not match {dataset}")
+        if audit.get("status") != "PASS":
+            raise ValueError(f"source capability audit {audit_id} is not PASS")
+        if audit.get("scope") != "field_semantics":
+            raise ValueError(f"source capability audit {audit_id} must use field_semantics scope")
+        method = audit.get("method")
+        if not isinstance(method, str) or not method.strip():
+            raise ValueError(f"source capability audit {audit_id} requires method")
+        evidence_class = audit.get("evidence_class")
+        if evidence_class not in {"strict_pit", "immutable_event"}:
+            raise ValueError(f"source capability audit {audit_id} has an unsupported evidence_class")
+        if (
+            str(audit.get("receipt_id")) != str(actual_receipt_id)
+            or str(audit.get("revision_id")) != str(revision_id)
+            or audit.get("contract_fingerprint") != fingerprint
+        ):
+            raise ValueError(
+                f"source capability audit {audit_id} is not bound to the exact read receipt and revision"
+            )
+
+        audited_at = _aware_timestamp(audit.get("audited_at"), "capability_audit.audited_at")
+        fields = audit.get("audited_fields")
+        if not isinstance(fields, (list, tuple)) or not fields:
+            raise ValueError(f"source capability audit {audit_id} requires audited_fields")
+        if any(not isinstance(field, str) or not field.strip() for field in fields):
+            raise ValueError(f"source capability audit {audit_id} has invalid audited_fields")
+        if len(set(fields)) != len(fields):
+            raise ValueError(f"source capability audit {audit_id} has duplicate audited_fields")
+
+        for field_name in fields:
+            spec = _FIELD_SPECS.get(field_name)
+            if spec is None:
+                raise ValueError(
+                    f"source capability audit {audit_id} references unsupported field {field_name}"
+                )
+            if spec["evidence_class"] != evidence_class:
+                raise ValueError(
+                    f"source capability audit {audit_id} evidence_class does not match {field_name}"
+                )
+            permitted_datasets = spec["datasets"]
+            if spec["taxonomy"]:
+                permitted_datasets = set(spec["datasets"])
+            if dataset not in permitted_datasets:
+                raise ValueError(
+                    f"source capability audit {audit_id} cannot certify {field_name} from {dataset}"
+                )
+            audited_fields.add(field_name)
+
+        normalized_audits.append({
+            "audit_id": audit_id,
+            "dataset": dataset,
+            "evidence_class": evidence_class,
+            "status": "PASS",
+            "scope": "field_semantics",
+            "method": method.strip(),
+            "audited_fields": sorted(fields),
+            "audited_at": audited_at.isoformat(),
+            "receipt_id": str(actual_receipt_id),
+            "revision_id": str(revision_id),
+            "contract_fingerprint": fingerprint,
+        })
+
+    return {
+        "revision_id": revision_id,
+        "contract_fingerprint": fingerprint,
+        "receipt_id": str(actual_receipt_id),
+        "receipt": dict(receipt),
+        "capability_audits": normalized_audits,
+        "capability_fields": audited_fields,
+    }
+
+
+def build_security_metadata_source_identity(
+    dataset: str,
+    *,
+    receipt: Mapping[str, Any],
+    revision_identity: Mapping[str, Any],
+    capability_audits: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Build a metadata source identity from one replayable read receipt.
+
+    Capability audits must explicitly bind the audited dataset, fields,
+    evidence class, audit method/time, receipt ID, revision and contract
+    fingerprint. This function validates structural binding; it does not
+    authenticate an external auditor or prove that a provider really has PIT
+    history. That remains an upstream source-qualification responsibility.
+    """
+    if not isinstance(revision_identity, Mapping):
+        raise ValueError("revision_identity must be a mapping")
+    candidate = {
+        "revision_id": revision_identity.get("revision_id"),
+        "contract_fingerprint": revision_identity.get("contract_fingerprint"),
+        "receipt_id": receipt.get("receipt_id") if isinstance(receipt, Mapping) else None,
+        "receipt": receipt,
+        "capability_audits": list(capability_audits) if isinstance(capability_audits, Sequence) else capability_audits,
+    }
+    normalized = _normalize_source_identity(dataset, candidate)
+    return {
+        key: value for key, value in normalized.items()
+        if key != "capability_fields"
+    }
+
+
 def _validate_source_identities(
     source_identities: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, dict[str, Any]]:
@@ -148,34 +315,8 @@ def _validate_source_identities(
         raise ValueError("source_identities must be a non-empty receipt-derived mapping")
     normalized: dict[str, dict[str, Any]] = {}
     for dataset, identity in source_identities.items():
-        if not isinstance(dataset, str) or not dataset.strip():
-            raise ValueError("source identity dataset names must be non-empty")
-        if not isinstance(identity, Mapping):
-            raise ValueError(f"source identity for {dataset} must be a mapping")
-        revision_id = identity.get("revision_id")
-        fingerprint = identity.get("contract_fingerprint")
-        receipt_id = identity.get("receipt_id")
-        evidence_classes = identity.get("validated_evidence_classes")
-        if (
-            not isinstance(revision_id, (str, int))
-            or isinstance(revision_id, bool)
-            or not str(revision_id).strip()
-        ):
-            raise ValueError(f"source identity for {dataset} has no revision_id")
-        if not isinstance(fingerprint, str) or not fingerprint.strip():
-            raise ValueError(f"source identity for {dataset} has no contract_fingerprint")
-        if not isinstance(receipt_id, str) or not receipt_id.strip():
-            raise ValueError(f"source identity for {dataset} has no receipt_id")
-        if not isinstance(evidence_classes, (list, tuple, set)) or not evidence_classes:
-            raise ValueError(f"source identity for {dataset} has no audited evidence capabilities")
-        normalized[dataset] = {
-            "revision_id": revision_id,
-            "contract_fingerprint": fingerprint,
-            "receipt_id": receipt_id,
-            "validated_evidence_classes": set(evidence_classes),
-        }
+        normalized[dataset] = _normalize_source_identity(dataset, identity)
     return normalized
-
 
 def validate_security_metadata(
     observations: pl.DataFrame,
@@ -299,9 +440,10 @@ def validate_security_metadata(
         identity = identities.get(dataset)
         if identity is None:
             raise ValueError(f"source receipt identity is missing for dataset {dataset}")
-        if spec["evidence_class"] not in identity["validated_evidence_classes"]:
+        if field not in identity["capability_fields"]:
             raise ValueError(
-                f"source identity for {dataset} does not certify {spec['evidence_class']}"
+                f"source identity for {dataset} does not certify {spec['evidence_class']} "
+                f"for field {field}"
             )
         if (
             str(row["source_revision_id"]) != str(identity["revision_id"])
