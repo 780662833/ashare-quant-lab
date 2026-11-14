@@ -20,6 +20,7 @@ import polars as pl
 POLICY_VERSION = "validation-ranking-policy-v1"
 _DIAGNOSTIC_COLUMNS = {
     "signal_date",
+    "sample_count",
     "spearman_rank_ic",
     "top_n_excess_forward_return",
     "top_minus_bottom_forward_return",
@@ -61,6 +62,8 @@ class ValidationRankingAcceptancePolicy:
     policy_id: str
     minimum_fold_count: int
     minimum_signal_date_count: int
+    minimum_rank_ic_observation_count: int
+    minimum_cross_section_size: int
     minimum_label_coverage_rate: float
     minimum_mean_spearman_rank_ic: float
     minimum_positive_spearman_rank_ic_ratio: float
@@ -78,6 +81,8 @@ class ValidationRankingAcceptancePolicy:
         for name, value in (
             ("minimum_fold_count", self.minimum_fold_count),
             ("minimum_signal_date_count", self.minimum_signal_date_count),
+            ("minimum_rank_ic_observation_count", self.minimum_rank_ic_observation_count),
+            ("minimum_cross_section_size", self.minimum_cross_section_size),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 2:
                 raise ValueError(f"{name} must be an integer >= 2")
@@ -148,6 +153,7 @@ def summarize_validation_stability(
 
     all_dates: set[str] = set()
     all_weekly_ic: list[float] = []
+    cross_section_sizes: list[int] = []
     all_weekly_top_excess: list[float] = []
     all_weekly_top_bottom: list[float] = []
     fold_ic_means: list[float] = []
@@ -226,7 +232,13 @@ def summarize_validation_stability(
             all_dates.add(signal_date)
             total_diagnostic_dates += 1
 
+            sample_count = row["sample_count"]
+            if isinstance(sample_count, bool) or not isinstance(sample_count, int) or sample_count < 1:
+                raise ValueError(f"{fold_id} sample_count must be a positive integer")
+            cross_section_sizes.append(sample_count)
             ic_value = row["spearman_rank_ic"]
+            if sample_count < 2 and ic_value is not None:
+                raise ValueError(f"{fold_id} Rank IC cannot be defined with fewer than two stocks")
             if ic_value is None:
                 missing_ic_dates += 1
             else:
@@ -317,6 +329,8 @@ def summarize_validation_stability(
         "evaluated_fold_count": evaluated_folds,
         "signal_date_count": total_signal_dates,
         "rank_ic_observation_count": len(all_weekly_ic),
+        "minimum_weekly_cross_section_size": min(cross_section_sizes) if cross_section_sizes else None,
+        "mean_weekly_cross_section_size": mean(cross_section_sizes) if cross_section_sizes else None,
         "missing_rank_ic_date_count": missing_ic_dates,
         "mean_spearman_rank_ic": mean_ic,
         "median_spearman_rank_ic": median(all_weekly_ic) if all_weekly_ic else None,
@@ -381,6 +395,16 @@ def summarize_validation_stability(
         policy.minimum_signal_date_count,
     )
     assess(
+        "minimum_rank_ic_observation_count",
+        len(all_weekly_ic),
+        policy.minimum_rank_ic_observation_count,
+    )
+    assess(
+        "minimum_cross_section_size",
+        min(cross_section_sizes) if cross_section_sizes else None,
+        policy.minimum_cross_section_size,
+    )
+    assess(
         "minimum_label_coverage_rate",
         pooled_coverage,
         policy.minimum_label_coverage_rate,
@@ -422,7 +446,13 @@ def summarize_validation_stability(
     if not failures:
         result["decision"] = "ACCEPTED"
     elif set(failures).intersection(
-        {"minimum_fold_count", "minimum_signal_date_count", "minimum_label_coverage_rate"}
+        {
+            "minimum_fold_count",
+            "minimum_signal_date_count",
+            "minimum_rank_ic_observation_count",
+            "minimum_cross_section_size",
+            "minimum_label_coverage_rate",
+        }
     ):
         result["decision"] = "INSUFFICIENT_EVIDENCE"
     else:
