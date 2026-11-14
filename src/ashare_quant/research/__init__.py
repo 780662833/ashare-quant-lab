@@ -14,7 +14,11 @@ from ashare_quant.research.walk_forward_model_runner import (
     WalkForwardCrossSectionalModelRun,
     run_walk_forward_cross_sectional_model,
 )
-from ashare_quant.research.cnequity_assembler import assemble_cnequity_research_bundle
+from ashare_quant.research.cnequity_assembler import (
+    assemble_cnequity_research_bundle,
+    assemble_cnequity_pit_fundamentals,
+    bind_pit_fundamental_provenance,
+)
 from ashare_quant.exceptions import ResearchBundleError
 from ashare_quant.research.bundle import ResearchDataBundle, build_research_data_bundle
 from ashare_quant.research.walk_forward_runner import (
@@ -75,6 +79,8 @@ __all__ = [
     "WalkForwardExperimentComparison",
     "build_research_data_bundle",
     "assemble_cnequity_research_bundle",
+    "assemble_cnequity_pit_fundamentals",
+    "bind_pit_fundamental_provenance",
     "build_research_qa_report",
     "build_period_regime_diagnostics",
     "CostStressScenario",
