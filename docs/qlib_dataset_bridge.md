@@ -35,22 +35,33 @@ using only train-plus-validation examples whose five-session labels have
 matured. Those examples form the final `train` segment; test rows are added
 only as feature-only inference rows.
 
-The Qlib bridge rechecks the admission fingerprints, exact row/key alignment,
+The Qlib bridge rechecks the admission fingerprints, label-key coverage,
 finite training values, maturity cutoff and non-overlapping segment bounds.
+Admission fingerprints cover the complete input feature and label frames.
+Some feature rows may legitimately have no future label (for example, an
+unavailable future price endpoint); every admitted label must match a feature,
+but only complete feature/label pairs are included in the Qlib learn segment.
+These unmatched feature rows are not silently promoted to training examples.
+
 Inference feature rows are checked for unique keys, numeric completeness and
-their assigned non-train segment. The project walk-forward planner remains
-responsible for label-horizon purge and embargo; Qlib provides the dataset
-segment interface and selected-data access, not a replacement split policy.
+their assigned non-train segment. The Qlib index uses a pandas datetime level
+and an exchange-qualified instrument level. The project walk-forward planner
+remains responsible for label-horizon purge and embargo; Qlib provides the
+dataset segment interface and selected-data access, not a replacement split
+policy.
 
 ## Dependency and validation boundary
 
 Qlib and pandas remain lazy optional research dependencies. The project stays
-on its Python 3.13 main development environment; real Qlib compatibility is
-to be verified later in a separate Python 3.12 environment. This integration
-does not change dependency pins or the CNEquity version lock.
+on its Python 3.13 main development environment; a separate GitHub Actions job
+installs Qlib 0.9.7 on Python 3.12 and exercises the real
+`DataHandlerLP.from_df()`, `DatasetH.prepare()` and datetime MultiIndex
+contracts with synthetic rows. The same smoke test constructs a real
+LightGBM Dataset and replaces only `lightgbm.train` with a prediction stub,
+so no model optimization or empirical training occurs. This does not change
+project dependency pins or the CNEquity version lock.
 
-CI uses synthetic Polars frames, stub Qlib/pandas objects and a fake
-LightGBM module. It exercises the data bridge, fit/predict contract and
-walk-forward wiring without installing or initializing a real Qlib instance,
-reading the local data lake, calling CNEquity, training on real data or
-starting a backtest. No empirical model result is implied.
+The base CI continues to use synthetic Polars frames and stub Qlib/pandas
+objects, and remains usable without the optional research dependencies. The
+separate real-API job does not read the local data lake, call CNEquity, train
+a model, or start a backtest. No empirical model result is implied.
