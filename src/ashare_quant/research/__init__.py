@@ -1,6 +1,6 @@
 """Canonical research data and benchmark orchestration."""
 
-from ashare_quant.research.benchmark import MomentumBenchmarkRun, run_momentum_benchmark
+from ashare_quant.research.benchmark import MomentumBenchmarkRun, run_momentum_benchmark\nfrom ashare_quant.research.features import CrossSectionalFeatureConfig, build_cross_sectional_features\nfrom ashare_quant.research.labels import build_forward_return_labels
 from ashare_quant.research.cnequity_assembler import assemble_cnequity_research_bundle
 from ashare_quant.exceptions import ResearchBundleError
 from ashare_quant.research.bundle import ResearchDataBundle, build_research_data_bundle
@@ -38,7 +38,7 @@ from ashare_quant.research.walk_forward import (
 )
 
 __all__ = [
-    "MomentumBenchmarkRun",
+    "MomentumBenchmarkRun",\n    "CrossSectionalFeatureConfig",\n    "build_cross_sectional_features",\n    "build_forward_return_labels",
     "ResearchBundleError",
     "ResearchDataBundle",
     "WalkForwardConfig",
