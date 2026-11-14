@@ -323,6 +323,6 @@ As of 2026-11-14:
 | Cross-sectional feature/label + strict admission | Implemented; empirical use remains gated by local data acceptance |
 | Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Merged in PR #67; 286 synthetic CI tests passed |
 | Validation-only ranking diagnostics | Merged in PR #70; per-week Rank IC, Pearson IC, Top-N excess and Top-Bottom spread, maturity checked before test start; no test labels or automated tuning |
-| Cross-fold validation stability policy | Implemented in Phase 9.11; descriptive weekly IC distribution/ICIR, positive-week and positive-fold ratios, coverage and Top-N excess stability; acceptance thresholds must be explicit, versioned and fingerprinted |
+| Cross-fold validation stability policy | Merged in PR #71; descriptive weekly IC distribution/ICIR, positive-week and positive-fold ratios, coverage and Top-N excess stability; minimum fold/date/valid-IC/cross-section/coverage/ranking thresholds are explicit, versioned and fingerprinted. Base CI 305 passed/2 skipped; real Qlib integration 2 passed |
 | Real Qlib 0.9.7 / Python 3.12 compatibility | Verified in PR #68 and #69: Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3, LightGBM 4.7.0; DatasetH API and full multi-fold runner both passed synthetic integration tests; optimizer stubbed, no model fit |
 | Live trading | Out of scope |
