@@ -111,6 +111,7 @@ def test_model_predicts_only_complete_rows_and_returns_model_scores(monkeypatch)
         booster=FakeBooster(),
         feature_columns=("return_5", "pit_roe"),
         config=LightGBMConfig(min_training_rows=2),
+        acceptance_report_id="acceptance-fixture",
         training_cutoff="2024-01-15",
         training_rows=2,
         source_fingerprint="a" * 64,
@@ -146,6 +147,7 @@ def test_model_save_load_checks_sidecar_checksum(tmp_path, monkeypatch):
     path = model.save(tmp_path / "model.txt")
     loaded = LightGBMRegressionModel.load(path)
     assert loaded.feature_columns == model.feature_columns
+    assert loaded.acceptance_report_id == model.acceptance_report_id
     assert loaded.training_cutoff == model.training_cutoff
     path.write_text("tampered", encoding="utf-8")
     with pytest.raises(ValueError, match="checksum"):
