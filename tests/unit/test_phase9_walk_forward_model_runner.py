@@ -96,6 +96,7 @@ def make_bundle_inputs(count=70):
         for symbol, _, _ in symbols
     ]
     window = {"start": sessions[0], "end": sessions[-1]}
+    pit_revision = {"revision_id": "synthetic-pit-v1", "contract_fingerprint": "synthetic-pit-contract"}
     report = {
         "report_id": "synthetic-phase9-acceptance-v1",
         "created_at": "2026-11-14T00:00:00Z",
@@ -119,7 +120,8 @@ def make_bundle_inputs(count=70):
         "receipts": {
             "historical_universe": {"receipt_id": "synthetic-universe", "replayable": True},
             "hfq": {"receipt_id": "synthetic-hfq", "replayable": True},
-            "pit": {"receipt_id": "synthetic-pit", "replayable": True},
+            "pit": {"receipt_id": "synthetic-pit", "replayable": True,
+                   "dependencies": {"financial_statement_items": pit_revision}},
         },
     }
     dependencies = {
@@ -190,7 +192,6 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     inputs = make_bundle_inputs()
     report = inputs["acceptance_report"]
     bundle = build_research_data_bundle(**inputs)
-    pit_revision = {"revision_id": "synthetic-pit-v1", "contract_fingerprint": "synthetic-pit-contract"}
     pit_dependencies = {
         **bundle.provenance["receipt_provenance"]["dependency_identities"],
         "financial_statement_items": pit_revision,
