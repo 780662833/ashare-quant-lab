@@ -71,8 +71,8 @@ def build_qlib_panel_rows(
         pl.col("forward_return").cast(pl.Float64),
     )
     joined = feature_frame.join(label_frame, on=_KEYS, how="inner", validate="1:1")
-    if joined.height != admission.feature_rows or joined.height != admission.label_rows:
-        raise ValueError("Qlib training panel must contain every admitted feature and label row")
+    if joined.height != admission.label_rows:
+        raise ValueError("Qlib training panel must contain every admitted label row")
     if joined.is_empty():
         raise ValueError("Qlib training panel is empty")
     if joined.filter(
@@ -149,18 +149,15 @@ def create_qlib_dataset(
         + [("label", "forward_return")]
     )
     columns = pd.MultiIndex.from_tuples(column_keys)
+    panel = features.select(*_KEYS, *feature_names).join(
+        labels.select(*_KEYS, "forward_return"),
+        on=_KEYS,
+        how="inner",
+        validate="1:1",
+    ).sort(_KEYS)
     values = [
-        [float(row[name]) for name in feature_names] + [target]
-        for row, target in zip(
-            features.sort(_KEYS).join(
-                labels.select(*_KEYS, "forward_return"),
-                on=_KEYS,
-                how="inner",
-                validate="1:1",
-            ).to_dicts(),
-            targets,
-            strict=True,
-        )
+        [float(row[name]) for name in feature_names] + [float(row["forward_return"])]
+        for row in panel.to_dicts()
     ]
     frame = pd.DataFrame(values, index=multi_index, columns=columns)
     handler = DataHandlerLP.from_df(frame)
