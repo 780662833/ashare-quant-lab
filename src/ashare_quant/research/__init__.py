@@ -76,7 +76,6 @@ __all__ = [
     "evaluate_validation_ranking",
     "ValidationRankingAcceptancePolicy",
     "summarize_validation_stability",
-    "evaluate_validation_ranking",
     "TrainingDatasetAdmission",
     "admit_training_dataset",
     "LightGBMConfig",
