@@ -43,7 +43,7 @@ def market(count=35):
 
 
 def test_feature_builder_uses_weekly_pit_members_and_strict_fundamentals():
-    adj, raw, members, fundamentals, sessions = market()
+    adj, raw, members, fundamentals, sessions = market(45)
     features = build_cross_sectional_features(
         adjusted_bars=adj, execution_bars=raw, universe_membership=members,
         fundamentals=fundamentals, trading_dates=sessions,
