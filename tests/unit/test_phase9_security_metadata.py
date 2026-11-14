@@ -454,6 +454,65 @@ def test_capability_audit_must_bind_exact_receipt_revision_and_contract():
         )
 
 
+def test_read_receipt_must_pin_exact_dataset_revision_and_contract():
+    receipt = {
+        "receipt_id": "industry-receipt",
+        "replayable": True,
+        "dependencies": {
+            "industry_members": {
+                "revision_id": "industry-r2",
+                "contract_fingerprint": "industry-contract",
+            },
+        },
+    }
+    audit = {
+        "audit_id": "audit-revision-mismatch",
+        "dataset": "industry_members",
+        "evidence_class": "strict_pit",
+        "status": "PASS",
+        "scope": "field_semantics",
+        "method": "source-contract-review",
+        "audited_fields": ["industry_l1_code"],
+        "audited_at": "2026-01-01T00:00:00+08:00",
+        "receipt_id": "industry-receipt",
+        "revision_id": "industry-r1",
+        "contract_fingerprint": "industry-contract",
+    }
+    with pytest.raises(ValueError, match="does not match its revision identity"):
+        build_security_metadata_source_identity(
+            "industry_members",
+            receipt=receipt,
+            revision_identity={
+                "revision_id": "industry-r1",
+                "contract_fingerprint": "industry-contract",
+            },
+            capability_audits=[audit],
+        )
+
+
+def test_metadata_source_identity_rejects_non_replayable_receipt():
+    receipt = {
+        "receipt_id": "industry-receipt",
+        "replayable": False,
+        "dependencies": {
+            "industry_members": {
+                "revision_id": "industry-r1",
+                "contract_fingerprint": "industry-contract",
+            },
+        },
+    }
+    with pytest.raises(ValueError, match="requires a replayable read receipt"):
+        build_security_metadata_source_identity(
+            "industry_members",
+            receipt=receipt,
+            revision_identity={
+                "revision_id": "industry-r1",
+                "contract_fingerprint": "industry-contract",
+            },
+            capability_audits=[],
+        )
+
+
 def test_capability_audit_is_field_scoped_and_evidence_class_specific():
     identity = IDENTITIES["industry_members"]
     audit = dict(identity["capability_audits"][0])
