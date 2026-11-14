@@ -138,6 +138,24 @@ cross-check between delisting-event symbols and the instrument master. It
 does not load daily-bar history, write to the lake, backfill, train or run a
 backtest. It intentionally permits a non-replayable receipt for diagnosis,
 but marks that identity as unpinned. Listing-date PIT admission remains
+
+If the instrument master is absent, the inspection reports `MISSING` rather
+than conflating that condition with an API failure. The next safe step is to
+print the source/scope plan only:
+
+```powershell
+python scripts/plan_cnequity_instruments_backfill.py
+```
+
+This wrapper invokes CNEquity's `backfill instruments --plan` command through
+its Python CLI. It makes no network request, creates no ingestion run and
+writes no lake data. Review the reported data root and source policy before
+deciding whether to authorize the actual backfill. Do not run `cne init` as a
+shortcut: it initializes the configured lake and can execute the config's
+full init phases. Do not use `cne backfill delisting_events`: that dataset is
+a derived supplementary output; its one-off rebuild and coverage workflow is
+owned by CNEquity's `scripts/delisted_ops.py`.
+
 `NOT_ADMITTED`; the inspection is not a historical-universe acceptance.
 
 Run the four-gate acceptance separately for the research window:
