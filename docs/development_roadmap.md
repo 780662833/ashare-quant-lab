@@ -339,3 +339,8 @@ The model's keyed predictions retain only eligible instruments, and the shared
 Top-20 selector ranks that available set without imputation. Synthetic tests
 cover all four invalid-value cases in both inference adapters. No model fitting,
 real market backtest, local data-lake access or CNEquity operation is performed.
+PR #78 is merged. Final-head CI: 339 unit tests passed, 2 skipped;
+the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 synthetic
+compatibility workflow passed 2 tests. Merge commit:
+`e68c0d27a4d488dcba3f57df39e39dc539aa326e`. No optimizer fit, real-data
+training or empirical market backtest was performed.
