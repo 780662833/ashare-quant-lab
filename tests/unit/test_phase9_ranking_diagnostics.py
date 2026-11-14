@@ -133,3 +133,22 @@ def test_validation_ranking_returns_empty_diagnostics_when_no_labels_match():
     assert report["status"] == "no_matched_validation_labels"
     assert report["matched_labeled_rows"] == 0
     assert report["mean_spearman_rank_ic"] is None
+
+def test_rank_ic_count_includes_negative_ic_observations():
+    predictions, labels = _frames()
+    labels = labels.with_columns(
+        pl.Series("forward_return", [-0.02, 0.01, 0.04])
+    )
+    _, report = evaluate_validation_ranking(
+        predictions,
+        labels,
+        top_n=2,
+        validation_start="2024-01-05",
+        validation_end="2024-01-05",
+        labels_mature_before="2024-01-19",
+    )
+
+    assert report["rank_ic_signal_date_count"] == 1
+    assert report["positive_rank_ic_signal_date_count"] == 0
+    assert report["positive_spearman_rank_ic_ratio"] == pytest.approx(0.0)
+    assert report["median_spearman_rank_ic"] == pytest.approx(-1.0)
