@@ -1,6 +1,6 @@
 # Development roadmap
 
-**Baseline:** 2026-11-13  
+**Baseline:** 2026-11-14  
 **Project:** A-share quantitative research MVP v1
 
 This roadmap tracks the research platform, not the volume of downloaded CNEquity
@@ -44,7 +44,7 @@ branch is not part of `main` until GitHub reports it merged.
 | 9.4 | Walk-forward model runner and matched momentum comparison | Merged in PR #61 | Per fold: train-only admission/fit, validation prediction, label-maturity re-admission/refit on train+validation, test-only predictions. Model and momentum reset to the same baseline NAV and use identical costs/execution settings. CI uses fake LightGBM and synthetic bundles; no real training or empirical run. |
 | 9.5 | Model experiment persistence and verification | Merged in PR #62 | Persist per-fold Booster, feature/label predictions, targets, benchmark and model ledgers, admissions, provenance and config; verify SHA-256 inventory and model metadata. No real model artifacts generated. |
 | 9.6 | Optional Qlib DatasetH bridge | Merged in PR #64–#66 | Lazy Qlib bridge for admission-checked Polars features/labels, `(datetime, instrument)` index, feature/label groups and chronological segments. Synthetic-only conversion tests. |
-| 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Implemented in PR under review | Walk-forward runner now builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. Synthetic adapter/runner tests only; real Qlib 3.12 verification, real training and backtest remain blocked. |
+| 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Merged in PR #67 | Walk-forward runner builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. PR #67 main CI passed 286 synthetic tests; real Qlib API compatibility is tracked separately. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -150,8 +150,9 @@ windows. No data assembly, scheduler or model-training unlock is added. See
   receives those approved boundaries as `DatasetH` segments; it does not
   weaken or replace admission.
 - Python 3.13 remains the main development environment. Qlib/pandas remain
-  optional and lazy; real Qlib API compatibility must be checked in a separate
-  Python 3.12 environment without changing the project's base interpreter.
+  optional and lazy; a dedicated Python 3.12 Qlib 0.9.7 smoke workflow checks
+  real DatasetH/LightGBM data-interface compatibility without changing the
+  project's base interpreter.
 
 ### Phase 9.6 — optional Qlib DatasetH bridge (merged in PR #64; CI test correction in PR #65)
 
@@ -162,6 +163,23 @@ non-overlapping segments. Qlib/pandas imports are lazy; base CI stubs the
 optional API. PIT/source receipts, admission, walk-forward boundaries and
 A-share execution remain project-owned. Synthetic CI validates conversion
 only; no real Qlib training or empirical strategy result is implied.
+
+### Phase 9.7 — integrated Qlib DatasetH → LightGBM pipeline (merged in PR #67)
+
+The diagnostic and final walk-forward fits now read Qlib's learn view; the
+validation and test paths read feature-only inference views. Admission,
+mature-label checks, purge/embargo, Top-20 target generation and A-share
+execution remain project-owned. The merged PR passed 286 synthetic tests;
+the PR CI did not install real Qlib.
+
+### Phase 9.8 — real Qlib 0.9.7 API compatibility (in PR under review)
+
+A separate Python 3.12 workflow installs the real Qlib 0.9.7 and LightGBM
+packages and runs a synthetic-only smoke test against `DataHandlerLP.from_df`,
+`DatasetH.prepare`, learn/infer views, pandas datetime MultiIndex and the
+LightGBM Dataset constructor. The LightGBM optimizer call is stubbed; no
+model is fitted. This phase does not access the local data lake, call CNEquity,
+run a real-data backtest or alter base dependencies/version locks.
 
 ## CNEquity data acquisition policy
 
