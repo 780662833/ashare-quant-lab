@@ -363,7 +363,7 @@ compatibility workflow passed 2 tests. Merge commit:
 training or empirical market backtest was performed.
 
 
-### Phase 9.20 — preserve missing PIT fundamentals without row-level bias
+### Phase 9.20 — preserve missing PIT fundamentals with native missing values
 
 The earlier all-features-complete rule removed an otherwise eligible security
 when a strict ROE/net-profit fact was not yet available at that historical
