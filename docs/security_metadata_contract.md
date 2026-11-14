@@ -96,6 +96,12 @@ on the supplied signal date.
 The source identity registry is built by
 build_security_metadata_source_identity(...) from a replayable read receipt,
 the exact revision identity, and one or more field-semantic capability audits.
+For listing-date adapters, the contract recognizes `instruments`,
+`sse_listing_events`, `szse_listing_events` and `bse_listing_events` as
+possible source-dataset namespaces. These names only enable structural
+validation; they do not register or qualify a provider. See
+[listing-date source qualification](listing_date_source_qualification.md)
+for the public-source review, evidence envelope and acceptance gates.
 A capability audit is not a free-form evidence-class list. Each PASS record
 must carry a unique audit_id, exact dataset, field scope, evidence_class,
 method, timezone-aware audited_at, receipt_id, revision_id and contract
