@@ -138,6 +138,7 @@ def test_model_save_load_checks_sidecar_checksum(tmp_path, monkeypatch):
         booster=FakeBooster(),
         feature_columns=("return_5", "pit_roe"),
         config=LightGBMConfig(min_training_rows=2),
+        acceptance_report_id="acceptance-fixture",
         training_cutoff="2024-01-15",
         training_rows=2,
         source_fingerprint="a" * 64,
