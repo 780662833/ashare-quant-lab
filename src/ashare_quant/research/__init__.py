@@ -3,8 +3,8 @@
 from ashare_quant.research.benchmark import MomentumBenchmarkRun, run_momentum_benchmark
 from ashare_quant.research.features import CrossSectionalFeatureConfig, build_cross_sectional_features
 from ashare_quant.research.labels import build_forward_return_labels
-from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
 from ashare_quant.research.missingness_diagnostics import evaluate_validation_feature_missingness
+from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
 from ashare_quant.research.validation_stability import (
     ValidationRankingAcceptancePolicy,
     summarize_validation_stability,
