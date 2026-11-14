@@ -25,7 +25,7 @@ _REQUIRED_GATES = {
 }
 _REQUIRED_FEATURE_KEYS = {"signal_date", "instrument"}
 _REQUIRED_LABEL_COLUMNS = {
-    "signal_date", "instrument", "label_end_date", "forward_return"
+    "signal_date", "instrument", "label_entry_date", "label_end_date", "forward_return"
 }
 
 
