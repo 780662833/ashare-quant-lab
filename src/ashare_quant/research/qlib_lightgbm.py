@@ -61,8 +61,14 @@ def _index_keys(frame: Any) -> list[tuple[str, str]]:
         raise ValueError("Qlib data contains duplicate datetime/instrument keys")
     if not hasattr(index, "get_level_values"):
         raise ValueError("Qlib index does not expose datetime/instrument levels")
-    dates = index.get_level_values(0).tolist()
-    instruments = index.get_level_values(1).tolist()
+    date_values = index.get_level_values(0)
+    instrument_values = index.get_level_values(1)
+    dates = date_values.tolist() if hasattr(date_values, "tolist") else list(date_values)
+    instruments = (
+        instrument_values.tolist()
+        if hasattr(instrument_values, "tolist")
+        else list(instrument_values)
+    )
     keys = [(_iso_index_value(day), str(symbol)) for day, symbol in zip(dates, instruments, strict=True)]
     if any(not symbol for _, symbol in keys):
         raise ValueError("Qlib index contains an empty instrument key")
