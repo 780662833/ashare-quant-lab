@@ -305,6 +305,10 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         assert fold.final_admission.admitted is True
         assert fold.final_admission.training_cutoff == fold.fold.test_start
         assert fold.test_predictions.height > 0
+        assert fold.validation_report["status"] == "evaluated"
+        assert fold.validation_report["labels_mature_before"] == fold.fold.test_start
+        assert fold.validation_diagnostics.height > 0
+        assert fold.validation_report["mean_spearman_rank_ic"] is not None
         assert fold.targets.height > 0
         assert fold.daily.height == fold.fold.test_sessions
         assert fold.daily["date"].min() == fold.fold.test_start
@@ -320,6 +324,8 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert result.oos_daily.height == sum(item.fold.test_sessions for item in result.folds)
     assert result.benchmark_oos_daily.height == result.oos_daily.height
     assert "mean_fold_excess_return" in result.aggregate_report
+    assert result.aggregate_report["validation_ranking"]["folds_with_mature_validation_labels"] == len(result.folds)
+    assert result.aggregate_report["validation_ranking"]["mean_spearman_rank_ic"] is not None
 
     saved = persist_walk_forward_model_run(
         result,
@@ -336,6 +342,8 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert verified["verified"] is True
     assert verified["fold_count"] == len(result.folds)
     manifest = verified["manifest"]
+    assert any(item["path"].endswith("validation_diagnostics.parquet") for item in manifest["artifacts"])
+    assert (saved / "folds" / result.folds[0].fold.fold_id / "validation_report.json").is_file() is False
     artifact = saved / manifest["artifacts"][0]["path"]
     artifact.write_bytes(artifact.read_bytes() + b"tamper")
     with pytest.raises(ValueError, match="checksum mismatch"):
@@ -512,6 +520,10 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
         assert 0 < fold.final_training_rows <= fold.final_admission.label_rows
         assert fold.final_training_rows == fold.model.training_rows
         assert fold.validation_predictions.height > 0
+        assert fold.validation_report["status"] == "evaluated"
+        assert fold.validation_report["labels_mature_before"] == fold.fold.test_start
+        assert fold.validation_diagnostics.height > 0
+        assert fold.validation_report["mean_spearman_rank_ic"] is not None
         assert fold.test_predictions.height > 0
         assert fold.targets.height > 0
         assert fold.targets.group_by("signal_date").agg(
@@ -528,3 +540,4 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
     assert result.benchmark_oos_daily.height == result.oos_daily.height
     assert result.aggregate_report["training_dataset_unlocked"] is False
     assert result.aggregate_report["model_training_performed"] is True
+    assert result.aggregate_report["validation_ranking"]["folds_with_mature_validation_labels"] == len(result.folds)
