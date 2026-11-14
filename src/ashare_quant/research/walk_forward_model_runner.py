@@ -31,6 +31,7 @@ from ashare_quant.research.qlib_lightgbm import (
     predict_qlib_lightgbm_regressor,
 )
 from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
+from ashare_quant.research.missingness_diagnostics import evaluate_validation_feature_missingness
 from ashare_quant.research.validation_stability import (
     ValidationRankingAcceptancePolicy,
     summarize_validation_stability,
@@ -57,6 +58,8 @@ class WalkForwardModelFoldRun:
     validation_predictions: pl.DataFrame
     validation_diagnostics: pl.DataFrame
     validation_report: dict[str, Any]
+    validation_feature_missingness: pl.DataFrame
+    validation_feature_missingness_report: dict[str, Any]
     test_predictions: pl.DataFrame
     targets: pl.DataFrame
     daily: pl.DataFrame
@@ -216,6 +219,23 @@ def _aggregate(
                 "Validation predictions are scored against labels matured strictly "
                 "before each fold test cutoff. These diagnostics are not computed "
                 "from test labels and are not used for model tuning."
+            ),
+        },
+        "validation_feature_missingness": {
+            "status": "descriptive_only",
+            "fold_count": len(folds),
+            "by_fold": [
+                {
+                    "fold_id": item.fold.fold_id,
+                    "validation_period": item.validation_feature_missingness_report["validation_period"],
+                    "labels_mature_before": item.validation_feature_missingness_report["labels_mature_before"],
+                    "by_feature": item.validation_feature_missingness_report["by_feature"],
+                }
+                for item in folds
+            ],
+            "interpretation": (
+                "Validation-only missingness and prediction/return group comparisons; "
+                "not used to select models or tune parameters."
             ),
         },
         "model_training_performed": True,
@@ -405,6 +425,17 @@ def run_walk_forward_cross_sectional_model(
             validation_end=fold.validation_end,
             labels_mature_before=fold.test_start,
         )
+        validation_feature_missingness, validation_feature_missingness_report = (
+            evaluate_validation_feature_missingness(
+                validation_features,
+                validation_predictions,
+                validation_labels,
+                top_n=top_n,
+                validation_start=fold.validation_start,
+                validation_end=fold.validation_end,
+                labels_mature_before=fold.test_start,
+            )
+        )
 
         # Final fit: include validation-period examples only after their labels
         # have matured strictly before the test start.
@@ -558,6 +589,7 @@ def run_walk_forward_cross_sectional_model(
                 "baseline_date": baseline_date,
                 "baseline_nav": baseline_nav,
                 "validation_ranking": validation_report,
+                "validation_feature_missingness": validation_feature_missingness_report,
                 "validation_acceptance_policy": (
                     validation_policy.to_dict() if validation_policy is not None else None
                 ),
@@ -605,6 +637,8 @@ def run_walk_forward_cross_sectional_model(
                 validation_predictions=validation_predictions,
                 validation_diagnostics=validation_diagnostics,
                 validation_report=validation_report,
+                validation_feature_missingness=validation_feature_missingness,
+                validation_feature_missingness_report=validation_feature_missingness_report,
                 test_predictions=test_predictions,
                 targets=targets,
                 daily=test_daily,
@@ -637,6 +671,12 @@ def run_walk_forward_cross_sectional_model(
             "validation_top_n_excess_forward_return": (
                 item.validation_report["mean_top_n_excess_forward_return"]
             ),
+            "validation_any_pit_missing_prediction_rate": item.validation_feature_missingness_report[
+                "by_feature"]["__any_pit_missing__"]["prediction_missing_rate"]
+            ],
+            "validation_any_pit_missing_top_n_rate": item.validation_feature_missingness_report[
+                "by_feature"]["__any_pit_missing__"]["top_n_missing_rate"]
+            ],
             "validation_top_minus_bottom_forward_return": (
                 item.validation_report["mean_top_minus_bottom_forward_return"]
             ),
