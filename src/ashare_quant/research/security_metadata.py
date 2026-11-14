@@ -128,6 +128,7 @@ def _validate_source_identities(
         revision_id = identity.get("revision_id")
         fingerprint = identity.get("contract_fingerprint")
         receipt_id = identity.get("receipt_id")
+        evidence_classes = identity.get("validated_evidence_classes")
         if (
             not isinstance(revision_id, (str, int))
             or isinstance(revision_id, bool)
@@ -138,10 +139,13 @@ def _validate_source_identities(
             raise ValueError(f"source identity for {dataset} has no contract_fingerprint")
         if not isinstance(receipt_id, str) or not receipt_id.strip():
             raise ValueError(f"source identity for {dataset} has no receipt_id")
+        if not isinstance(evidence_classes, (list, tuple, set)) or not evidence_classes:
+            raise ValueError(f"source identity for {dataset} has no audited evidence capabilities")
         normalized[dataset] = {
             "revision_id": revision_id,
             "contract_fingerprint": fingerprint,
             "receipt_id": receipt_id,
+            "validated_evidence_classes": set(evidence_classes),
         }
     return normalized
 
@@ -252,6 +256,10 @@ def validate_security_metadata(
         identity = identities.get(dataset)
         if identity is None:
             raise ValueError(f"source receipt identity is missing for dataset {dataset}")
+        if spec["evidence_class"] not in identity["validated_evidence_classes"]:
+            raise ValueError(
+                f"source identity for {dataset} does not certify {spec['evidence_class']}"
+            )
         if (
             str(row["source_revision_id"]) != str(identity["revision_id"])
             or row["source_contract_fingerprint"] != identity["contract_fingerprint"]
