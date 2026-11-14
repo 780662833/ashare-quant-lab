@@ -308,7 +308,7 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         pl.lit("999999.SZ").alias("instrument")
     )
     invalid_features = pl.concat([features, outside_member], how="vertical")
-    with pytest.raises(ValueError, match="features contain rows outside the point-in-time universe"):
+    with pytest.raises(ValueError, match="features contains rows outside the point-in-time universe"):
         run_walk_forward_cross_sectional_model(
             bundle,
             acceptance_report=report,
