@@ -221,7 +221,8 @@ def test_integrated_report_does_not_accept_fill_suite_for_blocked_baseline(monke
     (lambda x: x["experiment_ids"].__setitem__(1, "experiment-001"), "four unique IDs"),
     (lambda x: x["scenarios"][1].update(experiment_id="wrong-run"), "scenario experiment IDs"),
     (lambda x: x["scenarios"][2].update(cost_multiplier=9.0), "multipliers"),
-    (lambda x: x["integrity"].update(config_sha256=["bad"] * 4), "config hashes"),
+    (lambda x: x.update(scenario_multipliers=[1.0, 1.5, 2.0, 9.0]), "registered cost-stress multipliers"),
+    (lambda x: x["integrity"].update(config_sha256=["z" * 64] * 4), "config hashes"),
     (lambda x: x["integrity"].pop("data_provenance_sha256"), "data provenance hash"),
 ])
 def test_integrated_report_rejects_misaligned_cost_stress_artifacts(monkeypatch, mutation, message):
