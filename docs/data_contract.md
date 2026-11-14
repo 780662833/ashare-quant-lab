@@ -122,22 +122,37 @@ training.
 
 ### Run locally on Windows
 
-Use the project's current local lake path:
+The default data root for both scripts is the project-local
+\`data/cnequity\` directory. From the repository root, install the project
+dependencies and inspect the actual local instrument metadata first:
 
-```powershell
+\`\`\`powershell
 python -m pip install -e ".[dev]"
-python scripts/validate_cnequity_lake.py `
-  --data-root "F:\cnEquity" `
-  --start-date 2018-01-01 `
-  --end-date 2025-12-31
-```
+python scripts/inspect_cnequity_metadata.py
+\`\`\`
 
-The CNEquity user configuration is resolved by its local config resolver;
-avoid hard-coding an account-specific configuration path. Default PIT item
-codes are CNEquity-documented `roe` and `net_profit`. Reports are written to
-`reports/data_acceptance/` as JSON and Markdown. Exit code 0 means all gates
-passed; exit code 2 means one or more gates failed. A successful report still
-does not create a training dataset.
+The metadata inspection reads \`instruments\` and \`delisting_events\` through
+CNEquity's receipt API. It records actual fields, null coverage, date ranges,
+symbol anomalies, source/version distributions, receipt revisions and a
+cross-check between delisting-event symbols and the instrument master. It
+does not load daily-bar history, write to the lake, backfill, train or run a
+backtest. It intentionally permits a non-replayable receipt for diagnosis,
+but marks that identity as unpinned. Listing-date PIT admission remains
+\`NOT_ADMITTED\`; the inspection is not a historical-universe acceptance.
+
+Run the four-gate acceptance separately for the research window:
+
+\`\`\`powershell
+python scripts/validate_cnequity_lake.py --start-date 2018-01-01 --end-date 2025-12-31
+\`\`\`
+
+Pass \`--data-root\` explicitly only when the lake is outside the project
+default. The CNEquity user configuration is resolved by its local config
+resolver; avoid hard-coding an account-specific configuration path. Default
+PIT item codes are CNEquity-documented \`roe\` and \`net_profit\`. Acceptance
+reports are written to \`reports/data_acceptance/\` as JSON and Markdown.
+Exit code 0 means all gates passed; exit code 2 means one or more gates failed.
+A successful report still does not create or unlock a training dataset.
 
 ## CNEquity v0.21.0 status and price-limit semantics
 
