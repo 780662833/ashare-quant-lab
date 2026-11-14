@@ -49,6 +49,7 @@ directly. See the system-level architecture before extending a component.
 - [Canonical research data bundle](docs/research_data_bundle.md) — data assembly,
   acceptance report identity, provenance, and benchmark orchestration.
 - [Data contract](docs/data_contract.md) — CNEquity fields, PIT, four-gate admission.
+- [PIT missingness diagnostics](docs/feature_missingness_diagnostics.md) — validation-only coverage, Top-N mix and missing-vs-observed comparisons.
 - [Research protocol](docs/research_protocol.md) — experiment fairness and anti-bias rules.
 - [Backtest rules](docs/backtest_rules.md) — timing, fills, accounting, known gaps.
 - [Momentum benchmark](docs/momentum_benchmark.md) — weekly 126/21 signal definition.

@@ -265,7 +265,11 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
             "instrument": symbol,
             "item": item,
             "report_period": "2023-09-30",
-            "available_at": "2023-10-30T10:00:00+08:00",
+            "available_at": (
+                "2024-03-15T10:00:00+08:00"
+                if symbol == "600000.SH" and item == "roe"
+                else "2023-10-30T10:00:00+08:00"
+            ),
             "value": value,
             "pit_quality": "strict",
             "pit_is_exact": True,
@@ -346,6 +350,18 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         assert fold.validation_report["status"] == "evaluated"
         assert fold.validation_report["labels_mature_before"] == fold.fold.test_start
         assert fold.validation_diagnostics.height > 0
+        assert fold.validation_feature_missingness.height > 0
+        assert fold.validation_feature_missingness_report["status"] == "evaluated"
+        assert fold.validation_feature_missingness_report["labels_mature_before"] == fold.fold.test_start
+        assert fold.test_feature_coverage.height > 0
+        assert fold.test_feature_coverage_report["status"] == "evaluated"
+        assert fold.test_feature_coverage_report["period"] == {
+            "start": fold.fold.test_start, "end": fold.fold.test_end
+        }
+        assert "labels_mature_before" not in fold.test_feature_coverage_report
+        assert fold.validation_feature_missingness.filter(
+            pl.col("pit_feature") == "__any_pit_missing__"
+        ).height > 0
         assert fold.validation_report["mean_spearman_rank_ic"] is not None
         assert fold.targets.height > 0
         assert fold.daily.height == fold.fold.test_sessions
@@ -392,6 +408,18 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert '"validation_report"' in fold_manifest_text
     assert '"validation_acceptance_policy"' in fold_manifest_text
     assert manifest["aggregate_report"]["validation_ranking"]["cross_fold_stability"]["policy_id"] == "synthetic-lenient-v1"
+    assert manifest["aggregate_report"]["validation_feature_missingness"]["status"] == "descriptive_only"
+    assert manifest["aggregate_report"]["test_feature_coverage"]["status"] == "coverage_only_no_labels"
+    assert any(
+        item["path"].endswith("validation_feature_missingness.parquet")
+        for item in manifest["artifacts"]
+    )
+    assert any(
+        item["path"].endswith("test_feature_coverage.parquet")
+        for item in manifest["artifacts"]
+    )
+    assert "validation_feature_missingness_report" in fold_manifest_text
+    assert "test_feature_coverage_report" in fold_manifest_text
     artifact = saved / manifest["artifacts"][0]["path"]
     artifact.write_bytes(artifact.read_bytes() + b"tamper")
     with pytest.raises(ValueError, match="checksum mismatch"):
