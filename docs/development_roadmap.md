@@ -251,9 +251,13 @@ not certify real-lake coverage or empirical performance.
 The prior label formula used signal-day adjusted close to the close five
 sessions later, while the engine can only buy at the next session open. The
 new label builder derives HFQ adjusted opens from each session's raw open and
-same-session adjusted-close/raw-close multiplier. It measures the return from
-the first executable open after a signal to the first executable open after
-the next weekly signal, stores both entry and maturity dates, and follows
-holiday-shortened weeks. Admission validates the optional entry date lies
-strictly between signal and exit maturity. No real training or market run is
-performed.
+same-session adjusted-close/raw-close multiplier and requires exact HFQ
+evidence. It measures the return from the first executable open after a
+signal to the first executable open after the next weekly signal, stores both
+entry and maturity dates, and follows holiday-shortened weeks. Admission
+requires the explicit entry date and validates it strictly between signal
+and exit maturity. Walk-forward purge adds the one-session entry lag to the
+open-to-open holding horizon before the configured embargo. Folded momentum
+replays retain weekly signal dates from the original full calendar rather
+than inventing a rebalance at a midweek cutoff. No real training or market
+run is performed.
