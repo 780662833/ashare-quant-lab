@@ -5,6 +5,10 @@ from ashare_quant.research.features import CrossSectionalFeatureConfig, build_cr
 from ashare_quant.research.labels import build_forward_return_labels
 from ashare_quant.research.admission import TrainingDatasetAdmission, admit_training_dataset
 from ashare_quant.research.lightgbm_model import LightGBMConfig, LightGBMRegressionModel, fit_lightgbm_regressor
+from ashare_quant.research.model_experiment_store import (
+    persist_walk_forward_model_run,
+    verify_walk_forward_model_run,
+)
 from ashare_quant.research.walk_forward_model_runner import (
     WalkForwardModelFoldRun,
     WalkForwardCrossSectionalModelRun,
@@ -59,6 +63,8 @@ __all__ = [
     "WalkForwardModelFoldRun",
     "WalkForwardCrossSectionalModelRun",
     "run_walk_forward_cross_sectional_model",
+    "persist_walk_forward_model_run",
+    "verify_walk_forward_model_run",
     "ResearchBundleError",
     "ResearchDataBundle",
     "WalkForwardConfig",
