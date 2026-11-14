@@ -85,8 +85,11 @@ def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
 
     class FakeMultiIndex:
         @staticmethod
-        def from_tuples(values, names):
-            captured["index"] = (values, names)
+        def from_tuples(values, names=None):
+            if names is not None:
+                captured["index"] = (values, names)
+            else:
+                captured["columns"] = values
             return values
 
     class FakeColumns:
