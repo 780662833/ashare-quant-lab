@@ -75,6 +75,7 @@ def cost_report():
         "repository_commit": "abcdef1234567",
         "baseline_experiment_id": "experiment-001",
         "experiment_ids": ["experiment-001", "experiment-001-C1", "experiment-001-C2", "experiment-001-C3"],
+        "scenario_multipliers": [1.0, 1.5, 2.0, 3.0],
         "training_dataset_unlocked": False, "model_training_performed": False,
         "integrity": {
             "all_artifacts_verified": True,
