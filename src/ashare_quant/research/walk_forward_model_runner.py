@@ -44,6 +44,7 @@ class WalkForwardModelFoldRun:
     fold: WalkForwardFold
     training_admission: TrainingDatasetAdmission
     final_admission: TrainingDatasetAdmission
+    final_training_rows: int
     validation_predictions: pl.DataFrame
     test_predictions: pl.DataFrame
     targets: pl.DataFrame
@@ -109,6 +110,7 @@ def _fold_report(
     report["initial_nav"] = float(baseline_nav)
     report["final_nav"] = final_nav
     report["total_return"] = total_return
+    report["cagr"] = (final_nav / baseline_nav) ** (annualization / fold.test_sessions) - 1.0
     report["period"] = {
         "start": fold.test_start,
         "end": fold.test_end,
@@ -364,6 +366,7 @@ def run_walk_forward_cross_sectional_model(
                 fold=fold,
                 training_admission=train_admission,
                 final_admission=final_admission,
+                final_training_rows=final_model.training_rows,
                 validation_predictions=validation_predictions,
                 test_predictions=test_predictions,
                 targets=targets,
@@ -384,7 +387,7 @@ def run_walk_forward_cross_sectional_model(
             "validation_end": item.fold.validation_end,
             "test_start": item.fold.test_start,
             "test_end": item.fold.test_end,
-            "training_rows": item.final_admission.label_rows,
+            "training_rows": item.final_training_rows,
             "test_prediction_rows": item.test_predictions.height,
             "total_return": item.report["total_return"],
             "cagr": item.report["cagr"],
