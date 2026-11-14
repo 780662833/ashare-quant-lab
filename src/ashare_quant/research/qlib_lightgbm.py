@@ -125,10 +125,6 @@ def _training_arrays(prepared: Any, feature_columns: tuple[str, ...]):
         raise ValueError("Qlib features, labels and index rows are not aligned")
     if matrix.shape[0] == 0:
         raise ValueError("Qlib train segment is empty")
-    pit_indices = [
-        index for index, name in enumerate(feature_columns)
-        if name.startswith("pit_")
-    ]
     non_pit_indices = [
         index for index, name in enumerate(feature_columns)
         if not name.startswith("pit_")
@@ -304,10 +300,6 @@ def predict_qlib_lightgbm_regressor(
         )
     import numpy as np
 
-    pit_indices = [
-        index for index, name in enumerate(model.feature_columns)
-        if name.startswith("pit_")
-    ]
     non_pit_indices = [
         index for index, name in enumerate(model.feature_columns)
         if not name.startswith("pit_")
