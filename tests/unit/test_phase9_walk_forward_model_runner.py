@@ -510,7 +510,7 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
         assert fold.test_predictions.height > 0
         assert fold.targets.height > 0
         assert fold.targets.group_by("signal_date").agg(
-            pl.col("target_weight").sum().alias("weight_sum")
+            pl.col("weight").sum().alias("weight_sum")
         )["weight_sum"].to_list() == pytest.approx([1.0] * fold.targets["signal_date"].n_unique())
         assert fold.daily.height == fold.fold.test_sessions
         assert fold.daily["date"].min() == fold.fold.test_start
