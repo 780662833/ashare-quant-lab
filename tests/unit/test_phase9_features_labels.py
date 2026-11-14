@@ -90,14 +90,14 @@ def test_feature_builder_rejects_non_strict_pit_rows_as_fundamental_values():
 
 def test_feature_history_missing_session_is_not_compressed_or_forward_filled():
     adj, raw, members, fundamentals, sessions = market()
-    missing_date = sessions[10]
+    missing_date = sessions[9]
     adj = adj.filter(~((pl.col("date") == missing_date) & (pl.col("instrument") == "600000.SH")))
     features = build_cross_sectional_features(
         adjusted_bars=adj, execution_bars=raw, universe_membership=members,
         fundamentals=fundamentals, trading_dates=sessions,
         config=CrossSectionalFeatureConfig(return_windows=(5,), volatility_window=5, activity_window=5),
     )
-    signal = sessions[15]
+    signal = sessions[14]
     row = features.filter(
         (pl.col("signal_date") == signal) & (pl.col("instrument") == "600000.SH")
     ).row(0, named=True)
