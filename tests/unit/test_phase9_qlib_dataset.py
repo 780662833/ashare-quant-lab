@@ -143,3 +143,20 @@ def test_qlib_panel_rows_keeps_mature_rows_with_missing_pit_fundamentals():
     ]
     assert columns == ["return_5", "pit_roe"]
     assert targets == [-0.01, 0.03]
+
+
+@pytest.mark.parametrize("invalid_value", [float("nan"), float("inf"), float("-inf")])
+def test_qlib_panel_rows_rejects_non_null_nonfinite_pit_values(invalid_value):
+    features, labels = frames()
+    features = features.with_columns(
+        pl.when(pl.col("instrument") == "000001.SZ")
+        .then(pl.lit(invalid_value))
+        .otherwise(pl.col("pit_roe"))
+        .alias("pit_roe")
+    )
+    admission = admission_for(features, labels)
+
+    with pytest.raises(ValueError, match="non-finite"):
+        build_qlib_panel_rows(
+            features=features, labels=labels, admission=admission
+        )
