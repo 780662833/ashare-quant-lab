@@ -139,8 +139,10 @@ windows. No data assembly, scheduler or model-training unlock is added. See
 - No train or validation row may use a fact published after its simulated
   decision timestamp.
 - Qlib `DatasetH` is the primary research dataset interface and segment
-  selector; LightGBM is the single cross-sectional five-session return
-  regressor. No second model family is introduced.
+  selector; LightGBM is the single cross-sectional weekly rebalance-cycle
+  return regressor. Labels align to next-open entry and next-cycle next-open
+  exit; the session count can shorten around exchange holidays. No second
+  model family is introduced.
 - The model uses the same target-weight interface, engine, cost settings and
   report as momentum.
 - Phase 9 admission verifies the exact acceptance window/profile, all five
@@ -242,3 +244,15 @@ A phase is complete only when code, tests and documentation are committed,
 CI passes on the current PR head, the PR is merged before it is described as
 part of `main`, and all limitations are stated honestly. Synthetic CI does
 not certify real-lake coverage or empirical performance.
+
+### Phase 9.12 — next-open execution-aligned labels (in review)
+
+The prior label formula used signal-day adjusted close to the close five
+sessions later, while the engine can only buy at the next session open. The
+new label builder derives HFQ adjusted opens from each session's raw open and
+same-session adjusted-close/raw-close multiplier. It measures the return from
+the first executable open after a signal to the first executable open after
+the next weekly signal, stores both entry and maturity dates, and follows
+holiday-shortened weeks. Admission validates the optional entry date lies
+strictly between signal and exit maturity. No real training or market run is
+performed.
