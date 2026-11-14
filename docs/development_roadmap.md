@@ -246,7 +246,7 @@ CI passes on the current PR head, the PR is merged before it is described as
 part of `main`, and all limitations are stated honestly. Synthetic CI does
 not certify real-lake coverage or empirical performance.
 
-### Phase 9.12 — next-open execution-aligned labels (in review)
+### Phase 9.12 — next-open execution-aligned labels (merged PR #72)
 
 The prior label formula used signal-day adjusted close to the close five
 sessions later, while the engine can only buy at the next session open. The
