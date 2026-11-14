@@ -35,6 +35,8 @@ from ashare_quant.research.walk_forward import (
     build_walk_forward_folds,
 )
 from ashare_quant.strategies.cross_sectional import weekly_cross_sectional_model_targets
+from ashare_quant.strategies.momentum import MomentumConfig, momentum_scores
+from ashare_quant.backtest.engine import equal_weight_targets
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +47,7 @@ class WalkForwardModelFoldRun:
     training_admission: TrainingDatasetAdmission
     final_admission: TrainingDatasetAdmission
     final_training_rows: int
+    model: LightGBMRegressionModel
     validation_predictions: pl.DataFrame
     test_predictions: pl.DataFrame
     targets: pl.DataFrame
@@ -52,6 +55,12 @@ class WalkForwardModelFoldRun:
     orders: pl.DataFrame
     holdings: pl.DataFrame
     pending_targets: pl.DataFrame
+    benchmark_targets: pl.DataFrame
+    benchmark_daily: pl.DataFrame
+    benchmark_orders: pl.DataFrame
+    benchmark_holdings: pl.DataFrame
+    benchmark_pending_targets: pl.DataFrame
+    benchmark_report: dict[str, Any]
     report: dict[str, Any]
     provenance: dict[str, Any]
 
@@ -66,6 +75,10 @@ class WalkForwardCrossSectionalModelRun:
     oos_orders: pl.DataFrame
     oos_holdings: pl.DataFrame
     oos_pending_targets: pl.DataFrame
+    benchmark_oos_daily: pl.DataFrame
+    benchmark_oos_orders: pl.DataFrame
+    benchmark_oos_holdings: pl.DataFrame
+    benchmark_oos_pending_targets: pl.DataFrame
     aggregate_report: dict[str, Any]
 
 
@@ -93,6 +106,7 @@ def _fold_report(
     fold: WalkForwardFold,
     baseline_nav: float,
     annualization: int,
+    model_training_performed: bool = True,
 ) -> dict[str, Any]:
     daily = result.daily.sort("date")
     if daily.height != fold.test_sessions:
@@ -116,7 +130,7 @@ def _fold_report(
         "end": fold.test_end,
         "sessions": fold.test_sessions,
     }
-    report["model_training_performed"] = True
+    report["model_training_performed"] = model_training_performed
     report["training_dataset_unlocked"] = False
     return report
 
@@ -128,6 +142,8 @@ def _aggregate(
     annualization: int,
 ) -> dict[str, Any]:
     returns = [float(item.report["total_return"]) for item in folds]
+    benchmark_returns = [float(item.benchmark_report["total_return"]) for item in folds]
+    excess_returns = [model - benchmark for model, benchmark in zip(returns, benchmark_returns)]
     sharpes = [float(item.report["sharpe_ratio"]) for item in folds]
     drawdowns = [float(item.report["max_drawdown"]) for item in folds]
     sessions = sum(item.fold.test_sessions for item in folds)
@@ -137,12 +153,18 @@ def _aggregate(
         for previous, current in zip(folds, folds[1:])
     )
     linked_return = prod(1.0 + value for value in returns) - 1.0
+    benchmark_linked_return = prod(1.0 + value for value in benchmark_returns) - 1.0
     return {
         "fold_count": len(folds),
         "out_of_sample_sessions": sessions,
         "test_windows_contiguous": contiguous,
         "mean_fold_total_return": mean(returns),
         "median_fold_total_return": median(returns),
+        "mean_benchmark_fold_total_return": mean(benchmark_returns),
+        "mean_fold_excess_return": mean(excess_returns),
+        "positive_excess_fold_ratio": sum(value > 0 for value in excess_returns) / len(excess_returns),
+        "benchmark_fold_linked_total_return": benchmark_linked_return,
+        "model_minus_benchmark_linked_return": linked_return - benchmark_linked_return,
         "positive_fold_ratio": sum(value > 0 for value in returns) / len(returns),
         "mean_fold_sharpe": mean(sharpes),
         "worst_fold_max_drawdown": min(drawdowns),
@@ -171,6 +193,7 @@ def run_walk_forward_cross_sectional_model(
     model_config: LightGBMConfig | None = None,
     backtest_config: BacktestConfig | None = None,
     top_n: int = 20,
+    benchmark_config: MomentumConfig | None = None,
     annualization: int = 252,
 ) -> WalkForwardCrossSectionalModelRun:
     """Fit and evaluate the cross-sectional model in chronological OOS folds.
@@ -227,6 +250,9 @@ def run_walk_forward_cross_sectional_model(
     source_provenance = dict(bundle.provenance)
     cfg = model_config or LightGBMConfig()
     execution = backtest_config or BacktestConfig(top_n=top_n)
+    benchmark_strategy = benchmark_config or MomentumConfig(top_n=top_n)
+    if benchmark_strategy.top_n != top_n:
+        raise ValueError("benchmark_config.top_n and top_n must match")
     if execution.top_n != top_n:
         raise ValueError("top_n and BacktestConfig.top_n must match")
 
@@ -333,6 +359,57 @@ def run_walk_forward_cross_sectional_model(
             fold=fold,
             baseline_nav=baseline_nav,
             annualization=annualization,
+            model_training_performed=True,
+        )
+
+        # Reset both strategies to the same pre-test baseline NAV and execute
+        # only test-window signals. Momentum scores may use historical prices
+        # before test_start, but no pre-test momentum positions are carried in.
+        prefix_end = positions[fold.test_end]
+        prefix_sessions = sessions[: prefix_end + 1]
+        prefix_adjusted = _filter_dates(
+            bundle.adjusted_bars, end=fold.test_end, column="date"
+        )
+        prefix_membership = _filter_dates(
+            bundle.universe_membership, end=fold.test_end, column="date"
+        )
+        benchmark_scores = momentum_scores(
+            prefix_adjusted,
+            prefix_membership,
+            prefix_sessions,
+            benchmark_strategy,
+        )
+        benchmark_scores = _filter_dates(
+            benchmark_scores, start=fold.test_start, end=fold.test_end
+        )
+        benchmark_targets = equal_weight_targets(
+            benchmark_scores.select("signal_date", "instrument", "score"),
+            top_n=top_n,
+        )
+        if benchmark_targets.is_empty():
+            raise ValueError(f"{fold.fold_id} produced no test-period momentum benchmark targets")
+        benchmark_full_result = run_backtest(fold_bars, benchmark_targets, execution)
+        benchmark_daily = _filter_dates(
+            benchmark_full_result.daily, start=fold.test_start, end=fold.test_end, column="date"
+        )
+        benchmark_orders = _filter_dates(
+            benchmark_full_result.orders, start=fold.test_start, end=fold.test_end, column="date"
+        )
+        benchmark_holdings = _filter_dates(
+            benchmark_full_result.holdings, start=fold.test_start, end=fold.test_end, column="date"
+        )
+        benchmark_pending = benchmark_full_result.pending_targets
+        benchmark_report = _fold_report(
+            BacktestResult(
+                daily=benchmark_daily,
+                orders=benchmark_orders,
+                holdings=benchmark_holdings,
+                pending_targets=benchmark_pending,
+            ),
+            fold=fold,
+            baseline_nav=baseline_nav,
+            annualization=annualization,
+            model_training_performed=False,
         )
         fold_provenance = {
             **source_provenance,
@@ -367,6 +444,7 @@ def run_walk_forward_cross_sectional_model(
                 training_admission=train_admission,
                 final_admission=final_admission,
                 final_training_rows=final_model.training_rows,
+                model=final_model,
                 validation_predictions=validation_predictions,
                 test_predictions=test_predictions,
                 targets=targets,
@@ -374,6 +452,12 @@ def run_walk_forward_cross_sectional_model(
                 orders=test_orders,
                 holdings=test_holdings,
                 pending_targets=pending,
+                benchmark_targets=benchmark_targets,
+                benchmark_daily=benchmark_daily,
+                benchmark_orders=benchmark_orders,
+                benchmark_holdings=benchmark_holdings,
+                benchmark_pending_targets=benchmark_pending,
+                benchmark_report=benchmark_report,
                 report=report,
                 provenance=fold_provenance,
             )
@@ -390,6 +474,8 @@ def run_walk_forward_cross_sectional_model(
             "training_rows": item.final_training_rows,
             "test_prediction_rows": item.test_predictions.height,
             "total_return": item.report["total_return"],
+            "benchmark_total_return": item.benchmark_report["total_return"],
+            "excess_return": item.report["total_return"] - item.benchmark_report["total_return"],
             "cagr": item.report["cagr"],
             "sharpe_ratio": item.report["sharpe_ratio"],
             "max_drawdown": item.report["max_drawdown"],
@@ -409,6 +495,18 @@ def run_walk_forward_cross_sectional_model(
     oos_pending = pl.concat(
         [item.pending_targets for item in folds], how="vertical_relaxed"
     )
+    benchmark_oos_daily = pl.concat(
+        [item.benchmark_daily for item in folds], how="vertical_relaxed"
+    ).sort("date")
+    benchmark_oos_orders = pl.concat(
+        [item.benchmark_orders for item in folds], how="vertical_relaxed"
+    ).sort(["date", "instrument"])
+    benchmark_oos_holdings = pl.concat(
+        [item.benchmark_holdings for item in folds], how="vertical_relaxed"
+    ).sort(["date", "instrument"])
+    benchmark_oos_pending = pl.concat(
+        [item.benchmark_pending_targets for item in folds], how="vertical_relaxed"
+    )
     return WalkForwardCrossSectionalModelRun(
         folds=folds,
         fold_table=fold_table,
@@ -416,5 +514,9 @@ def run_walk_forward_cross_sectional_model(
         oos_orders=oos_orders,
         oos_holdings=oos_holdings,
         oos_pending_targets=oos_pending,
+        benchmark_oos_daily=benchmark_oos_daily,
+        benchmark_oos_orders=benchmark_oos_orders,
+        benchmark_oos_holdings=benchmark_oos_holdings,
+        benchmark_oos_pending_targets=benchmark_oos_pending,
         aggregate_report=_aggregate(folds, trading_dates=sessions, annualization=annualization),
     )
