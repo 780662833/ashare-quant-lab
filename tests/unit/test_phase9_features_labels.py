@@ -130,9 +130,12 @@ def test_execution_aligned_labels_follow_actual_weekly_schedule_in_short_holiday
     adj, raw, members, fundamentals, sessions = market()
     # Remove Monday from the second week, leaving a four-session trading week.
     short_week_sessions = [value for value in sessions if value != sessions[5]]
+    short_adj = adj.filter(pl.col("date") != sessions[5])
+    short_raw = raw.filter(pl.col("date") != sessions[5])
+    short_members = members.filter(pl.col("date") != sessions[5])
     labels = build_forward_return_labels(
-        adjusted_bars=adj, execution_bars=raw,
-        universe_membership=members, trading_dates=short_week_sessions,
+        adjusted_bars=short_adj, execution_bars=short_raw,
+        universe_membership=short_members, trading_dates=short_week_sessions,
     )
     first = labels.filter(pl.col("signal_date") == sessions[4])
     assert first.height == 2
