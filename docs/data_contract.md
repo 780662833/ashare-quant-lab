@@ -131,3 +131,16 @@ The concrete adapter is pinned to CNEquity 0.21.0. Its query arguments,
 profile semantics, PIT quality values and diagnostic APIs are taken from that
 release's public API contract; a version upgrade requires a fresh contract
 review and adapter tests.
+
+
+## Feature-source exactness and PIT determinism
+
+Every HFQ adjusted-close row used by weekly features must carry
+`adj_is_exact=true`, and its adjusted price must be finite and positive.
+This is checked independently by the feature builder, not inferred only from
+the acceptance report. Strict PIT facts are selected by publication
+availability at or before the signal close; duplicate
+(instrument, item, report period, availability timestamp) facts are rejected
+rather than selected according to input row order. Strict PIT values must be
+numeric and finite. The supplied exchange calendar must already be strictly
+chronological; the feature builder does not silently reorder it.
