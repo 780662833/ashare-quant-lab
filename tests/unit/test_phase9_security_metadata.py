@@ -457,7 +457,7 @@ def test_capability_audit_must_bind_exact_receipt_revision_and_contract():
 def test_capability_audit_is_field_scoped_and_evidence_class_specific():
     identity = IDENTITIES["industry_members"]
     audit = dict(identity["capability_audits"][0])
-    audit["audited_fields"] = ["listing_date"]
+    audit["audited_fields"] = ["industry_l2_code"]
     identities = {
         **IDENTITIES,
         "industry_members": {
