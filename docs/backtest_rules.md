@@ -5,6 +5,10 @@
 - 20 target holdings by default, nominally 5% each with 20 valid candidates;
   equal-weight among fewer valid candidates.
 - Weekly rebalance using the final supplied exchange session in each ISO week.
+  For walk-forward folds, determine these dates once from the original full
+  research calendar, then retain only signal dates at or before the fold
+  cutoff. A midweek truncation boundary must not become a synthetic rebalance
+  date or require a new PIT universe snapshot.
 - No leverage; gross target exposure cannot exceed 100%.
 - Model strategy and momentum benchmark share the same engine/configuration.
 
@@ -17,6 +21,24 @@
   differences may be retried on later sessions under the same target.
 - The official exchange calendar must be supplied by the future research
   bundle; dates observed for one selected stock are not a calendar.
+
+## Supervised-return label timing
+
+- Model labels start at the adjusted open of the first executable session after
+  the signal close, not at the signal-day close.
+- The label exit is the adjusted open of the first executable session after
+  the next weekly signal. This matches when the shared engine can first replace
+  the holding and naturally follows holiday-shortened trading weeks.
+- The label builder requires exact HFQ adjusted-close evidence
+  (adj_is_exact=true) and derives each session's adjusted open by applying that
+  same session's multiplier (adj_close / raw_close) to raw open. It never
+  mixes raw open with adjusted close, forward-fills prices, or substitutes a
+  different session's adjustment factor.
+- label_entry_date is a required training-label field recording the entry
+  execution session; label_end_date records the exit execution/maturity
+  session used by walk-forward purging. Admission rejects labels missing the
+  explicit entry date. A label is omitted if either adjusted-open endpoint is
+  unavailable.
 - Targets still requiring execution at the end of the supplied window are
   exposed separately in `BacktestResult.pending_targets` and the execution
   report. A signal on the final supplied session is marked `no_next_session`,

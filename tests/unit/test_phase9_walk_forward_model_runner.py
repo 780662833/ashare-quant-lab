@@ -286,9 +286,9 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     )
     labels = build_forward_return_labels(
         adjusted_bars=bundle.adjusted_bars,
+        execution_bars=bundle.execution_bars,
         universe_membership=bundle.universe_membership,
         trading_dates=bundle.trading_dates,
-        horizon_sessions=5,
     )
 
     walk_config = WalkForwardConfig(
@@ -494,9 +494,9 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
     )
     labels = build_forward_return_labels(
         adjusted_bars=bundle.adjusted_bars,
+        execution_bars=bundle.execution_bars,
         universe_membership=bundle.universe_membership,
         trading_dates=bundle.trading_dates,
-        horizon_sessions=5,
     )
 
     walk_config = WalkForwardConfig(

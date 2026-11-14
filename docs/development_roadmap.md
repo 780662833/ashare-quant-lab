@@ -139,8 +139,10 @@ windows. No data assembly, scheduler or model-training unlock is added. See
 - No train or validation row may use a fact published after its simulated
   decision timestamp.
 - Qlib `DatasetH` is the primary research dataset interface and segment
-  selector; LightGBM is the single cross-sectional five-session return
-  regressor. No second model family is introduced.
+  selector; LightGBM is the single cross-sectional weekly rebalance-cycle
+  return regressor. Labels align to next-open entry and next-cycle next-open
+  exit; the session count can shorten around exchange holidays. No second
+  model family is introduced.
 - The model uses the same target-weight interface, engine, cost settings and
   report as momentum.
 - Phase 9 admission verifies the exact acceptance window/profile, all five
@@ -150,9 +152,10 @@ windows. No data assembly, scheduler or model-training unlock is added. See
 - The acceptance report and bundle provenance retain
   `training_dataset_unlocked=false`; the model runner consumes a successful
   per-fold admission object before constructing a Qlib dataset or fitting.
-- The project's fold planner owns label-horizon purge and embargo. Qlib
-  receives those approved boundaries as `DatasetH` segments; it does not
-  weaken or replace admission.
+- The project's fold planner owns label-entry lag, open-to-open label-horizon
+  purge, and embargo. The reported maturity date includes the one-session
+  close-to-next-open entry delay. Qlib receives those approved boundaries as
+  `DatasetH` segments; it does not weaken or replace admission.
 - Python 3.13 remains the main development environment. Qlib/pandas remain
   optional and lazy; a dedicated Python 3.12 Qlib 0.9.7 smoke workflow checks
   real DatasetH/LightGBM data-interface compatibility without changing the
@@ -242,3 +245,19 @@ A phase is complete only when code, tests and documentation are committed,
 CI passes on the current PR head, the PR is merged before it is described as
 part of `main`, and all limitations are stated honestly. Synthetic CI does
 not certify real-lake coverage or empirical performance.
+
+### Phase 9.12 — next-open execution-aligned labels (in review)
+
+The prior label formula used signal-day adjusted close to the close five
+sessions later, while the engine can only buy at the next session open. The
+new label builder derives HFQ adjusted opens from each session's raw open and
+same-session adjusted-close/raw-close multiplier and requires exact HFQ
+evidence. It measures the return from the first executable open after a
+signal to the first executable open after the next weekly signal, stores both
+entry and maturity dates, and follows holiday-shortened weeks. Admission
+requires the explicit entry date and validates it strictly between signal
+and exit maturity. Walk-forward purge adds the one-session entry lag to the
+open-to-open holding horizon before the configured embargo. Folded momentum
+replays retain weekly signal dates from the original full calendar rather
+than inventing a rebalance at a midweek cutoff. No real training or market
+run is performed.

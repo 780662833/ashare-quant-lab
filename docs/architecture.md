@@ -115,8 +115,11 @@ flowchart TD
 - LightGBM is the single cross-sectional regression model. It reads Qlib's
   learn view for fitting and infer view for keyed predictions; project-owned
   Top-20 equal-weight target generation remains downstream.
-- Validation predictions are evaluated against validation labels only after
-  label maturity strictly before test start. Cross-fold stability summaries
+- Walk-forward purge calculations distinguish the one-session next-open
+  entry lag from the open-to-open holding horizon; maturity dates include both
+  before adding the configured embargo. Validation predictions are evaluated
+  against validation labels only after label maturity strictly before test
+  start. Cross-fold stability summaries
   are descriptive by default; any acceptance policy must be explicit,
   versioned and fingerprinted. No test labels feed policy decisions.
 - Project-owned Polars features/labels, CNEquity receipts, PIT availability,
@@ -145,6 +148,11 @@ flowchart TD
 - Execution date: next eligible exchange session, never the same close.
 - Fundamentals carry both report period and publication/availability time.
   Report period is not a substitute for when a fact became knowable.
+- Supervised return labels begin at the first executable open after signal close
+  and end at the first executable open after the next weekly signal. Their
+  explicit entry and maturity dates follow the supplied exchange calendar,
+  including holiday-shortened weeks; they do not include the untradable
+  signal-close-to-entry-open return.
 
 The future research bundle must use the official exchange calendar. Do not
 infer calendar sessions from the dates on which one selected stock happened

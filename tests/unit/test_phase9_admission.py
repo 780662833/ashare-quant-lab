@@ -98,6 +98,7 @@ def frames():
     labels = pl.DataFrame({
         "signal_date": ["2024-01-05", "2024-01-05"],
         "instrument": ["600000.SH", "000001.SZ"],
+        "label_entry_date": ["2024-01-08", "2024-01-08"],
         "label_end_date": ["2024-01-12", "2024-01-12"],
         "forward_return": [0.03, -0.01],
     })
@@ -246,3 +247,37 @@ def test_acceptance_pit_receipt_must_match_adapter_revision():
     result = admit(report=report)
     assert result.admitted is False
     assert any("acceptance PIT receipt revision" in reason for reason in result.rejection_reasons)
+
+
+def test_admission_rejects_invalid_execution_label_entry_date():
+    features, labels = frames()
+    labels = labels.with_columns(
+        pl.Series("label_entry_date", ["2024-01-05", "2024-01-04"])
+    )
+    result = admit(labels=labels)
+    assert result.admitted is False
+    assert any(
+        "label entry date must be after signal and before exit maturity" in reason
+        for reason in result.rejection_reasons
+    )
+
+
+def test_admission_accepts_valid_execution_label_entry_date():
+    features, labels = frames()
+    labels = labels.with_columns(
+        pl.Series("label_entry_date", ["2024-01-08", "2024-01-08"])
+    )
+    result = admit(labels=labels)
+    assert result.admitted is True
+
+
+
+def test_admission_requires_explicit_execution_entry_date():
+    features, labels = frames()
+    legacy_labels = labels.drop("label_entry_date")
+    result = admit(labels=legacy_labels)
+    assert result.admitted is False
+    assert any(
+        "label_entry_date" in reason
+        for reason in result.rejection_reasons
+    )

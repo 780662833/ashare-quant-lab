@@ -4,7 +4,7 @@ import polars as pl
 import pytest
 
 from ashare_quant.backtest import BacktestConfig, CostModel
-from ashare_quant.backtest.engine import BacktestResult
+from ashare_quant.backtest.engine import BacktestResult, weekly_rebalance_dates
 from ashare_quant.research import (
     ResearchDataBundle,
     WalkForwardConfig,
@@ -201,6 +201,13 @@ def test_walk_forward_runner_returns_fold_metrics_and_test_only_ledgers(configs)
         assert fold_run.report["initial_nav"] == pytest.approx(fold_run.baseline_nav)
         assert fold_run.provenance["walk_forward"]["data_cutoff_date"] == fold.test_end
         assert fold_run.provenance["walk_forward"]["training_dataset_unlocked"] is False
+        actual_signal_dates = fold_run.provenance["momentum_signal_dates"]
+        original_weekly_dates = set(weekly_rebalance_dates(bundle.trading_dates))
+        membership_dates = set(bundle.universe_membership["date"].to_list())
+        assert actual_signal_dates == sorted(actual_signal_dates)
+        assert set(actual_signal_dates).issubset(original_weekly_dates)
+        assert all(signal_date <= fold.test_end for signal_date in actual_signal_dates)
+        assert set(actual_signal_dates).issubset(membership_dates)
 
     assert run.oos_daily.height == sum(item.fold.test_sessions for item in run.folds)
     assert run.fold_table["total_return"].is_finite().all()

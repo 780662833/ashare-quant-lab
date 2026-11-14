@@ -117,6 +117,8 @@ def momentum_scores(
     universe_membership: pl.DataFrame,
     trading_dates: list[Any],
     config: MomentumConfig | None = None,
+    *,
+    signal_dates: list[Any] | None = None,
 ) -> pl.DataFrame:
     """Compute weekly cross-sectional momentum scores using only known history.
 
@@ -130,7 +132,16 @@ def momentum_scores(
     prices, membership, sessions = _validate_inputs(
         adjusted_bars, universe_membership, trading_dates
     )
-    weekly_dates = weekly_rebalance_dates(sessions)
+    if signal_dates is None:
+        weekly_dates = weekly_rebalance_dates(sessions)
+    else:
+        weekly_dates = _iso_dates(signal_dates, name="signal_dates")
+        if len(weekly_dates) != len(set(weekly_dates)):
+            raise ValueError("signal_dates must contain unique dates")
+        if weekly_dates != sorted(weekly_dates):
+            raise ValueError("signal_dates must be strictly chronological")
+        if not set(weekly_dates).issubset(set(sessions)):
+            raise ValueError("signal_dates must be contained in the supplied trading calendar")
     membership_dates = set(membership["date"].to_list())
     missing_membership_dates = sorted(set(weekly_dates).difference(membership_dates))
     if missing_membership_dates:

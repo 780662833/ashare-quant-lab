@@ -20,8 +20,16 @@ def market(count=35):
     adjusted, raw, members = [], [], []
     for i, day in enumerate(sessions):
         for symbol, base, slope in (("600000.SH", 10.0, 0.1), ("000001.SZ", 20.0, 0.03)):
-            adjusted.append({"instrument": symbol, "date": day, "adj_close": base + slope * i})
-            raw.append({"instrument": symbol, "date": day, "volume": 1000 + i * 10, "amount": (base + slope * i) * 1000})
+            raw_close = base + slope * i
+            raw_open = raw_close - 0.05
+            adjusted.append({
+                "instrument": symbol, "date": day, "adj_close": raw_close * 2.0,
+                "adj_is_exact": True,
+            })
+            raw.append({
+                "instrument": symbol, "date": day, "open": raw_open, "close": raw_close,
+                "volume": 1000 + i * 10, "amount": raw_close * 1000,
+            })
             members.append({"instrument": symbol, "date": day})
     fundamentals = []
     for symbol in ("600000.SH", "000001.SZ"):
@@ -104,15 +112,40 @@ def test_feature_history_missing_session_is_not_compressed_or_forward_filled():
     assert row["return_5"] is None
 
 
-def test_forward_labels_have_exact_maturity_and_no_tail_label():
+def test_forward_labels_align_entry_and_exit_with_next_open_execution():
     adj, raw, members, fundamentals, sessions = market()
     labels = build_forward_return_labels(
-        adjusted_bars=adj, universe_membership=members, trading_dates=sessions, horizon_sessions=5,
+        adjusted_bars=adj, execution_bars=raw,
+        universe_membership=members, trading_dates=sessions,
     )
     first = labels.filter(pl.col("signal_date") == sessions[4])
     assert first.height == 2
-    assert set(first["label_end_date"].to_list()) == {sessions[9]}
+    assert set(first["label_entry_date"].to_list()) == {sessions[5]}
+    assert set(first["label_end_date"].to_list()) == {sessions[10]}
+    row = first.filter(pl.col("instrument") == "600000.SH").row(0, named=True)
+    entry_raw_open = 10.0 + 0.1 * 5 - 0.05
+    exit_raw_open = 10.0 + 0.1 * 10 - 0.05
+    assert row["forward_return"] == pytest.approx(exit_raw_open / entry_raw_open - 1.0)
     assert labels["signal_date"].max() < sessions[-5]
+
+
+def test_execution_aligned_labels_follow_actual_weekly_schedule_in_short_holiday_week():
+    adj, raw, members, fundamentals, sessions = market()
+    # Remove Monday from the second week, leaving a four-session trading week.
+    short_week_sessions = [value for value in sessions if value != sessions[5]]
+    short_adj = adj.filter(pl.col("date") != sessions[5])
+    short_raw = raw.filter(pl.col("date") != sessions[5])
+    short_members = members.filter(pl.col("date") != sessions[5])
+    labels = build_forward_return_labels(
+        adjusted_bars=short_adj, execution_bars=short_raw,
+        universe_membership=short_members, trading_dates=short_week_sessions,
+    )
+    first = labels.filter(pl.col("signal_date") == sessions[4])
+    assert first.height == 2
+    # Entry is Tuesday because Monday is absent; exit is the open after the
+    # next week's Friday signal, not a hard-coded five-session offset.
+    assert set(first["label_entry_date"].to_list()) == {sessions[6]}
+    assert set(first["label_end_date"].to_list()) == {sessions[10]}
 
 
 def test_forward_label_uses_signal_date_membership_not_future_membership():
@@ -122,14 +155,63 @@ def test_forward_label_uses_signal_date_membership_not_future_membership():
         ~((pl.col("date") == signal) & (pl.col("instrument") == "600000.SH"))
     )
     labels = build_forward_return_labels(
-        adjusted_bars=adj, universe_membership=members, trading_dates=sessions, horizon_sessions=5,
+        adjusted_bars=adj, execution_bars=raw,
+        universe_membership=members, trading_dates=sessions,
     )
     assert "600000.SH" not in labels.filter(pl.col("signal_date") == signal)["instrument"].to_list()
 
 
-def test_invalid_label_horizon_is_rejected():
+def test_forward_labels_require_both_adjusted_open_endpoints():
     adj, raw, members, fundamentals, sessions = market()
-    with pytest.raises(ValueError, match="positive"):
+    missing_exit_open = raw.filter(
+        ~((pl.col("date") == sessions[10]) & (pl.col("instrument") == "600000.SH"))
+    )
+    labels = build_forward_return_labels(
+        adjusted_bars=adj, execution_bars=missing_exit_open,
+        universe_membership=members, trading_dates=sessions,
+    )
+    first = labels.filter(pl.col("signal_date") == sessions[4])
+    assert "600000.SH" not in first["instrument"].to_list()
+    assert "000001.SZ" in first["instrument"].to_list()
+
+
+def test_invalid_price_data_and_calendar_are_rejected():
+    adj, raw, members, fundamentals, sessions = market()
+    bad = raw.with_columns(
+        pl.when(pl.col("instrument") == "600000.SH")
+        .then(0.0).otherwise(pl.col("open")).alias("open")
+    )
+    with pytest.raises(ValueError, match="finite and positive"):
         build_forward_return_labels(
-            adjusted_bars=adj, universe_membership=members, trading_dates=sessions, horizon_sessions=0,
+            adjusted_bars=adj, execution_bars=bad,
+            universe_membership=members, trading_dates=sessions,
+        )
+    with pytest.raises(ValueError, match="outside trading calendar"):
+        build_forward_return_labels(
+            adjusted_bars=adj, execution_bars=raw,
+            universe_membership=members, trading_dates=sessions[:-1],
+        )
+
+
+
+def test_forward_labels_reject_non_exact_hfq_adjustment_rows():
+    adj, raw, members, fundamentals, sessions = market()
+    bad = adj.with_columns(
+        pl.when(pl.col("date") == sessions[5])
+        .then(False).otherwise(pl.col("adj_is_exact")).alias("adj_is_exact")
+    )
+    with pytest.raises(ValueError, match="finite, positive and exact"):
+        build_forward_return_labels(
+            adjusted_bars=bad, execution_bars=raw,
+            universe_membership=members, trading_dates=sessions,
+        )
+
+
+def test_forward_labels_reject_unsorted_calendar_without_reordering():
+    adj, raw, members, fundamentals, sessions = market()
+    unsorted = [sessions[1], sessions[0], *sessions[2:]]
+    with pytest.raises(ValueError, match="strictly chronological"):
+        build_forward_return_labels(
+            adjusted_bars=adj, execution_bars=raw,
+            universe_membership=members, trading_dates=unsorted,
         )
