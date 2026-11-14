@@ -372,6 +372,8 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
         reason="install optional Qlib 0.9.7",
     )
     DataHandlerLP = qlib_handler.DataHandlerLP
+    assert DataHandlerLP.DK_L is not None
+    assert DataHandlerLP.DK_I is not None
 
     captured = []
 
