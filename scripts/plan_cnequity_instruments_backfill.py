@@ -8,7 +8,11 @@ the data lake.
 """
 
 import argparse
+import json
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 from click.testing import CliRunner
 from cnequity.cli.main import cli
@@ -23,6 +27,11 @@ def main() -> int:
         default=None,
         help="Optional CNEquity config path; otherwise use CNEquity's normal resolver.",
     )
+    parser.add_argument(
+        "--expected-data-root",
+        default=str(ROOT / "data" / "cnequity"),
+        help="Expected lake root; plan exits non-zero when CNEquity config points elsewhere.",
+    )
     args = parser.parse_args()
 
     command = ["backfill", "instruments", "--plan"]
@@ -36,6 +45,22 @@ def main() -> int:
         print(f"{type(result.exception).__name__}: {result.exception}", file=sys.stderr)
     if result.exit_code != 0:
         return result.exit_code or 1
+
+    try:
+        plan = json.loads(result.output)
+        actual_root = Path(plan["data_root"]).expanduser().resolve()
+    except (json.JSONDecodeError, KeyError, TypeError):
+        print("Could not verify the planned data_root from CNEquity output.", file=sys.stderr)
+        return 2
+    expected_root = Path(args.expected_data_root).expanduser().resolve()
+    if actual_root != expected_root:
+        print(
+            f"DATA ROOT MISMATCH: CNEquity will plan against {actual_root}, "
+            f"but expected {expected_root}. No data was fetched or written.",
+            file=sys.stderr,
+        )
+        return 2
+    print(f"Verified data_root: {actual_root}", file=sys.stderr)
     return 0
 
 
