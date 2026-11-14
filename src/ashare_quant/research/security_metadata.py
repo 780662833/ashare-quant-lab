@@ -393,7 +393,7 @@ def select_security_metadata_as_of(
         and _aware_timestamp(row["available_at"], "available_at") <= cutoff
     ]
 
-    latest_by_start: dict[tuple[str, str, str], dict[str, Any]] = {}
+    latest_by_start: dict[tuple[str, str, str | None, str], dict[str, Any]] = {}
     for row in rows:
         key = (
             row["instrument"], row["field"], row["classification_system"],
