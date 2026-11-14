@@ -220,7 +220,8 @@ def evaluate_validation_ranking(
     spread_values = [row["top_minus_bottom_forward_return"] for row in rows]
     top_excess_values = [row["top_n_excess_forward_return"] for row in rows]
     top_return_values = [row["top_n_mean_forward_return"] for row in rows]
-    positive_ic = [value for value in ic_values if value is not None]
+    valid_ic = [value for value in ic_values if value is not None]
+    positive_ic = [value for value in valid_ic if value > 0]
     positive_spreads = [value for value in spread_values if value is not None]
     prediction_rows = pred.height
     matched_rows = matched.height
@@ -232,9 +233,10 @@ def evaluate_validation_ranking(
         "matched_labeled_rows": matched_rows,
         "label_coverage_rate": matched_rows / prediction_rows if prediction_rows else 0.0,
         "evaluated_signal_date_count": len(rows),
-        "rank_ic_signal_date_count": len(positive_ic),
+        "rank_ic_signal_date_count": len(valid_ic),
+        "positive_rank_ic_signal_date_count": len(positive_ic),
         "mean_spearman_rank_ic": _mean_optional(ic_values),
-        "median_spearman_rank_ic": median(positive_ic) if positive_ic else None,
+        "median_spearman_rank_ic": median(valid_ic) if valid_ic else None,
         "positive_spearman_rank_ic_ratio": (
             sum(value > 0 for value in positive_ic) / len(positive_ic)
             if positive_ic else None
