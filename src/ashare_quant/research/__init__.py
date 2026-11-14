@@ -4,6 +4,7 @@ from ashare_quant.research.benchmark import MomentumBenchmarkRun, run_momentum_b
 from ashare_quant.research.features import CrossSectionalFeatureConfig, build_cross_sectional_features
 from ashare_quant.research.labels import build_forward_return_labels
 from ashare_quant.research.admission import TrainingDatasetAdmission, admit_training_dataset
+from ashare_quant.research.lightgbm_model import LightGBMConfig, LightGBMRegressionModel, fit_lightgbm_regressor
 from ashare_quant.research.cnequity_assembler import assemble_cnequity_research_bundle
 from ashare_quant.exceptions import ResearchBundleError
 from ashare_quant.research.bundle import ResearchDataBundle, build_research_data_bundle
@@ -47,6 +48,9 @@ __all__ = [
     "build_forward_return_labels",
     "TrainingDatasetAdmission",
     "admit_training_dataset",
+    "LightGBMConfig",
+    "LightGBMRegressionModel",
+    "fit_lightgbm_regressor",
     "ResearchBundleError",
     "ResearchDataBundle",
     "WalkForwardConfig",

@@ -84,12 +84,23 @@ training command. The acceptance report and provenance continue to carry
 admission decision and enforce it before any LightGBM fit. No training has been
 started.
 
-## Delivery sequence
+## Model adapter and portfolio targets
 
-1. Implement and test pure feature and label builders on synthetic frames.
-2. Implement four-gate training admission and label-maturity checks.
-3. Implement deterministic LightGBM fit/predict/save/load behind the gate.
-4. Implement weekly model predictions and Top-20 equal-weight targets.
-5. Add walk-forward model runner using the existing fold planner.
-6. Compare model and momentum on identical folds, costs, execution rules and
-   common windows. Only then consider empirical conclusions.
+`fit_lightgbm_regressor(...)` uses the optional `research` extra and refuses to
+fit unless it receives a successful admission object whose exact feature and
+label frame fingerprints still match. It drops incomplete feature rows,
+requires a configured minimum sample count, and uses deterministic single-
+thread LightGBM settings. Model artifacts contain a feature schema, training
+cutoff, source fingerprint and SHA-256 checksum sidecar; load verifies the
+checksum before constructing a Booster.
+
+`weekly_cross_sectional_model_targets(...)` ranks each signal-date cross-
+section by predicted forward return and delegates Top-N equal-weight target
+construction to the shared engine. It emits weights only; all execution and
+accounting remain in the backtest engine.
+
+The adapter has not been invoked to fit a model. Remaining Phase 9 work is a
+walk-forward model runner that trains only within each fold's admitted training
+window, predicts validation/test rows without refitting on them, persists model
+and prediction provenance, and compares the model with momentum on identical
+folds, costs and execution rules.
