@@ -298,7 +298,7 @@ def test_feature_builder_rejects_unsorted_calendar_without_reordering():
 
 
 def test_pit_features_prefer_latest_known_report_period_over_late_old_period_revision():
-    adj, raw, members, fundamentals, sessions = market()
+    adj, raw, members, fundamentals, sessions = market(45)
     # Dec-2023 is already known by Feb-20. A restatement of Sep-2023 is
     # announced later, on Feb-22. That older period must not eclipse Dec-2023.
     additional = pl.DataFrame([
@@ -328,7 +328,7 @@ def test_pit_features_prefer_latest_known_report_period_over_late_old_period_rev
 
 
 def test_pit_features_use_latest_revision_within_latest_report_period():
-    adj, raw, members, fundamentals, sessions = market()
+    adj, raw, members, fundamentals, sessions = market(45)
     additional = pl.DataFrame([{
         "instrument": "600000.SH", "item": "roe", "report_period": "2023-12-31",
         "available_at": "2024-02-22T10:00:00+08:00", "value": 0.35,
