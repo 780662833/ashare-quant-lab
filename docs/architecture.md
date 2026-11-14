@@ -318,6 +318,5 @@ As of 2026-11-14:
 | Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
 | Cross-sectional feature/label + strict admission | Implemented; empirical use remains gated by local data acceptance |
 | Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Merged in PR #67; 286 synthetic CI tests passed |
-| Full multi-fold runner through real Qlib APIs | Merged in PR #69; 2 synthetic real-API integration tests passed; LightGBM optimizer stubbed |
-| Real Qlib 0.9.7 / Python 3.12 compatibility | Verified in PR #68: Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3, LightGBM 4.7.0; one real-API synthetic smoke test passed; no model fit |
+| Real Qlib 0.9.7 / Python 3.12 compatibility | Verified in PR #68 and #69: Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3, LightGBM 4.7.0; DatasetH API and full multi-fold runner both passed synthetic integration tests; optimizer stubbed, no model fit |
 | Live trading | Out of scope |
