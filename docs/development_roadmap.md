@@ -301,3 +301,17 @@ unverified Qlib wrappers and non-session execution dates. PR #75 CI:
 Pandas 2.3.3 / LightGBM 4.7.0 real-API synthetic workflow passed 2 tests.
 The LightGBM optimizer remained stubbed; no real model fit or market
 backtest was performed. Merge commit: `728016f`.
+
+
+
+### Phase 9.16 — latest-known PIT report-period precedence (merged PR #76)
+
+PIT feature selection now first chooses the newest report period already
+available at each signal timestamp, then chooses the latest revision within
+that report period. A later restatement of an older period cannot override a
+newer period already published. Report periods must be canonical YYYY-MM-DD
+dates and cannot be later than their publication date. Synthetic regression
+tests cover older-period restatements, same-period revisions, malformed dates
+and future report periods. PR #76 CI: 336 unit tests passed, 2 skipped.
+No real model fit or market backtest was performed. Merge commit:
+`1d235523a6a61f286769ec89b037860fd0d153fd`.
