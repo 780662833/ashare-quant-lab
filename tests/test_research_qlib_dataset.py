@@ -24,6 +24,7 @@ def _frames():
         {
             "signal_date": ["2024-01-05", "2024-01-12"],
             "instrument": ["000001.SZ", "000002.SZ"],
+            "label_entry_date": ["2024-01-08", "2024-01-15"],
             "label_end_date": ["2024-01-12", "2024-01-19"],
             "forward_return": [0.03, 0.01],
         }
