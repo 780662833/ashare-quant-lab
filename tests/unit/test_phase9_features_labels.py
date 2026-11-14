@@ -22,7 +22,10 @@ def market(count=35):
         for symbol, base, slope in (("600000.SH", 10.0, 0.1), ("000001.SZ", 20.0, 0.03)):
             raw_close = base + slope * i
             raw_open = raw_close - 0.05
-            adjusted.append({"instrument": symbol, "date": day, "adj_close": raw_close * 2.0})
+            adjusted.append({
+                "instrument": symbol, "date": day, "adj_close": raw_close * 2.0,
+                "adj_is_exact": True,
+            })
             raw.append({
                 "instrument": symbol, "date": day, "open": raw_open, "close": raw_close,
                 "volume": 1000 + i * 10, "amount": raw_close * 1000,
@@ -187,4 +190,28 @@ def test_invalid_price_data_and_calendar_are_rejected():
         build_forward_return_labels(
             adjusted_bars=adj, execution_bars=raw,
             universe_membership=members, trading_dates=sessions[:-1],
+        )
+
+
+
+def test_forward_labels_reject_non_exact_hfq_adjustment_rows():
+    adj, raw, members, fundamentals, sessions = market()
+    bad = adj.with_columns(
+        pl.when(pl.col("date") == sessions[5])
+        .then(False).otherwise(pl.col("adj_is_exact")).alias("adj_is_exact")
+    )
+    with pytest.raises(ValueError, match="finite, positive and exact"):
+        build_forward_return_labels(
+            adjusted_bars=bad, execution_bars=raw,
+            universe_membership=members, trading_dates=sessions,
+        )
+
+
+def test_forward_labels_reject_unsorted_calendar_without_reordering():
+    adj, raw, members, fundamentals, sessions = market()
+    unsorted = [sessions[1], sessions[0], *sessions[2:]]
+    with pytest.raises(ValueError, match="strictly chronological"):
+        build_forward_return_labels(
+            adjusted_bars=adj, execution_bars=raw,
+            universe_membership=members, trading_dates=unsorted,
         )
