@@ -6,6 +6,7 @@ import json
 import math
 import os
 from dataclasses import asdict, dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -197,6 +198,27 @@ class LightGBMRegressionModel:
         )
 
 
+def _validate_execution_label_dates(labels: pl.DataFrame) -> None:
+    """Require the signal, executable entry and exit maturity dates to be ordered."""
+    for column in ("signal_date", "label_entry_date", "label_end_date"):
+        for value in labels[column].cast(pl.String).to_list():
+            if not isinstance(value, str):
+                raise ValueError(f"Labels contain an invalid {column}")
+            try:
+                parsed = date.fromisoformat(value)
+            except ValueError as exc:
+                raise ValueError(f"Labels contain an invalid {column}") from exc
+            if parsed.isoformat() != value:
+                raise ValueError(f"Labels contain a non-canonical {column}")
+    if labels.filter(
+        (pl.col("label_entry_date").cast(pl.String) <= pl.col("signal_date").cast(pl.String))
+        | (pl.col("label_entry_date").cast(pl.String) >= pl.col("label_end_date").cast(pl.String))
+    ).height:
+        raise ValueError(
+            "Labels contain an execution entry date that is not after signal and before maturity"
+        )
+
+
 def fit_lightgbm_regressor(
     *,
     features: pl.DataFrame,
@@ -218,9 +240,12 @@ def fit_lightgbm_regressor(
     feature_columns = tuple(admission.feature_columns)
     if not feature_columns:
         raise ValueError("Admission contains no model feature columns")
-    required_labels = {"signal_date", "instrument", "label_end_date", "forward_return"}
+    required_labels = {
+        "signal_date", "instrument", "label_entry_date", "label_end_date", "forward_return"
+    }
     if not required_labels.issubset(labels.columns):
-        raise ValueError("Labels do not satisfy the forward-return contract")
+        raise ValueError("Labels do not satisfy the execution-aligned forward-return contract")
+    _validate_execution_label_dates(labels)
 
     joined = labels.join(features, on=_KEYS, how="inner")
     joined = joined.filter(
