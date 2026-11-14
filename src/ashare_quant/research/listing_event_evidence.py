@@ -61,7 +61,7 @@ _EXCHANGE_SPECS = {
     },
 }
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
-_INSTRUMENT = re.compile(r"^[0-9]{6}\\.(SH|SZ|BJ)$")
+_INSTRUMENT = re.compile(r"^[0-9]{6}\.(SH|SZ|BJ)$")
 
 
 def _required_text(row: Mapping[str, Any], field: str) -> str:
