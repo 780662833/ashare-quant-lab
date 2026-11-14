@@ -37,7 +37,7 @@ def build_forward_return_labels(
     label_end_date is the exit execution date and must mature strictly before
     the training cutoff. label_entry_date records the first executable session.
     """
-    required_prices = {"instrument", "date", "adj_close"}
+    required_prices = {"instrument", "date", "adj_close", "adj_is_exact"}
     required_execution = {"instrument", "date", "open", "close"}
     required_members = {"instrument", "date"}
     for name, frame, required in (
@@ -62,7 +62,8 @@ def build_forward_return_labels(
         sessions.append(text)
     if len(sessions) != len(set(sessions)):
         raise ValueError("Trading calendar contains duplicate sessions")
-    sessions = sorted(sessions)
+    if sessions != sorted(sessions):
+        raise ValueError("Trading calendar must be strictly chronological")
     if not sessions:
         raise ValueError("Trading calendar must not be empty")
 
@@ -70,6 +71,7 @@ def build_forward_return_labels(
         pl.col("instrument").cast(pl.String),
         pl.col("date").cast(pl.String),
         pl.col("adj_close").cast(pl.Float64),
+        pl.col("adj_is_exact").cast(pl.Boolean, strict=True),
     )
     execution = execution_bars.select(
         pl.col("instrument").cast(pl.String),
@@ -108,8 +110,10 @@ def build_forward_return_labels(
         pl.col("adj_close").is_null()
         | (~pl.col("adj_close").is_finite())
         | (pl.col("adj_close") <= 0)
+        | pl.col("adj_is_exact").is_null()
+        | (pl.col("adj_is_exact") != True)
     ).height:
-        raise ValueError("HFQ adjusted close must be finite and positive")
+        raise ValueError("HFQ adjusted close must be finite, positive and exact")
     if execution.filter(
         pl.col("open").is_null()
         | pl.col("close").is_null()
