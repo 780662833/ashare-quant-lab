@@ -17,6 +17,21 @@
   differences may be retried on later sessions under the same target.
 - The official exchange calendar must be supplied by the future research
   bundle; dates observed for one selected stock are not a calendar.
+
+## Supervised-return label timing
+
+- Model labels start at the adjusted open of the first executable session after
+  the signal close, not at the signal-day close.
+- The label exit is the adjusted open of the first executable session after
+  the next weekly signal. This matches when the shared engine can first replace
+  the holding and naturally follows holiday-shortened trading weeks.
+- The label builder derives each session's HFQ open by applying that same
+  session's close adjustment multiplier (adj_close / raw_close) to the raw
+  open. It never mixes raw open with adjusted close, forward-fills prices,
+  or substitutes a different session's adjustment factor.
+- label_entry_date records the entry execution session; label_end_date records
+  the exit execution/maturity session used by walk-forward purging. A label is
+  omitted if either adjusted-open endpoint is unavailable.
 - Targets still requiring execution at the end of the supplied window are
   exposed separately in `BacktestResult.pending_targets` and the execution
   report. A signal on the final supplied session is marked `no_next_session`,
