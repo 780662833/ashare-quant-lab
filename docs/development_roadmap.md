@@ -355,3 +355,9 @@ even if it bypasses the canonical feature builder. The failure occurs before
 fold planning, admission, or model fitting. A synthetic regression test adds
 an out-of-universe instrument and confirms the runner rejects the frame at
 its public boundary. No empirical data, model fit, or market backtest is used.
+
+PR #79 is merged. Final-head CI: 339 unit tests passed, 2 skipped;
+the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 synthetic
+compatibility workflow passed 2 tests. Merge commit:
+`bec4a49de7427d862eda6c89df99d39e3288ec0a`. No optimizer fit, real-data
+training or empirical market backtest was performed.
