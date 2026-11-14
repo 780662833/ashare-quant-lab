@@ -238,3 +238,11 @@ def test_missing_or_mismatched_pit_receipt_blocks_training_admission():
     )
     assert result.admitted is False
     assert any("acceptance receipts do not match" in reason for reason in result.rejection_reasons)
+
+
+def test_acceptance_pit_receipt_must_match_adapter_revision():
+    report = valid_report()
+    report["receipts"]["pit"]["dependencies"]["financial_statement_items"]["revision_id"] = "stale-pit-revision"
+    result = admit(report=report)
+    assert result.admitted is False
+    assert any("acceptance PIT receipt revision" in reason for reason in result.rejection_reasons)
