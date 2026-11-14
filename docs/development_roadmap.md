@@ -44,7 +44,8 @@ branch is not part of `main` until GitHub reports it merged.
 | 9.4 | Walk-forward model runner and matched momentum comparison | Merged in PR #61 | Per fold: train-only admission/fit, validation prediction, label-maturity re-admission/refit on train+validation, test-only predictions. Model and momentum reset to the same baseline NAV and use identical costs/execution settings. CI uses fake LightGBM and synthetic bundles; no real training or empirical run. |
 | 9.5 | Model experiment persistence and verification | Merged in PR #62 | Persist per-fold Booster, feature/label predictions, targets, benchmark and model ledgers, admissions, provenance and config; verify SHA-256 inventory and model metadata. No real model artifacts generated. |
 | 9.6 | Optional Qlib DatasetH bridge | Merged in PR #64–#66 | Lazy Qlib bridge for admission-checked Polars features/labels, `(datetime, instrument)` index, feature/label groups and chronological segments. Synthetic-only conversion tests. |
-| 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Merged in PR #67 | Walk-forward runner builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. PR #67 main CI passed 286 synthetic tests; real Qlib API compatibility is tracked separately. |
+| 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Merged in PR #67 | Walk-forward runner builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. PR #67 main CI passed 286 synthetic tests. |
+| 9.8 | Real Qlib 0.9.7 API compatibility | Merged in PR #68 | Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3 and LightGBM 4.7.0; actual `DataHandlerLP.from_df`, `DatasetH.prepare`, learn/infer views, datetime MultiIndex and LightGBM Dataset construction passed one synthetic smoke test. `lightgbm.train` was stubbed; no model fit or real-data backtest. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -172,13 +173,13 @@ mature-label checks, purge/embargo, Top-20 target generation and A-share
 execution remain project-owned. The merged PR passed 286 synthetic tests;
 the PR CI did not install real Qlib.
 
-### Phase 9.8 — real Qlib 0.9.7 API compatibility (in PR under review)
+### Phase 9.8 — real Qlib 0.9.7 API compatibility (merged in PR #68)
 
-A separate Python 3.12 workflow installs the real Qlib 0.9.7 and LightGBM
-packages and runs a synthetic-only smoke test against `DataHandlerLP.from_df`,
-`DatasetH.prepare`, learn/infer views, pandas datetime MultiIndex and the
-LightGBM Dataset constructor. The LightGBM optimizer call is stubbed; no
-model is fitted. This phase does not access the local data lake, call CNEquity,
+The dedicated Python 3.12.16 workflow installed Qlib 0.9.7, Pandas 2.3.3 and
+LightGBM 4.7.0. The synthetic-only smoke test passed against the real
+`DataHandlerLP.from_df`, `DatasetH.prepare`, learn/infer views, pandas datetime
+MultiIndex and LightGBM Dataset constructor. `lightgbm.train` was stubbed; no
+model was fitted. The job did not access the local data lake, call CNEquity,
 run a real-data backtest or alter base dependencies/version locks.
 
 ## CNEquity data acquisition policy
