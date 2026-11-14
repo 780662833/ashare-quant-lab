@@ -152,9 +152,10 @@ windows. No data assembly, scheduler or model-training unlock is added. See
 - The acceptance report and bundle provenance retain
   `training_dataset_unlocked=false`; the model runner consumes a successful
   per-fold admission object before constructing a Qlib dataset or fitting.
-- The project's fold planner owns label-horizon purge and embargo. Qlib
-  receives those approved boundaries as `DatasetH` segments; it does not
-  weaken or replace admission.
+- The project's fold planner owns label-entry lag, open-to-open label-horizon
+  purge, and embargo. The reported maturity date includes the one-session
+  close-to-next-open entry delay. Qlib receives those approved boundaries as
+  `DatasetH` segments; it does not weaken or replace admission.
 - Python 3.13 remains the main development environment. Qlib/pandas remain
   optional and lazy; a dedicated Python 3.12 Qlib 0.9.7 smoke workflow checks
   real DatasetH/LightGBM data-interface compatibility without changing the
