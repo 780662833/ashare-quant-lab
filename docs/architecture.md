@@ -129,8 +129,11 @@ flowchart TD
   historical universe, trading status, walk-forward splits and admission
   remain authoritative. Weekly feature construction requires exact HFQ
   adjustment evidence for every adjusted-close row; strict PIT facts must be
-  finite and duplicate availability keys are rejected. Qlib is a
-  dataset/workflow adapter, not a data source of truth or an admission bypass.
+  finite and duplicate availability keys are rejected. PIT values select the
+  latest report period known at the signal timestamp and then the latest
+  revision within that period. Zero-volume rolling windows produce a null
+  volume-ratio feature, never a NaN 0/0 result. Qlib is a dataset/workflow
+  adapter, not a data source of truth or an admission bypass.
 - A-share execution, costs, price limits, order fills and portfolio accounting
   remain project-owned and must not be delegated to generic defaults.
 - Qlib and pandas stay optional/lazy in the Python 3.13 development
