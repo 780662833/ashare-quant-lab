@@ -1,4 +1,4 @@
-# Point-in-time security metadata contract (Phase 9.23)
+# Point-in-time security metadata contract (Phase 9.24)
 
 ## Purpose and status
 
@@ -29,6 +29,7 @@ material PIT limitations as 0.21.0.
 | Dimension / dataset | Contract evidence | Research decision |
 |---|---|---|
 | Listing date: instruments | Contains list_date/delist_date, but contract has pit=false and no available_at or revision history for the fact | Candidate immutable event only after source-specific validation and full universe coverage |
+| Official listing-event candidates: SSE / SZSE / BSE | Official notice/monthly archive records can show event dates, but full historical retention, per-row publication timestamps and PIT-universe completeness remain unproven | Candidate namespaces only; no adapter or source admitted. See [listing-date source qualification](listing_date_source_qualification.md) |
 | Industry: industry_members | history_mode=snapshot_with_backfill, fetch_semantics=snapshot, pit=false, pit_grade=none | Not accepted as historical PIT |
 | Industry: Shenwan interval source | Contains effective start_date, but normalized history drops update_time and has no source-published availability timestamp | Not accepted as historical PIT |
 | Market cap: valuation_metrics | history_mode=snapshot_with_backfill, pit=false, pit_grade=none; snapshot fallback is not a historical publication record | Not accepted as strict PIT |
