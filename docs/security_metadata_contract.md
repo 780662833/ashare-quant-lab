@@ -75,6 +75,8 @@ availability/revision. Required fields:
 |---|---|
 | instrument | Exchange-qualified security identifier |
 | field | listing_date, industry_l1_code/l2/l3_code, market_cap_total or market_cap_float |
+| classification_system | Required for industry: eastmoney or sw; null for non-taxonomy fields |
+| value_unit | date, classification_code or CNY, fixed by field registry |
 | value_numeric / value_string / value_date | Exactly one typed value according to the field registry |
 | effective_from | Inclusive first date the fact applies |
 | effective_to | Exclusive end date; null means open-ended where allowed |
@@ -106,11 +108,16 @@ the pinned dataset contract and its own normalization rules.
   and not an exact publication timestamp, availability is conservatively set
   to 23:59:59 Asia/Shanghai on the listing date; the fact cannot be used in
   that day's 16:00 signal.
-- industry_l1/l2/l3_code requires strict PIT evidence. Each classification
-  interval has an effective start and optional exclusive end plus a separate
-  available_at timestamp. A classification announced in advance is usable
-  only on or after effective_from; a later restatement is usable only after
-  that revision's available_at.
+- industry_l1/l2/l3_code requires strict PIT evidence and an explicit
+  classification_system. EastMoney and Shenwan codes remain separate
+  namespaces; their values are never merged or ranked by publication time.
+  Each classification interval has an effective start and optional exclusive
+  end plus a separate available_at timestamp. A classification announced in
+  advance is usable only on or after effective_from; a later restatement is
+  usable only after that revision's available_at.
+- market_cap_total and market_cap_float are expressed in CNY. Share counts are
+  not accepted in these fields; any future derivation must separately prove
+  same-session share structure, A-share float semantics and publication time.
 - market_cap_total and market_cap_float require strict PIT evidence, a finite
   non-negative value, and a bounded effective interval. The effective start
   must equal the signal date: market cap is a same-session observation, not a
