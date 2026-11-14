@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
-
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
@@ -12,12 +10,12 @@ from ashare_quant.research.admission import (
     TrainingDatasetAdmission,
     _frame_fingerprint,
 )
-from ashare_quant.research.lightgbm_model import (
-    LightGBMConfig,
-    LightGBMRegressionModel,
-)
+from ashare_quant.research.lightgbm_model import LightGBMConfig
 from ashare_quant.research.qlib_dataset import create_qlib_dataset
-from ashare_quant.research.qlib_lightgbm import predict_qlib_lightgbm_regressor
+from ashare_quant.research.qlib_lightgbm import (
+    fit_qlib_lightgbm_regressor,
+    predict_qlib_lightgbm_regressor,
+)
 
 
 class SyntheticBooster:
@@ -79,8 +77,8 @@ def _admitted_synthetic_frames():
     return features, labels, admission, inference_features
 
 
-def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract():
-    """Exercise actual Qlib 0.9.7 APIs with synthetic rows only; never call lgb.train."""
+def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
+    """Exercise actual Qlib 0.9.7 APIs with synthetic rows only; never fit a model."""
     features, labels, admission, inference_features = _admitted_synthetic_frames()
     dataset_bundle = create_qlib_dataset(
         features=features,
@@ -115,15 +113,28 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract():
     assert np.isfinite(train_features).all()
     assert np.isfinite(train_labels).all()
 
-    # Exercise the actual LightGBM Dataset constructor only. Do not fit/train.
-    lightgbm_dataset = lgb.Dataset(
-        train_features,
-        label=train_labels,
-        feature_name=list(admission.feature_columns),
+    # Keep the real Qlib and LightGBM Dataset APIs, but replace only the final
+    # LightGBM optimizer call so this smoke test cannot fit a model.
+    captured = {}
+
+    def no_fit(params, train_data, num_boost_round):
+        train_data.construct()
+        captured["params"] = params
+        captured["dataset"] = train_data
+        captured["num_boost_round"] = num_boost_round
+        return SyntheticBooster()
+
+    monkeypatch.setattr(lgb, "train", no_fit)
+    model = fit_qlib_lightgbm_regressor(
+        dataset=dataset_bundle,
+        admission=admission,
+        config=LightGBMConfig(min_training_rows=2, num_boost_round=3),
     )
-    lightgbm_dataset.construct()
-    assert lightgbm_dataset.num_data() == 2
-    assert lightgbm_dataset.num_feature() == 2
+    assert model.training_rows == 2
+    assert captured["dataset"].num_data() == 2
+    assert captured["dataset"].num_feature() == 2
+    assert captured["dataset"].get_feature_name() == ["return_5", "pit_roe"]
+    assert captured["num_boost_round"] == 3
 
     valid = dataset_bundle.prepare(
         "valid",
@@ -139,20 +150,7 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract():
         "600000.SH",
     ]
 
-    # Exercise the project's real Qlib inference adapter with a prediction-only
-    # stub. The test intentionally does not invoke LightGBM's training API.
-    model = LightGBMRegressionModel(
-        booster=SyntheticBooster(),
-        feature_columns=admission.feature_columns,
-        config=LightGBMConfig(min_training_rows=2),
-        acceptance_report_id=admission.report_id,
-        training_cutoff=admission.training_cutoff,
-        training_rows=admission.label_rows,
-        source_fingerprint=admission.source_fingerprint,
-        feature_fingerprint=admission.feature_fingerprint,
-        label_fingerprint=admission.label_fingerprint,
-    )
-    predictions = predict_qlib_lightgbm_regressor(
+    # The returned model carries a synthetic prediction-only Booster.\n    predictions = predict_qlib_lightgbm_regressor(
         model=model,
         dataset=dataset_bundle,
         segment="valid",
