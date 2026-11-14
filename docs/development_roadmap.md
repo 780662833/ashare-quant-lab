@@ -315,3 +315,14 @@ tests cover older-period restatements, same-period revisions, malformed dates
 and future report periods. PR #76 CI: 336 unit tests passed, 2 skipped.
 No real model fit or market backtest was performed. Merge commit:
 `1d235523a6a61f286769ec89b037860fd0d153fd`.
+
+
+### Phase 9.17 — finite-safe zero-volume activity features (merged PR #77)
+
+The rolling volume-ratio feature now returns null when the rolling mean
+volume is zero or unavailable. Zero-volume observations remain in the raw
+panel; the feature builder no longer creates NaN from a 0/0 ratio. Training
+and inference therefore both exclude incomplete rows instead of allowing a
+single NaN to invalidate an entire inference cross-section. Synthetic CI:
+337 unit tests passed, 2 skipped. No real model fit or market backtest was
+performed. Merge commit: `c8e94f10154710be78044bf4c55425798504ed6e`.
