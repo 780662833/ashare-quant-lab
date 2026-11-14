@@ -50,7 +50,7 @@ def test_feature_builder_uses_weekly_pit_members_and_strict_fundamentals():
         config=CrossSectionalFeatureConfig(return_windows=(5, 10), volatility_window=5, activity_window=5),
     )
     row = features.filter(
-        (pl.col("signal_date") == "2024-02-02") & (pl.col("instrument") == "600000.SH")
+        (pl.col("signal_date") == "2024-02-23") & (pl.col("instrument") == "600000.SH")
     ).row(0, named=True)
     assert row["pit_roe"] == pytest.approx(0.25)
     assert row["return_5"] is not None
