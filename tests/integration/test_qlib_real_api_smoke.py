@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import polars as pl
+import pytest
+
+pytest.importorskip("qlib", reason="real Qlib compatibility test requires pyqlib")
+pytest.importorskip("lightgbm", reason="real Qlib compatibility test requires LightGBM")
+
+import lightgbm as lgb
 from qlib.data.dataset.handler import DataHandlerLP
 
 from ashare_quant.research.admission import (
