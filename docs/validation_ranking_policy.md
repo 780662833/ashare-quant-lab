@@ -18,8 +18,11 @@ default thresholds. A caller must explicitly construct
 `ValidationRankingAcceptancePolicy` and provide:
 
 - `policy_id`: stable, human-readable identifier for the frozen rule set.
-- `minimum_fold_count` and `minimum_signal_date_count`: minimum validation
-  evidence volume.
+- `minimum_fold_count`, `minimum_signal_date_count` and
+  `minimum_rank_ic_observation_count`: minimum validation evidence volume.
+- `minimum_cross_section_size`: minimum number of labeled stocks in every
+  evaluated signal-date cross-section, preventing tiny universes from passing
+  a ranking policy.
 - `minimum_label_coverage_rate`: minimum pooled count of matched mature
   labels divided by prediction rows.
 - `minimum_mean_spearman_rank_ic`: minimum mean weekly cross-sectional rank IC.
@@ -42,7 +45,8 @@ validation results; this implementation does not pick or optimize them.
 The summary reports:
 
 - Weekly Rank IC mean, median, sample standard deviation, positive ratio and
-  descriptive ICIR (mean divided by sample standard deviation).
+  descriptive ICIR (mean divided by sample standard deviation), including the
+  number of valid IC weeks and minimum/mean weekly cross-section size.
 - Fold-level mean Rank IC and the fraction of folds with positive mean IC.
 - Pooled label coverage, total prediction and matched-label counts.
 - Mean weekly Top-N excess and the fraction of folds with positive mean Top-N
