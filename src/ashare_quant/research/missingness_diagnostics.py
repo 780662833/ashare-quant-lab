@@ -292,10 +292,13 @@ def evaluate_validation_feature_missingness(
         top_rows = date_predictions[:top_n]
         date_eligible_count = len(eligible_by_date.get(signal_date, set()))
         for pit_feature in diagnostic_features:
-            def is_missing(row: dict[str, Any]) -> bool:
-                if pit_feature == _ANY_PIT_MISSING:
+            def is_missing(
+                row: dict[str, Any],
+                selected_feature: str = pit_feature,
+            ) -> bool:
+                if selected_feature == _ANY_PIT_MISSING:
                     return any(row[name] is None for name in pit_features)
-                return row[pit_feature] is None
+                return row[selected_feature] is None
 
             universe_missing = [row for row in date_features if is_missing(row)]
             prediction_missing = [
