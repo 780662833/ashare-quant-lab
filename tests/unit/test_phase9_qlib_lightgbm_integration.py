@@ -244,6 +244,7 @@ def test_qlib_training_rejects_cutoff_or_row_count_mismatch(monkeypatch):
             "train": ("2024-01-01", "2024-01-15"),
             "valid": ("2024-01-19", "2024-01-19"),
         },
+        label_entry_contract_verified=True,
     )
     with pytest.raises(ValueError, match="cutoff"):
         fit_qlib_lightgbm_regressor(
