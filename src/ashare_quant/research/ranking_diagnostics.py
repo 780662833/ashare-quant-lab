@@ -238,8 +238,8 @@ def evaluate_validation_ranking(
         "mean_spearman_rank_ic": _mean_optional(ic_values),
         "median_spearman_rank_ic": median(valid_ic) if valid_ic else None,
         "positive_spearman_rank_ic_ratio": (
-            sum(value > 0 for value in positive_ic) / len(positive_ic)
-            if positive_ic else None
+            len(positive_ic) / len(valid_ic)
+            if valid_ic else None
         ),
         "mean_pearson_ic": _mean_optional(pearson_values),
         "mean_top_n_forward_return": _mean_optional(top_return_values),
