@@ -14,7 +14,15 @@ from ashare_quant.research.walk_forward_model_runner import (
     WalkForwardCrossSectionalModelRun,
     run_walk_forward_cross_sectional_model,
 )
-from ashare_quant.research.qlib_dataset import build_qlib_panel_rows, create_qlib_dataset
+from ashare_quant.research.qlib_dataset import (
+    QlibDatasetBundle,
+    build_qlib_panel_rows,
+    create_qlib_dataset,
+)
+from ashare_quant.research.qlib_lightgbm import (
+    fit_qlib_lightgbm_regressor,
+    predict_qlib_lightgbm_regressor,
+)
 from ashare_quant.research.cnequity_assembler import (
     assemble_cnequity_research_bundle,
     assemble_cnequity_pit_fundamentals,
@@ -67,6 +75,9 @@ __all__ = [
     "fit_lightgbm_regressor",
     "build_qlib_panel_rows",
     "create_qlib_dataset",
+    "QlibDatasetBundle",
+    "fit_qlib_lightgbm_regressor",
+    "predict_qlib_lightgbm_regressor",
     "WalkForwardModelFoldRun",
     "WalkForwardCrossSectionalModelRun",
     "run_walk_forward_cross_sectional_model",

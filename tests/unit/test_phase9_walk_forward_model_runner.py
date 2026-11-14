@@ -189,6 +189,40 @@ def make_bundle_inputs(count=70):
 
 def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkeypatch, tmp_path):
     fake_lightgbm(monkeypatch)
+
+    # Exercise the existing fold orchestration without requiring a real Qlib install.
+    # The Qlib -> LightGBM adapters have separate contract tests.
+    import ashare_quant.research.walk_forward_model_runner as runner_module
+    from ashare_quant.research.lightgbm_model import fit_lightgbm_regressor
+
+    def fake_create_qlib_dataset(
+        *, features, labels, admission, segments, inference_features=None
+    ):
+        return SimpleNamespace(
+            features=features,
+            labels=labels,
+            admission=admission,
+            segment_bounds=dict(segments),
+            inference_features=inference_features,
+        )
+
+    def fake_fit_qlib(*, dataset, admission, config=None):
+        assert dataset.admission == admission
+        return fit_lightgbm_regressor(
+            features=dataset.features,
+            labels=dataset.labels,
+            admission=admission,
+            config=config,
+        )
+
+    def fake_predict_qlib(*, model, dataset, segment):
+        assert segment in dataset.segment_bounds
+        return model.predict(dataset.inference_features)
+
+    monkeypatch.setattr(runner_module, "create_qlib_dataset", fake_create_qlib_dataset)
+    monkeypatch.setattr(runner_module, "fit_qlib_lightgbm_regressor", fake_fit_qlib)
+    monkeypatch.setattr(runner_module, "predict_qlib_lightgbm_regressor", fake_predict_qlib)
+
     inputs = make_bundle_inputs()
     report = inputs["acceptance_report"]
     bundle = build_research_data_bundle(**inputs)

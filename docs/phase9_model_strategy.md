@@ -91,31 +91,41 @@ training command. The acceptance report and provenance continue to carry
 admission decision and enforce it before any LightGBM fit. No training has been
 started.
 
-## Model adapter and portfolio targets
+## Qlib DatasetH, LightGBM and portfolio targets
 
-`fit_lightgbm_regressor(...)` uses the optional `research` extra and refuses to
-fit unless it receives a successful admission object whose exact feature and
-label frame fingerprints still match. It drops incomplete feature rows,
-requires a configured minimum sample count, and uses deterministic single-
-thread LightGBM settings. Model artifacts contain a feature schema, training
-cutoff, source fingerprint and SHA-256 checksum sidecar; load verifies the
-checksum before constructing a Booster.
+The primary walk-forward training path is Qlib `DatasetH` ->
+`LightGBMRegressionModel`, not a separate Qlib model stack:
 
-`weekly_cross_sectional_model_targets(...)` ranks each signal-date cross-
-section by predicted forward return and delegates Top-N equal-weight target
-construction to the shared engine. It emits weights only; all execution and
-accounting remain in the backtest engine.
+- `create_qlib_dataset(...)` accepts only the exact successful fold admission,
+  checks feature/label fingerprints and maturity, and creates a Qlib
+  `DatasetH` bundle. Validation and test frames enter only as feature-only
+  inference rows; their labels are not sent to the inference view.
+- The diagnostic fit reads Qlib's train segment through
+  `DataHandlerLP.DK_L`; validation predictions read only Qlib's feature
+  inference view through `DataHandlerLP.DK_I`.
+- Before test prediction, the runner re-admits train-plus-validation rows at
+  the test cutoff. Only labels matured strictly before that cutoff enter the
+  final Qlib train segment. The test segment is feature-only.
+- `fit_qlib_lightgbm_regressor(...)` uses the frozen deterministic LightGBM
+  regression configuration and returns the same project model type used for
+  model persistence. The lower-level Polars fit adapter remains available for
+  isolated compatibility tests; the walk-forward runner uses Qlib.
+- `weekly_cross_sectional_model_targets(...)` ranks each signal-date
+  cross-section by predicted five-session return and delegates Top-20
+  equal-weight target construction to the shared engine.
 
-The adapter has not been invoked against real data. The walk-forward model
-runner is implemented as an explicit callable workflow: it fits a diagnostic
-model on the admitted training window, predicts validation rows, then rechecks
-label maturity and refits on train+validation before producing test-only
-predictions. Test targets run through the same backtest engine. CI uses only a
-fake LightGBM module and synthetic bundles; no empirical result is claimed.
-Model and momentum are evaluated from the same pre-test baseline NAV, with
-only test-window signals executed and identical BacktestConfig applied to
-both. The model runner records per-fold excess returns and benchmark-linked
-returns; these remain descriptive until a real, accepted data run is performed.
+Qlib segment selection does not replace the project's walk-forward planner,
+label-horizon purge, embargo or admission. PIT availability, source receipts,
+historical universe, trading status and feature construction remain
+project-owned. T+1, order eligibility, price limits, commissions, transfer
+fees, stamp duty, slippage, fills and unfilled-order handling also remain
+project-owned by the backtest engine.
+
+The integrated adapter has not been run with a real Qlib installation or on
+real market data. CI uses synthetic frames, stub Qlib APIs and a fake
+LightGBM module. Model and momentum continue to share the same pre-test
+baseline NAV and BacktestConfig in the explicit walk-forward workflow; no
+empirical performance claim is made until an accepted real-data run occurs.
 
 `persist_walk_forward_model_run(...)` writes the final Booster for each fold,
 model/benchmark predictions and ledgers, admissions, configs and provenance.

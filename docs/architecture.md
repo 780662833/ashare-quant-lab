@@ -108,19 +108,24 @@ flowchart TD
 
 - Qlib and pandas are optional research dependencies; base synthetic backtest
   and momentum workflows do not require Qlib.
-- Phase 9 provides a lazy Qlib `DataHandlerLP.from_df` / `DatasetH` bridge
-  for an already-admitted Polars training panel. The bridge verifies admission
-  fingerprints, complete key alignment, finite values and label maturity
-  before conversion to Qlib's `(datetime, instrument)` index and
-  `(feature, label)` column groups.
+- Phase 9 uses Qlib `DataHandlerLP.from_df` / `DatasetH` as the primary
+  research dataset interface. It accepts only admission-bound Polars
+  train/label frames, exposes chronological segments and keeps validation/test
+  rows feature-only for inference.
+- LightGBM is the single cross-sectional regression model. It reads Qlib's
+  learn view for fitting and infer view for keyed predictions; project-owned
+  Top-20 equal-weight target generation remains downstream.
 - Project-owned Polars features/labels, CNEquity receipts, PIT availability,
   historical universe, trading status, walk-forward splits and admission
   remain authoritative. Qlib is a dataset/workflow adapter, not a data source
   of truth or an admission bypass.
 - A-share execution, costs, price limits, order fills and portfolio accounting
   remain project-owned and must not be delegated to generic defaults.
-- Synthetic CI stubs the optional Qlib API. No real Qlib training, model fit,
-  real-data backtest or empirical performance claim has been made.
+- Qlib and pandas stay optional/lazy in the Python 3.13 development
+  environment. Separate Python 3.12 real-API compatibility validation remains
+  pending; no dependency or CNEquity version lock was changed.
+- Synthetic CI stubs Qlib and LightGBM APIs. No real-data training, backtest
+  or empirical performance claim has been made.
 
 ## 4. Canonical data and time contract
 
@@ -296,7 +301,7 @@ fold-level and regime-level results, not only pooled headline metrics.
 
 ## 10. Current maturity snapshot
 
-As of 2026-11-13:
+As of 2026-11-14:
 
 | Capability | State |
 |---|---|
@@ -308,5 +313,7 @@ As of 2026-11-13:
 | Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
 | Walk-forward momentum runner | Merged in PR #13; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
 | Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
-| Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
+| Cross-sectional feature/label + strict admission | Implemented; empirical use remains gated by local data acceptance |
+| Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Implemented in Phase 9.7 PR under review; synthetic tests only |
+| Real Qlib 0.9.7 / Python 3.12 compatibility | Pending isolated optional-environment verification |
 | Live trading | Out of scope |

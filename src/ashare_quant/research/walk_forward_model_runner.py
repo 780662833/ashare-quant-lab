@@ -24,10 +24,11 @@ from ashare_quant.research.admission import (
     admit_training_dataset,
 )
 from ashare_quant.research.bundle import ResearchDataBundle
-from ashare_quant.research.lightgbm_model import (
-    LightGBMConfig,
-    LightGBMRegressionModel,
-    fit_lightgbm_regressor,
+from ashare_quant.research.lightgbm_model import LightGBMConfig, LightGBMRegressionModel
+from ashare_quant.research.qlib_dataset import create_qlib_dataset
+from ashare_quant.research.qlib_lightgbm import (
+    fit_qlib_lightgbm_regressor,
+    predict_qlib_lightgbm_regressor,
 )
 from ashare_quant.research.walk_forward import (
     WalkForwardConfig,
@@ -262,8 +263,12 @@ def run_walk_forward_cross_sectional_model(
 
     for fold in planned:
         # First fit: train only, with all labels mature before validation starts.
-        train_features = _filter_dates(features, end=fold.train_end)
-        train_labels = _filter_dates(labels, end=fold.train_end)
+        train_features = _filter_dates(
+            features, start=fold.train_start, end=fold.train_end
+        )
+        train_labels = _filter_dates(
+            labels, start=fold.train_start, end=fold.train_end
+        )
         train_labels = train_labels.filter(
             pl.col("label_end_date").cast(pl.String) < fold.validation_start
         )
@@ -282,21 +287,38 @@ def run_walk_forward_cross_sectional_model(
             raise PermissionError(
                 f"{fold.fold_id} train admission failed: {list(train_admission.rejection_reasons)}"
             )
-        diagnostic_model = fit_lightgbm_regressor(
-            features=train_features,
-            labels=train_labels,
-            admission=train_admission,
-            config=cfg,
-        )
         validation_features = _filter_dates(
             features, start=fold.validation_start, end=fold.validation_end
         )
-        validation_predictions = diagnostic_model.predict(validation_features)
+        diagnostic_dataset = create_qlib_dataset(
+            features=train_features,
+            labels=train_labels,
+            admission=train_admission,
+            segments={
+                "train": (fold.train_start, fold.train_end),
+                "valid": (fold.validation_start, fold.validation_end),
+            },
+            inference_features=validation_features,
+        )
+        diagnostic_model = fit_qlib_lightgbm_regressor(
+            dataset=diagnostic_dataset,
+            admission=train_admission,
+            config=cfg,
+        )
+        validation_predictions = predict_qlib_lightgbm_regressor(
+            model=diagnostic_model,
+            dataset=diagnostic_dataset,
+            segment="valid",
+        )
 
         # Final fit: include validation-period examples only after their labels
         # have matured strictly before the test start.
-        final_features = _filter_dates(features, end=fold.validation_end)
-        final_labels = _filter_dates(labels, end=fold.validation_end)
+        final_features = _filter_dates(
+            features, start=fold.train_start, end=fold.validation_end
+        )
+        final_labels = _filter_dates(
+            labels, start=fold.train_start, end=fold.validation_end
+        )
         final_labels = final_labels.filter(
             pl.col("label_end_date").cast(pl.String) < fold.test_start
         )
@@ -315,14 +337,29 @@ def run_walk_forward_cross_sectional_model(
             raise PermissionError(
                 f"{fold.fold_id} final admission failed: {list(final_admission.rejection_reasons)}"
             )
-        final_model = fit_lightgbm_regressor(
+        test_features = _filter_dates(
+            features, start=fold.test_start, end=fold.test_end
+        )
+        final_dataset = create_qlib_dataset(
             features=final_features,
             labels=final_labels,
             admission=final_admission,
+            segments={
+                "train": (fold.train_start, fold.validation_end),
+                "test": (fold.test_start, fold.test_end),
+            },
+            inference_features=test_features,
+        )
+        final_model = fit_qlib_lightgbm_regressor(
+            dataset=final_dataset,
+            admission=final_admission,
             config=cfg,
         )
-        test_features = _filter_dates(features, start=fold.test_start, end=fold.test_end)
-        test_predictions = final_model.predict(test_features)
+        test_predictions = predict_qlib_lightgbm_regressor(
+            model=final_model,
+            dataset=final_dataset,
+            segment="test",
+        )
         targets = weekly_cross_sectional_model_targets(test_predictions, top_n=top_n)
         if targets.is_empty():
             raise ValueError(f"{fold.fold_id} produced no test-period model targets")
@@ -439,6 +476,13 @@ def run_walk_forward_cross_sectional_model(
                     "source_fingerprint": final_model.source_fingerprint,
                     "feature_fingerprint": final_model.feature_fingerprint,
                     "label_fingerprint": final_model.label_fingerprint,
+                },
+                "training_dataset_backend": "qlib.DatasetH",
+                "training_model_backend": "lightgbm",
+                "dataset_segments": {
+                    "train": [fold.train_start, fold.validation_end],
+                    "validation": [fold.validation_start, fold.validation_end],
+                    "test": [fold.test_start, fold.test_end],
                 },
                 "feature_data_cutoff_date": fold.test_end,
                 "execution_data_cutoff_date": fold.test_end,
