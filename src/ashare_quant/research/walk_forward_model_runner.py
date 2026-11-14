@@ -366,10 +366,14 @@ def run_walk_forward_cross_sectional_model(
         # only test-window signals. Momentum scores may use historical prices
         # before test_start, but no pre-test momentum positions are carried in.
         prefix_end = positions[fold.test_end]
-        prefix_sessions_all = sessions[: prefix_end + 1]
-        # A truncated final week is not a rebalance session: only retain the
-        # last completed weekly membership snapshot visible by test_end.
-        last_completed_signal = weekly_rebalance_dates(prefix_sessions_all)[-1]
+        # The calendar prefix can end mid-week. Use actual PIT membership
+        # snapshot dates, not the final available session in that partial week.
+        available_membership_dates = bundle.universe_membership.filter(
+            pl.col("date").cast(pl.String) <= fold.test_end
+        )["date"].cast(pl.String).unique().to_list()
+        if not available_membership_dates:
+            raise ValueError(f"{fold.fold_id} has no prior PIT membership snapshot")
+        last_completed_signal = max(available_membership_dates)
         prefix_sessions = sessions[: positions[last_completed_signal] + 1]
         prefix_adjusted = _filter_dates(
             bundle.adjusted_bars, end=last_completed_signal, column="date"
