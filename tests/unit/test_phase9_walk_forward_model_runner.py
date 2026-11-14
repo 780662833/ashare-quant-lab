@@ -192,6 +192,7 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     inputs = make_bundle_inputs()
     report = inputs["acceptance_report"]
     bundle = build_research_data_bundle(**inputs)
+    pit_revision = {"revision_id": "synthetic-pit-v1", "contract_fingerprint": "synthetic-pit-contract"}
     pit_dependencies = {
         **bundle.provenance["receipt_provenance"]["dependency_identities"],
         "financial_statement_items": pit_revision,
