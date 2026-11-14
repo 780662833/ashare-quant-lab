@@ -32,7 +32,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "quality": "verified",
         "datasets": {"instruments"},
         "requires_open_interval": True,
-        "same_day_effective": True,
+        "value_date_matches_effective_from": True,
+        "same_day_observation": False,
     },
     "industry_l1_code": {
         "value_kind": "string",
@@ -41,7 +42,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "quality": "strict",
         "datasets": {"industry_members", "sw_industry_history"},
         "requires_open_interval": False,
-        "same_day_effective": False,
+        "value_date_matches_effective_from": False,
+        "same_day_observation": False,
     },
     "industry_l2_code": {
         "value_kind": "string",
@@ -50,7 +52,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "quality": "strict",
         "datasets": {"industry_members", "sw_industry_history"},
         "requires_open_interval": False,
-        "same_day_effective": False,
+        "value_date_matches_effective_from": False,
+        "same_day_observation": False,
     },
     "industry_l3_code": {
         "value_kind": "string",
@@ -59,7 +62,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "quality": "strict",
         "datasets": {"industry_members", "sw_industry_history"},
         "requires_open_interval": False,
-        "same_day_effective": False,
+        "value_date_matches_effective_from": False,
+        "same_day_observation": False,
     },
     "market_cap_total": {
         "value_kind": "numeric",
@@ -68,7 +72,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "quality": "strict",
         "datasets": {"valuation_metrics", "derived_market_cap"},
         "requires_open_interval": False,
-        "same_day_effective": False,
+        "value_date_matches_effective_from": False,
+        "same_day_observation": True,
     },
     "market_cap_float": {
         "value_kind": "numeric",
@@ -77,7 +82,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "quality": "strict",
         "datasets": {"valuation_metrics", "derived_market_cap"},
         "requires_open_interval": False,
-        "same_day_effective": False,
+        "value_date_matches_effective_from": False,
+        "same_day_observation": True,
     },
 }
 
@@ -211,7 +217,7 @@ def validate_security_metadata(
             raise ValueError("effective_to must be later than effective_from")
         if spec["requires_open_interval"] and effective_to is not None:
             raise ValueError(f"{field} must use an open-ended immutable-event interval")
-        if spec["same_day_effective"] and effective_from != value_date:
+        if spec["value_date_matches_effective_from"] and effective_from != value_date:
             raise ValueError(f"{field} effective_from must equal its value date")
 
         populated = [name for name in _VALUE_COLUMNS if row[name] is not None]
