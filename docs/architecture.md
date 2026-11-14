@@ -1,7 +1,7 @@
 # Research architecture and engineering contract
 
 **Status:** v1 architecture baseline  
-**Last updated:** 2026-11-04  
+**Last updated:** 2026-11-14  
 **Repository:** `780662833/ashare-quant-lab`
 
 This document is the system-level reference for implementation decisions. A
