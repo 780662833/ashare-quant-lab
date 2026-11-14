@@ -125,6 +125,18 @@ def build_qlib_panel_rows(
         | (pl.col("label_end_date") >= admission.training_cutoff)
     ).height:
         raise ValueError("Qlib panel contains labels that are not mature before the cutoff")
+    # Admission rejects non-null NaN/Inf values. Repeat that defense at
+    # this low-level boundary so a manually constructed admission object cannot
+    # turn corrupted source values into silent row exclusions.
+    invalid_feature_values = pl.any_horizontal(
+        *[
+            pl.col(name).is_not_null() & (~pl.col(name).is_finite())
+            for name in admission.feature_columns
+        ]
+    )
+    if joined.filter(invalid_feature_values).height:
+        raise ValueError("Qlib training features contain non-finite values")
+
     # Market-derived inputs must be complete and finite. Strict PIT columns
     # may remain null when a report was not yet knowable at the signal close;
     # their nulls are passed to LightGBM as native NaN values, never imputed.
