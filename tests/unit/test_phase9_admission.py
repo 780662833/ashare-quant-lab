@@ -16,6 +16,9 @@ def valid_provenance(report):
     identities["price_limit_rules"] = {
         "revision_id": "rev-limits", "contract_fingerprint": "sha-limits", "source": "fixture"
     }
+    identities["financial_statement_items"] = {
+        "revision_id": "rev-pit", "contract_fingerprint": "sha-pit"
+    }
     receipts = [{
         "dataset": "daily_bars",
         "receipt": {
@@ -23,7 +26,14 @@ def valid_provenance(report):
             "dependencies": {name: identities[name] for name in datasets},
         },
     }]
+    pit_dependencies = {name: identities[name] for name in datasets}
+    pit_dependencies["financial_statement_items"] = identities["financial_statement_items"]
+    receipts.append({
+        "dataset": "financial_statement_items",
+        "receipt": {"replayable": True, "receipt_id": "pit-adapter", "dependencies": pit_dependencies},
+    })
     observed = {name: identities[name] for name in datasets}
+    observed["financial_statement_items"] = identities["financial_statement_items"]
     return {
         "acceptance_report_id": report["report_id"],
         "acceptance_report_window": dict(report["window"]),
@@ -37,6 +47,13 @@ def valid_provenance(report):
             "revision": "rev-limits",
         },
         "training_dataset_unlocked": False,
+        "pit_fundamentals": {
+            "items": ["roe", "net_profit"],
+            "as_of_date": report["window"]["end"],
+            "receipt_id": "pit-adapter",
+            "source_revision_identity": identities["financial_statement_items"],
+            "availability_policy": "announce_date_end_of_day_Asia/Shanghai",
+        },
     }
 
 
@@ -51,7 +68,9 @@ def valid_report():
         "receipts": {
             "historical_universe": {"replayable": True},
             "hfq": {"replayable": True},
-            "pit": {"replayable": True},
+            "pit": {"replayable": True, "receipt_id": "pit-acceptance", "dependencies": {
+                "financial_statement_items": {"revision_id": "rev-pit", "contract_fingerprint": "sha-pit"}
+            }},
         },
         "gates": [
             {"name": "historical_universe", "status": "PASS",
@@ -219,3 +238,11 @@ def test_missing_or_mismatched_pit_receipt_blocks_training_admission():
     )
     assert result.admitted is False
     assert any("acceptance receipts do not match" in reason for reason in result.rejection_reasons)
+
+
+def test_acceptance_pit_receipt_must_match_adapter_revision():
+    report = valid_report()
+    report["receipts"]["pit"]["dependencies"]["financial_statement_items"]["revision_id"] = "stale-pit-revision"
+    result = admit(report=report)
+    assert result.admitted is False
+    assert any("acceptance PIT receipt revision" in reason for reason in result.rejection_reasons)

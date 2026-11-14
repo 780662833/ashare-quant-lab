@@ -182,6 +182,56 @@ def _validate_acceptance(
             reasons.append("source provenance universe profile does not match")
         if source_provenance.get("acceptance_source_receipts") != dict(receipts):
             reasons.append("source provenance acceptance receipts do not match the report")
+        pit_binding = source_provenance.get("pit_fundamentals")
+        pit_revision = source_provenance.get("source_revisions", {}).get("financial_statement_items")
+        acceptance_pit = receipts.get("pit") if isinstance(receipts, Mapping) else None
+        acceptance_pit_dependencies = (
+            acceptance_pit.get("dependencies")
+            if isinstance(acceptance_pit, Mapping) else None
+        )
+        acceptance_pit_identity = (
+            acceptance_pit_dependencies.get("financial_statement_items")
+            if isinstance(acceptance_pit_dependencies, Mapping) else None
+        )
+        if not isinstance(acceptance_pit_identity, Mapping):
+            reasons.append("acceptance PIT receipt does not pin financial_statement_items revision")
+        elif not isinstance(pit_revision, Mapping) or (
+            acceptance_pit_identity.get("revision_id") != pit_revision.get("revision_id")
+            or acceptance_pit_identity.get("contract_fingerprint") != pit_revision.get("contract_fingerprint")
+        ):
+            reasons.append("acceptance PIT receipt revision does not match the adapter PIT revision")
+        pit_records = [
+            record for record in source_provenance.get("source_receipts", [])
+            if isinstance(record, Mapping) and record.get("dataset") == "financial_statement_items"
+        ]
+        if not isinstance(pit_binding, Mapping):
+            reasons.append("source provenance is missing the strict PIT fundamentals binding")
+        else:
+            binding_items = pit_binding.get("items")
+            if not isinstance(binding_items, list) or sorted(binding_items) != sorted(report.get("pit_items", [])):
+                reasons.append("strict PIT adapter item set does not match the acceptance report")
+            if pit_binding.get("as_of_date") != end_date:
+                reasons.append("strict PIT adapter as_of_date does not match acceptance window end")
+            if pit_binding.get("availability_policy") != "announce_date_end_of_day_Asia/Shanghai":
+                reasons.append("strict PIT availability policy is not the conservative end-of-day rule")
+            if not isinstance(pit_revision, Mapping):
+                reasons.append("source provenance is missing the financial_statement_items revision")
+            elif pit_binding.get("source_revision_identity") != pit_revision:
+                reasons.append("strict PIT adapter revision identity does not match source revisions")
+            if not pit_records:
+                reasons.append("source provenance has no financial_statement_items adapter receipt")
+            elif not any(
+                isinstance(record.get("receipt"), Mapping)
+                and record["receipt"].get("replayable") is True
+                and str(record["receipt"].get("receipt_id")) == str(pit_binding.get("receipt_id"))
+                and isinstance(pit_revision, Mapping)
+                and isinstance(record["receipt"].get("dependencies"), Mapping)
+                and isinstance(record["receipt"]["dependencies"].get("financial_statement_items"), Mapping)
+                and record["receipt"]["dependencies"]["financial_statement_items"].get("revision_id") == pit_revision.get("revision_id")
+                and record["receipt"]["dependencies"]["financial_statement_items"].get("contract_fingerprint") == pit_revision.get("contract_fingerprint")
+                for record in pit_records
+            ):
+                reasons.append("strict PIT adapter receipt does not match its pinned revision")
     return reasons
 
 
