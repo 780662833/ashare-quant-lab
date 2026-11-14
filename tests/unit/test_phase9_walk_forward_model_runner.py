@@ -313,6 +313,10 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         assert fold.benchmark_report["model_training_performed"] is False
         assert fold.benchmark_daily.height == fold.daily.height
         assert fold.benchmark_report["initial_nav"] == fold.report["initial_nav"]
+    assert any(
+        item.final_training_rows < item.final_admission.label_rows
+        for item in result.folds
+    )
     assert result.oos_daily.height == sum(item.fold.test_sessions for item in result.folds)
     assert result.benchmark_oos_daily.height == result.oos_daily.height
     assert "mean_fold_excess_return" in result.aggregate_report
@@ -505,7 +509,8 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
         assert fold.training_admission.admitted
         assert fold.final_admission.admitted
         assert fold.final_admission.training_cutoff == fold.fold.test_start
-        assert fold.final_training_rows == fold.final_admission.label_rows
+        assert 0 < fold.final_training_rows <= fold.final_admission.label_rows
+        assert fold.final_training_rows == fold.model.training_rows
         assert fold.validation_predictions.height > 0
         assert fold.test_predictions.height > 0
         assert fold.targets.height > 0
