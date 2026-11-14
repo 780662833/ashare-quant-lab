@@ -144,6 +144,16 @@ windows. No data assembly, scheduler or model-training unlock is added. See
   `training_dataset_unlocked=false`; the model runner consumes a successful
   per-fold admission object before each explicit LightGBM fit.
 
+### Phase 9.6 — optional Qlib DatasetH bridge (merged in PR #64; CI test correction in PR #65)
+
+The bridge converts only an admitted Polars training panel into Qlib's
+`DataHandlerLP.from_df` and `DatasetH` contracts. It rechecks feature/label
+fingerprints, exact key alignment, finite values, label maturity and
+non-overlapping segments. Qlib/pandas imports are lazy; base CI stubs the
+optional API. PIT/source receipts, admission, walk-forward boundaries and
+A-share execution remain project-owned. Synthetic CI validates conversion
+only; no real Qlib training or empirical strategy result is implied.
+
 ## CNEquity data acquisition policy
 
 The user's current Windows lake root is:
