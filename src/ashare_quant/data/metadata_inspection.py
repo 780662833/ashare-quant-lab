@@ -310,22 +310,31 @@ def inspect_cnequity_metadata(
 
     frames: dict[str, pl.DataFrame] = {}
     for dataset in ("instruments", "delisting_events"):
+        schema = None
+        schema_error = None
         try:
             schema = schema_reader(dataset)
+        except Exception as exc:
+            schema_error = f"{type(exc).__name__}: {exc}"
+        try:
             result = loader(dataset, data_root=str(root), require_replayable=False)
             frame = getattr(result, "frame", None)
             receipt = getattr(result, "receipt", None)
             if not isinstance(frame, pl.DataFrame):
                 raise TypeError(f"CNEquity {dataset} read did not return a Polars DataFrame")
             frames[dataset] = frame
-            report["datasets"][dataset] = _summarize_dataset(
+            summary = _summarize_dataset(
                 dataset, frame, receipt, schema, as_of=inspection_date
             )
+            if schema_error is not None:
+                summary["contract_schema_error"] = schema_error
+            report["datasets"][dataset] = summary
         except Exception as exc:
             report["datasets"][dataset] = {
                 "status": "ERROR",
                 "error": f"{type(exc).__name__}: {exc}",
                 "contract": _contract_metadata(dataset),
+                "contract_schema_error": schema_error,
             }
 
     instruments = frames.get("instruments")
