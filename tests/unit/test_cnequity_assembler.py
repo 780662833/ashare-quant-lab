@@ -7,7 +7,10 @@ import pytest
 
 from ashare_quant.data.cne_adapter import CNEquityAdapter
 from ashare_quant.exceptions import ResearchBundleError
-from ashare_quant.research.cnequity_assembler import assemble_cnequity_research_bundle
+from ashare_quant.research.cnequity_assembler import (
+    assemble_cnequity_pit_fundamentals,
+    assemble_cnequity_research_bundle,
+)
 
 START = "2024-01-02"
 END = "2024-01-05"
@@ -86,6 +89,7 @@ def _fixtures():
         "receipts": {
             "historical_universe": {"replayable": True, "receipt_id": "universe-acceptance"},
             "hfq": {"replayable": True, "receipt_id": "hfq-acceptance"},
+            "pit": {"replayable": True, "receipt_id": "pit-acceptance"},
         },
     }
     counts = {
@@ -143,6 +147,22 @@ class FakeAdapter(CNEquityAdapter):
 
     def trading_status(self, instruments, start_date, end_date):
         return self.fixture["status"]
+
+    def financial_statement_items(self, items, as_of_date, instruments=None):
+        identity = {"revision_id": "pit-r1", "contract_fingerprint": "pit-contract"}
+        self.fixture["dependencies"]["financial_statement_items"] = identity
+        dependencies = dict(self.fixture["dependencies"])
+        self.fixture["receipts"].append({
+            "dataset": "financial_statement_items",
+            "receipt": {
+                "replayable": True, "receipt_id": "pit-adapter-receipt",
+                "dependencies": dependencies, "coverage": {"completeness": "audited"},
+            },
+        })
+        return self.fixture["pit_facts"].filter(
+            pl.col("item_code").is_in(items)
+            & pl.col("symbol").is_in(instruments or self.fixture["symbols"])
+        )
 
 
 def assemble(fixture):
@@ -212,3 +232,61 @@ def test_assembler_rejects_rule_revision_mismatch():
     )
     with pytest.raises(ResearchBundleError, match="revision identity"):
         assemble(fixture)
+
+
+
+def test_pit_assembler_normalizes_strict_facts_and_pins_adapter_receipt():
+    fixture = _fixtures()
+    fixture["acceptance"]["gates"][3] = {
+        "name": "point_in_time_fundamentals", "status": "PASS",
+        "mode": "strict", "items": ["roe", "net_profit"],
+        "missing_symbol_item_pairs": 0,
+    }
+    adapter = FakeAdapter(fixture)
+    bundle = assemble_cnequity_research_bundle(
+        adapter,
+        start_date=START,
+        end_date=END,
+        acceptance_report=fixture["acceptance"],
+        acceptance_report_id="synthetic-acceptance-001",
+        price_limit_evidence=fixture["limits"],
+        price_limit_revision=fixture["revisions"]["price_limit_rules"],
+        coverage_audits=fixture["audits"],
+    )
+    facts = assemble_cnequity_pit_fundamentals(
+        adapter, bundle, items=["roe", "net_profit"], as_of_date=END
+    )
+    assert facts.height == 4
+    assert facts.columns == [
+        "instrument", "item", "report_period", "available_at",
+        "value", "pit_quality", "pit_is_exact",
+    ]
+    assert set(facts["available_at"].to_list()) == {"2024-01-03T23:59:59+08:00"}
+    assert bundle.provenance["pit_fundamentals"]["receipt_id"] == "pit-adapter-receipt"
+    assert bundle.provenance["source_revisions"]["financial_statement_items"]["revision_id"] == "pit-r1"
+    assert any(
+        record["dataset"] == "financial_statement_items"
+        for record in bundle.provenance["source_receipts"]
+    )
+
+
+def test_pit_assembler_rejects_missing_symbol_item_coverage():
+    fixture = _fixtures()
+    fixture["pit_facts"] = fixture["pit_facts"].filter(
+        ~((pl.col("symbol") == "000001.SZ") & (pl.col("item_code") == "roe"))
+    )
+    adapter = FakeAdapter(fixture)
+    bundle = assemble_cnequity_research_bundle(
+        adapter,
+        start_date=START,
+        end_date=END,
+        acceptance_report=fixture["acceptance"],
+        acceptance_report_id="synthetic-acceptance-001",
+        price_limit_evidence=fixture["limits"],
+        price_limit_revision=fixture["revisions"]["price_limit_rules"],
+        coverage_audits=fixture["audits"],
+    )
+    with pytest.raises(ResearchBundleError, match="missing symbol/item coverage"):
+        assemble_cnequity_pit_fundamentals(
+            adapter, bundle, items=["roe", "net_profit"], as_of_date=END
+        )
