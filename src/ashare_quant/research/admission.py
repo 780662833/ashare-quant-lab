@@ -304,12 +304,16 @@ def admit_training_dataset(
     ).encode("utf-8")
     fingerprint = hashlib.sha256(provenance_bytes).hexdigest()
     report_id = str(acceptance_report.get("report_id", ""))
-    feature_fingerprint = _frame_fingerprint(
-        features, keys=["signal_date", "instrument"]
-    ) if _REQUIRED_FEATURE_KEYS.issubset(features.columns) else ""
-    label_fingerprint = _frame_fingerprint(
-        labels, keys=["signal_date", "instrument"]
-    ) if _REQUIRED_LABEL_COLUMNS.issubset(labels.columns) else ""
+    feature_fingerprint = (
+        _frame_fingerprint(features, keys=["signal_date", "instrument"])
+        if not reasons and _REQUIRED_FEATURE_KEYS.issubset(features.columns)
+        else ""
+    )
+    label_fingerprint = (
+        _frame_fingerprint(labels, keys=["signal_date", "instrument"])
+        if not reasons and _REQUIRED_LABEL_COLUMNS.issubset(labels.columns)
+        else ""
+    )
     return TrainingDatasetAdmission(
         admitted=not reasons,
         report_id=report_id,
