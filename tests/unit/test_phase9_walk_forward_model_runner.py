@@ -17,6 +17,10 @@ from ashare_quant.strategies.momentum import MomentumConfig
 from ashare_quant.research.walk_forward_model_runner import (
     run_walk_forward_cross_sectional_model,
 )
+from ashare_quant.research.model_experiment_store import (
+    persist_walk_forward_model_run,
+    verify_walk_forward_model_run,
+)
 
 PROFILE = "cn_a_sh_sz_research_v1"
 
