@@ -80,7 +80,29 @@ def test_build_qlib_panel_rows_rejects_unadmitted_data():
 
 
 def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
+    from dataclasses import replace
+    from ashare_quant.research.admission import _frame_fingerprint
+
     features, labels, admission = _frames()
+    features = pl.concat(
+        [
+            features,
+            pl.DataFrame(
+                {
+                    "signal_date": ["2024-01-12"],
+                    "instrument": ["000003.SZ"],
+                    "return_5": [0.05],
+                }
+            ),
+        ]
+    )
+    admission = replace(
+        admission,
+        feature_rows=3,
+        feature_fingerprint=_frame_fingerprint(
+            features, keys=["signal_date", "instrument"]
+        ),
+    )
     captured = {}
 
     class FakeMultiIndex:
