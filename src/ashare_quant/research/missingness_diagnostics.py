@@ -227,6 +227,8 @@ def evaluate_validation_feature_missingness(
         pl.col("label_end_date").cast(pl.String),
         pl.col("forward_return").cast(pl.Float64, strict=True),
     )
+    for label_end_date in label_frame["label_end_date"].to_list():
+        _iso_date(label_end_date, "labels.label_end_date")
     if label_frame.filter(
         pl.col("label_end_date").is_null()
         | pl.col("forward_return").is_null()
@@ -266,6 +268,9 @@ def evaluate_validation_feature_missingness(
         for row in label_rows
     }
     predictions_by_date: dict[str, list[dict[str, Any]]] = {}
+    features_by_date: dict[str, list[dict[str, Any]]] = {}
+    for row in feature_rows:
+        features_by_date.setdefault(str(row["signal_date"]), []).append(row)
     for row in prediction_rows:
         predictions_by_date.setdefault(str(row["signal_date"]), []).append(row)
     eligible_by_date: dict[str, set[tuple[str, str]]] = {}
@@ -276,9 +281,7 @@ def evaluate_validation_feature_missingness(
     signal_dates = sorted(feature_frame["signal_date"].unique().to_list())
     diagnostic_features = [*pit_features, _ANY_PIT_MISSING]
     for signal_date in signal_dates:
-        date_features = [
-            row for row in feature_rows if row["signal_date"] == signal_date
-        ]
+        date_features = features_by_date.get(signal_date, [])
         date_predictions = sorted(
             predictions_by_date.get(signal_date, []),
             key=lambda row: (
