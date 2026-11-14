@@ -12,16 +12,19 @@ IDENTITIES = {
         "revision_id": "instruments-r1",
         "contract_fingerprint": "instruments-contract",
         "receipt_id": "instruments-receipt",
+        "validated_evidence_classes": ["immutable_event"],
     },
     "industry_members": {
         "revision_id": "industry-r1",
         "contract_fingerprint": "industry-contract",
         "receipt_id": "industry-receipt",
+        "validated_evidence_classes": ["strict_pit"],
     },
     "valuation_metrics": {
         "revision_id": "valuation-r1",
         "contract_fingerprint": "valuation-contract",
         "receipt_id": "valuation-receipt",
+        "validated_evidence_classes": ["strict_pit"],
     },
 }
 
@@ -343,3 +346,21 @@ def test_rejects_non_finite_market_cap_values():
     )]
     with pytest.raises(ValueError, match="finite and non-negative"):
         validate_security_metadata(frame(*rows), source_identities=IDENTITIES)
+
+
+def test_rejects_claimed_quality_without_source_capability_attestation():
+    identities = {
+        **IDENTITIES,
+        "industry_members": {
+            **IDENTITIES["industry_members"],
+            "validated_evidence_classes": ["snapshot_only"],
+        },
+    }
+    rows = [observation(
+        "industry_l1_code",
+        effective_from="2024-01-01",
+        effective_to=None,
+        value_string="IND-A",
+    )]
+    with pytest.raises(ValueError, match="does not certify strict_pit"):
+        validate_security_metadata(frame(*rows), source_identities=identities)
