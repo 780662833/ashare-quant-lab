@@ -116,6 +116,18 @@ def _pit_values(
             continue
         if row["report_period"] is None or not str(row["report_period"]).strip():
             raise ValueError("strict PIT report_period must be non-empty")
+        report_period = str(row["report_period"]).strip()
+        try:
+            parsed_report_period = date.fromisoformat(report_period)
+        except ValueError as exc:
+            raise ValueError(
+                "strict PIT report_period must use canonical YYYY-MM-DD format"
+            ) from exc
+        if parsed_report_period.isoformat() != report_period:
+            raise ValueError(
+                "strict PIT report_period must use canonical YYYY-MM-DD format"
+            )
+
         available = row["available_at"]
         if isinstance(available, str):
             try:
@@ -125,6 +137,10 @@ def _pit_values(
         if not isinstance(available, datetime) or available.tzinfo is None:
             raise ValueError("available_at must be timezone-aware")
         available = available.astimezone(SHANGHAI)
+        if parsed_report_period > available.date():
+            raise ValueError(
+                "strict PIT report_period cannot be later than its publication date"
+            )
 
         # A duplicate source fact with the same availability timestamp is
         # ambiguous: choosing the first/last input row would make PIT features
@@ -132,7 +148,7 @@ def _pit_values(
         fact_key = (
             str(row["instrument"]),
             str(row["item"]),
-            str(row["report_period"]),
+            report_period,
             available.isoformat(),
         )
         if fact_key in seen_fact_keys:
@@ -147,7 +163,13 @@ def _pit_values(
             raise ValueError("strict PIT value must be numeric") from exc
         if not isfinite(value):
             raise ValueError("strict PIT value must be finite")
-        eligible.append({**row, "value": value, "_available": available})
+        eligible.append({
+            **row,
+            "report_period": report_period,
+            "value": value,
+            "_report_period": parsed_report_period,
+            "_available": available,
+        })
 
     selected: list[dict[str, Any]] = []
     for signal_date in signal_dates:
@@ -158,9 +180,13 @@ def _pit_values(
                 continue
             key = (str(row["instrument"]), str(row["item"]))
             previous = latest.get(key)
-            rank = (row["_available"], str(row["report_period"]))
+            # First select the newest reporting period knowable at this
+            # signal timestamp. Within that period, use its latest published
+            # revision. A later restatement of an older period must not
+            # displace a newer period that was already public.
+            rank = (row["_report_period"], row["_available"])
             if previous is None or rank > (
-                previous["_available"], str(previous["report_period"])
+                previous["_report_period"], previous["_available"]
             ):
                 latest[key] = row
         for instrument in instruments:

@@ -56,6 +56,15 @@ tradability state must be point-in-time. Store report period separately from
 publication/availability timestamp. A report-period date is not publication
 time; revisions must not overwrite historically knowable values.
 
+For each instrument/fundamental item at a signal timestamp, first select the
+latest report period whose fact was already available by that timestamp. If
+that same report period has multiple point-in-time revisions, select the
+latest available revision. A later restatement of an older period must not
+override a newer reporting period that was already published. Report periods
+must be canonical YYYY-MM-DD dates and cannot be later than their
+publication date. Publication timestamp, not report period, controls
+historical eligibility.
+
 ## Four-gate data admission
 
 No model-training input may be built until all four gates pass for the exact

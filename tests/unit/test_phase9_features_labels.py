@@ -294,3 +294,75 @@ def test_feature_builder_rejects_unsorted_calendar_without_reordering():
                 return_windows=(5,), volatility_window=5, activity_window=5
             ),
         )
+
+
+
+def test_pit_features_prefer_latest_known_report_period_over_late_old_period_revision():
+    adj, raw, members, fundamentals, sessions = market(45)
+    # Dec-2023 is already known by Feb-20. A restatement of Sep-2023 is
+    # announced later, on Feb-22. That older period must not eclipse Dec-2023.
+    additional = pl.DataFrame([
+        {
+            "instrument": "600000.SH", "item": "roe", "report_period": "2023-09-30",
+            "available_at": "2024-02-22T14:00:00+08:00", "value": 0.88,
+            "pit_quality": "strict", "pit_is_exact": True,
+        },
+        {
+            "instrument": "600000.SH", "item": "roe", "report_period": "2023-12-31",
+            "available_at": "2024-02-22T10:00:00+08:00", "value": 0.35,
+            "pit_quality": "strict", "pit_is_exact": True,
+        },
+    ])
+    features = build_cross_sectional_features(
+        adjusted_bars=adj, execution_bars=raw, universe_membership=members,
+        fundamentals=pl.concat([fundamentals, additional]), trading_dates=sessions,
+        config=CrossSectionalFeatureConfig(
+            return_windows=(5,), volatility_window=5, activity_window=5
+        ),
+    )
+    row = features.filter(
+        (pl.col("signal_date") == "2024-02-23")
+        & (pl.col("instrument") == "600000.SH")
+    ).row(0, named=True)
+    assert row["pit_roe"] == pytest.approx(0.35)
+
+
+def test_pit_features_use_latest_revision_within_latest_report_period():
+    adj, raw, members, fundamentals, sessions = market(45)
+    additional = pl.DataFrame([{
+        "instrument": "600000.SH", "item": "roe", "report_period": "2023-12-31",
+        "available_at": "2024-02-22T10:00:00+08:00", "value": 0.35,
+        "pit_quality": "strict", "pit_is_exact": True,
+    }])
+    features = build_cross_sectional_features(
+        adjusted_bars=adj, execution_bars=raw, universe_membership=members,
+        fundamentals=pl.concat([fundamentals, additional]), trading_dates=sessions,
+        config=CrossSectionalFeatureConfig(
+            return_windows=(5,), volatility_window=5, activity_window=5
+        ),
+    )
+    row = features.filter(
+        (pl.col("signal_date") == "2024-02-23")
+        & (pl.col("instrument") == "600000.SH")
+    ).row(0, named=True)
+    assert row["pit_roe"] == pytest.approx(0.35)
+
+
+@pytest.mark.parametrize("bad_period", ["2023Q4", "2024-2-01", "2024-03-01"])
+def test_pit_features_reject_noncanonical_or_future_report_period(bad_period):
+    adj, raw, members, fundamentals, sessions = market()
+    bad = fundamentals.with_columns(
+        pl.when(
+            (pl.col("instrument") == "600000.SH")
+            & (pl.col("item") == "roe")
+            & (pl.col("report_period") == "2023-12-31")
+        ).then(pl.lit(bad_period)).otherwise(pl.col("report_period")).alias("report_period")
+    )
+    with pytest.raises(ValueError, match="report_period"):
+        build_cross_sectional_features(
+            adjusted_bars=adj, execution_bars=raw, universe_membership=members,
+            fundamentals=bad, trading_dates=sessions,
+            config=CrossSectionalFeatureConfig(
+                return_windows=(5,), volatility_window=5, activity_window=5
+            ),
+        )
