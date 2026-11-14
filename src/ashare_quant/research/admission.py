@@ -191,13 +191,16 @@ def _validate_acceptance(
         if not isinstance(pit_binding, Mapping):
             reasons.append("source provenance is missing the strict PIT fundamentals binding")
         else:
-            if sorted(pit_binding.get("items", [])) != sorted(report.get("pit_items", [])):
+            binding_items = pit_binding.get("items")
+            if not isinstance(binding_items, list) or sorted(binding_items) != sorted(report.get("pit_items", [])):
                 reasons.append("strict PIT adapter item set does not match the acceptance report")
             if pit_binding.get("as_of_date") != end_date:
                 reasons.append("strict PIT adapter as_of_date does not match acceptance window end")
             if pit_binding.get("availability_policy") != "announce_date_end_of_day_Asia/Shanghai":
                 reasons.append("strict PIT availability policy is not the conservative end-of-day rule")
-            if pit_binding.get("source_revision_identity") != pit_revision:
+            if not isinstance(pit_revision, Mapping):
+                reasons.append("source provenance is missing the financial_statement_items revision")
+            elif pit_binding.get("source_revision_identity") != pit_revision:
                 reasons.append("strict PIT adapter revision identity does not match source revisions")
             if not pit_records:
                 reasons.append("source provenance has no financial_statement_items adapter receipt")
@@ -205,6 +208,7 @@ def _validate_acceptance(
                 isinstance(record.get("receipt"), Mapping)
                 and record["receipt"].get("replayable") is True
                 and str(record["receipt"].get("receipt_id")) == str(pit_binding.get("receipt_id"))
+                and isinstance(pit_revision, Mapping)
                 and isinstance(record["receipt"].get("dependencies"), Mapping)
                 and isinstance(record["receipt"]["dependencies"].get("financial_statement_items"), Mapping)
                 and record["receipt"]["dependencies"]["financial_statement_items"].get("revision_id") == pit_revision.get("revision_id")
