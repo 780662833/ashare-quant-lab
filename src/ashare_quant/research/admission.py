@@ -183,7 +183,7 @@ def _validate_acceptance(
         if source_provenance.get("acceptance_source_receipts") != dict(receipts):
             reasons.append("source provenance acceptance receipts do not match the report")
         pit_binding = source_provenance.get("pit_fundamentals")
-        pit_revision = revisions.get("financial_statement_items") if isinstance(revisions, Mapping) else None
+        pit_revision = source_provenance.get("source_revisions", {}).get("financial_statement_items")
         pit_records = [
             record for record in source_provenance.get("source_receipts", [])
             if isinstance(record, Mapping) and record.get("dataset") == "financial_statement_items"
@@ -204,9 +204,11 @@ def _validate_acceptance(
             elif not any(
                 isinstance(record.get("receipt"), Mapping)
                 and record["receipt"].get("replayable") is True
-                and record["receipt"].get("receipt_id") == pit_binding.get("receipt_id")
+                and str(record["receipt"].get("receipt_id")) == str(pit_binding.get("receipt_id"))
                 and isinstance(record["receipt"].get("dependencies"), Mapping)
-                and record["receipt"]["dependencies"].get("financial_statement_items") == pit_revision
+                and isinstance(record["receipt"]["dependencies"].get("financial_statement_items"), Mapping)
+                and record["receipt"]["dependencies"]["financial_statement_items"].get("revision_id") == pit_revision.get("revision_id")
+                and record["receipt"]["dependencies"]["financial_statement_items"].get("contract_fingerprint") == pit_revision.get("contract_fingerprint")
                 for record in pit_records
             ):
                 reasons.append("strict PIT adapter receipt does not match its pinned revision")
