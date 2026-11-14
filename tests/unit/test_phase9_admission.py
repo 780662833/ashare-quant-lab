@@ -195,3 +195,27 @@ def test_invalid_date_and_invalid_horizon_are_rejected():
             training_cutoff="2024-01-15", universe_profile=report["profile"],
             label_horizon_sessions=0,
         )
+
+
+def test_missing_or_mismatched_pit_receipt_blocks_training_admission():
+    report = valid_report()
+    report["receipts"].pop("pit")
+    result = admit(report=report)
+    assert result.admitted is False
+    assert any("pit receipt" in reason for reason in result.rejection_reasons)
+
+    report = valid_report()
+    provenance = valid_provenance(report)
+    provenance["acceptance_source_receipts"]["pit"] = {"replayable": False}
+    result = admit_training_dataset(
+        acceptance_report=report,
+        source_provenance=provenance,
+        features=frames()[0],
+        labels=frames()[1],
+        start_date="2024-01-01",
+        end_date="2024-04-30",
+        training_cutoff="2024-01-15",
+        universe_profile=report["profile"],
+    )
+    assert result.admitted is False
+    assert any("acceptance receipts do not match" in reason for reason in result.rejection_reasons)
