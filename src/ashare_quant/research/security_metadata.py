@@ -349,7 +349,7 @@ def select_security_metadata_as_of(
         for current in ordered:
             if previous is not None:
                 previous_end = previous["effective_to"]
-                if previous_end is None or previous_end > current["effective_from"]:
+                if previous_end is not None and previous_end > current["effective_from"]:
                     raise ValueError(
                         f"overlapping effective intervals for {key[0]} / {key[1]}"
                     )
@@ -363,10 +363,11 @@ def select_security_metadata_as_of(
                 or row["effective_from"] == signal
             )
         ]
-        if len(applicable) > 1:
-            raise ValueError(f"ambiguous point-in-time metadata for {key[0]} / {key[1]}")
         if applicable:
-            selected.append(applicable[0])
+            # An open-ended prior interval is implicitly superseded by the
+            # next known effective_from. Explicit overlapping bounded
+            # intervals were rejected above.
+            selected.append(max(applicable, key=lambda row: row["effective_from"]))
 
     if selected:
         return pl.DataFrame(selected, schema=frame.schema).sort(["instrument", "field"])
