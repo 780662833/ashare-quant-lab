@@ -157,7 +157,7 @@ def test_model_prediction_excludes_null_nan_and_infinite_feature_rows(monkeypatc
             "000004.SZ",
         ],
         "return_5": [0.04, None, float("nan"), float("inf"), 0.03, float("-inf")],
-        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10],
+        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25],
     })
 
     predictions = model.predict(features)
