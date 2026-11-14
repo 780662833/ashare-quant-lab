@@ -364,3 +364,68 @@ def test_rejects_claimed_quality_without_source_capability_attestation():
     )]
     with pytest.raises(ValueError, match="does not certify strict_pit"):
         validate_security_metadata(frame(*rows), source_identities=identities)
+
+
+def test_open_ended_interval_is_superseded_by_later_effective_event():
+    rows = [
+        observation(
+            "industry_l1_code",
+            effective_from="2024-01-01",
+            effective_to=None,
+            available_at="2024-01-01T09:00:00+08:00",
+            value_string="OLD",
+        ),
+        observation(
+            "industry_l1_code",
+            effective_from="2024-01-05",
+            effective_to=None,
+            available_at="2024-01-04T09:00:00+08:00",
+            value_string="NEW",
+        ),
+    ]
+    early = select(rows, signal_date="2024-01-03",
+                   decision_at="2024-01-03T16:00:00+08:00")
+    later = select(rows, signal_date="2024-01-06",
+                   decision_at="2024-01-06T16:00:00+08:00")
+    assert early["value_string"].item() == "OLD"
+    assert later["value_string"].item() == "NEW"
+
+
+def test_selection_output_carries_asof_cutoff_for_coverage_provenance():
+    rows = [observation(
+        "listing_date",
+        effective_from="2020-03-10",
+        effective_to=None,
+        available_at="2020-03-10T23:59:59+08:00",
+        value_date="2020-03-10",
+    )]
+    selected = select(rows, fields=("listing_date",))
+    assert selected["signal_date"].item() == "2024-01-05"
+    assert selected["decision_at"].item() == "2024-01-05T16:00:00+08:00"
+
+
+def test_coverage_audit_passes_only_when_every_requested_pair_is_present():
+    rows = [
+        observation(
+            "listing_date",
+            instrument=symbol,
+            effective_from="2020-03-10",
+            effective_to=None,
+            available_at="2020-03-10T23:59:59+08:00",
+            value_date="2020-03-10",
+        )
+        for symbol in ("600000.SH", "000001.SZ")
+    ]
+    selected = select(
+        rows,
+        instruments=("600000.SH", "000001.SZ"),
+        fields=("listing_date",),
+    )
+    report = audit_security_metadata_coverage(
+        selected,
+        instruments=("600000.SH", "000001.SZ"),
+        fields=("listing_date",),
+    )
+    assert report["status"] == "PASS"
+    assert report["coverage_rate"] == 1.0
+    assert report["signal_date"] == "2024-01-05"
