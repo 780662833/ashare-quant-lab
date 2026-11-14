@@ -12,6 +12,7 @@ def _inputs():
         pl.DataFrame(
             {
                 "signal_date": ["2024-01-05", "2024-01-12"],
+                "sample_count": [4, 4],
                 "spearman_rank_ic": [0.2, 0.1],
                 "top_n_excess_forward_return": [0.02, 0.01],
                 "top_minus_bottom_forward_return": [0.04, 0.03],
@@ -20,6 +21,7 @@ def _inputs():
         pl.DataFrame(
             {
                 "signal_date": ["2024-01-19", "2024-01-26"],
+                "sample_count": [3, 4],
                 "spearman_rank_ic": [0.3, 0.0],
                 "top_n_excess_forward_return": [-0.03, -0.005],
                 "top_minus_bottom_forward_return": [0.05, -0.01],
@@ -54,6 +56,8 @@ def _policy(**overrides):
         "policy_id": "validation-v1-test",
         "minimum_fold_count": 2,
         "minimum_signal_date_count": 4,
+        "minimum_rank_ic_observation_count": 4,
+        "minimum_cross_section_size": 3,
         "minimum_label_coverage_rate": 0.9,
         "minimum_mean_spearman_rank_ic": 0.1,
         "minimum_positive_spearman_rank_ic_ratio": 0.7,
@@ -82,6 +86,7 @@ def test_cross_fold_validation_stability_applies_explicit_policy():
     assert summary["evaluated_fold_count"] == 2
     assert summary["signal_date_count"] == 4
     assert summary["rank_ic_observation_count"] == 4
+    assert summary["minimum_weekly_cross_section_size"] == 3
     assert summary["label_coverage_rate"] == pytest.approx(18 / 20)
     assert summary["mean_spearman_rank_ic"] == pytest.approx(0.15)
     assert summary["positive_spearman_rank_ic_ratio"] == pytest.approx(0.75)
@@ -103,6 +108,22 @@ def test_cross_fold_validation_policy_rejects_weak_ranking():
     assert "minimum_mean_spearman_rank_ic" in summary["failed_criteria"]
     assert summary["criteria"]["minimum_mean_spearman_rank_ic"]["status"] == "FAIL"
 
+
+
+def test_cross_fold_policy_requires_minimum_cross_section_and_ic_sample():
+    diagnostics, reports = _inputs()
+    diagnostics[1] = diagnostics[1].with_columns(
+        pl.Series("sample_count", [2, 4])
+    )
+    summary = summarize_validation_stability(
+        diagnostics,
+        reports,
+        policy=_policy(minimum_cross_section_size=3),
+    )
+
+    assert summary["minimum_weekly_cross_section_size"] == 2
+    assert summary["decision"] == "INSUFFICIENT_EVIDENCE"
+    assert "minimum_cross_section_size" in summary["failed_criteria"]
 
 
 def test_cross_fold_validation_policy_checks_positive_ic_fold_consistency():
