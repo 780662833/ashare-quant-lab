@@ -154,5 +154,7 @@ fit adapter and Qlib training-panel bridge require canonical signal, entry and
 maturity dates and enforce
 `signal_date < label_entry_date < label_end_date < training_cutoff`.
 A Qlib dataset wrapper must be marked as having passed this conversion-time
-entry-date check before the Qlib LightGBM fit adapter accepts it. This keeps
-legacy close-to-close labels from entering a lower-level training API.
+entry-date check before the Qlib LightGBM fit adapter accepts it. The model
+runner also requires entry and maturity dates to exist in the validated
+bundle's official exchange calendar. This keeps legacy close-to-close labels
+and non-session execution dates from entering a lower-level training API.
