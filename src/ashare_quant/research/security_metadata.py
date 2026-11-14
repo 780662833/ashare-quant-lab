@@ -1,0 +1,408 @@
+"""Fail-closed point-in-time security metadata contract.
+
+Provider-agnostic temporal observations with explicit effective dates,
+availability timestamps and receipt-bound source identities. This module never
+reads CNEquity or infers metadata from price bars or first-observed dates.
+"""
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from datetime import date, datetime
+from math import isfinite
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import polars as pl
+
+SHANGHAI = ZoneInfo("Asia/Shanghai")
+
+_REQUIRED_COLUMNS = {
+    "instrument", "field", "value_numeric", "value_string", "value_date",
+    "effective_from", "effective_to", "available_at", "evidence_class",
+    "pit_grade", "quality", "is_exact", "source", "source_dataset",
+    "source_revision_id", "source_contract_fingerprint", "source_receipt_id",
+}
+_VALUE_COLUMNS = ("value_numeric", "value_string", "value_date")
+
+_FIELD_SPECS: dict[str, dict[str, Any]] = {
+    "listing_date": {
+        "value_kind": "date",
+        "evidence_class": "immutable_event",
+        "pit_grade": "event_verified",
+        "quality": "verified",
+        "datasets": {"instruments"},
+        "requires_open_interval": True,
+        "same_day_effective": True,
+    },
+    "industry_l1_code": {
+        "value_kind": "string",
+        "evidence_class": "strict_pit",
+        "pit_grade": "strict",
+        "quality": "strict",
+        "datasets": {"industry_members", "sw_industry_history"},
+        "requires_open_interval": False,
+        "same_day_effective": False,
+    },
+    "industry_l2_code": {
+        "value_kind": "string",
+        "evidence_class": "strict_pit",
+        "pit_grade": "strict",
+        "quality": "strict",
+        "datasets": {"industry_members", "sw_industry_history"},
+        "requires_open_interval": False,
+        "same_day_effective": False,
+    },
+    "industry_l3_code": {
+        "value_kind": "string",
+        "evidence_class": "strict_pit",
+        "pit_grade": "strict",
+        "quality": "strict",
+        "datasets": {"industry_members", "sw_industry_history"},
+        "requires_open_interval": False,
+        "same_day_effective": False,
+    },
+    "market_cap_total": {
+        "value_kind": "numeric",
+        "evidence_class": "strict_pit",
+        "pit_grade": "strict",
+        "quality": "strict",
+        "datasets": {"valuation_metrics", "derived_market_cap"},
+        "requires_open_interval": False,
+        "same_day_effective": False,
+    },
+    "market_cap_float": {
+        "value_kind": "numeric",
+        "evidence_class": "strict_pit",
+        "pit_grade": "strict",
+        "quality": "strict",
+        "datasets": {"valuation_metrics", "derived_market_cap"},
+        "requires_open_interval": False,
+        "same_day_effective": False,
+    },
+}
+
+
+def _iso_date(value: Any, name: str, *, nullable: bool = False) -> str | None:
+    if value is None and nullable:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a canonical YYYY-MM-DD string")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a canonical YYYY-MM-DD string") from exc
+    if parsed.isoformat() != value:
+        raise ValueError(f"{name} must be a canonical YYYY-MM-DD string")
+    return value
+
+
+def _aware_timestamp(value: Any, name: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be an ISO-8601 timestamp with timezone")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be an ISO-8601 timestamp with timezone") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"{name} must be timezone-aware")
+    return parsed.astimezone(SHANGHAI)
+
+
+def _validate_source_identities(
+    source_identities: Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    if not isinstance(source_identities, Mapping) or not source_identities:
+        raise ValueError("source_identities must be a non-empty receipt-derived mapping")
+    normalized: dict[str, dict[str, Any]] = {}
+    for dataset, identity in source_identities.items():
+        if not isinstance(dataset, str) or not dataset.strip():
+            raise ValueError("source identity dataset names must be non-empty")
+        if not isinstance(identity, Mapping):
+            raise ValueError(f"source identity for {dataset} must be a mapping")
+        revision_id = identity.get("revision_id")
+        fingerprint = identity.get("contract_fingerprint")
+        receipt_id = identity.get("receipt_id")
+        if (
+            not isinstance(revision_id, (str, int))
+            or isinstance(revision_id, bool)
+            or not str(revision_id).strip()
+        ):
+            raise ValueError(f"source identity for {dataset} has no revision_id")
+        if not isinstance(fingerprint, str) or not fingerprint.strip():
+            raise ValueError(f"source identity for {dataset} has no contract_fingerprint")
+        if not isinstance(receipt_id, str) or not receipt_id.strip():
+            raise ValueError(f"source identity for {dataset} has no receipt_id")
+        normalized[dataset] = {
+            "revision_id": revision_id,
+            "contract_fingerprint": fingerprint,
+            "receipt_id": receipt_id,
+        }
+    return normalized
+
+
+def validate_security_metadata(
+    observations: pl.DataFrame,
+    *,
+    source_identities: Mapping[str, Mapping[str, Any]],
+) -> pl.DataFrame:
+    """Validate typed temporal observations against exact source receipt identities.
+
+    Effective intervals are half-open: [effective_from, effective_to).
+    Open-ended intervals are allowed only for immutable listing-date events;
+    industry observations may be open-ended only when no later effective
+    classification is known. Market-cap observations must be bounded.
+    """
+    if not isinstance(observations, pl.DataFrame):
+        raise TypeError("observations must be a Polars DataFrame")
+    if observations.is_empty():
+        raise ValueError("security metadata observations must not be empty")
+    missing = _REQUIRED_COLUMNS.difference(observations.columns)
+    if missing:
+        raise ValueError(f"security metadata missing columns: {sorted(missing)}")
+    identities = _validate_source_identities(source_identities)
+
+    frame = observations.select(sorted(_REQUIRED_COLUMNS)).with_columns(
+        pl.col("instrument").cast(pl.String, strict=True),
+        pl.col("field").cast(pl.String, strict=True),
+        pl.col("value_numeric").cast(pl.Float64, strict=True),
+        pl.col("value_string").cast(pl.String, strict=True),
+        pl.col("value_date").cast(pl.String, strict=True),
+        pl.col("effective_from").cast(pl.String, strict=True),
+        pl.col("effective_to").cast(pl.String, strict=True),
+        pl.col("available_at").cast(pl.String, strict=True),
+        pl.col("evidence_class").cast(pl.String, strict=True),
+        pl.col("pit_grade").cast(pl.String, strict=True),
+        pl.col("quality").cast(pl.String, strict=True),
+        pl.col("is_exact").cast(pl.Boolean, strict=True),
+        pl.col("source").cast(pl.String, strict=True),
+        pl.col("source_dataset").cast(pl.String, strict=True),
+        pl.col("source_revision_id").cast(pl.String, strict=True),
+        pl.col("source_contract_fingerprint").cast(pl.String, strict=True),
+        pl.col("source_receipt_id").cast(pl.String, strict=True),
+    )
+
+    for column in (
+        "instrument", "field", "effective_from", "available_at",
+        "evidence_class", "pit_grade", "quality", "source",
+        "source_dataset", "source_revision_id",
+        "source_contract_fingerprint", "source_receipt_id",
+    ):
+        if frame[column].null_count() or frame.filter(
+            pl.col(column).str.strip_chars() == ""
+        ).height:
+            raise ValueError(f"security metadata contains null or empty {column}")
+
+    normalized_rows: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in frame.to_dicts():
+        instrument = str(row["instrument"]).strip()
+        field = str(row["field"]).strip()
+        if not instrument:
+            raise ValueError("security metadata instrument must be non-empty")
+        spec = _FIELD_SPECS.get(field)
+        if spec is None:
+            raise ValueError(f"unsupported security metadata field: {field}")
+
+        effective_from = _iso_date(row["effective_from"], "effective_from")
+        effective_to = _iso_date(row["effective_to"], "effective_to", nullable=True)
+        value_date = _iso_date(row["value_date"], "value_date", nullable=True)
+        available_at = _aware_timestamp(row["available_at"], "available_at")
+        if effective_to is not None and effective_to <= effective_from:
+            raise ValueError("effective_to must be later than effective_from")
+        if spec["requires_open_interval"] and effective_to is not None:
+            raise ValueError(f"{field} must use an open-ended immutable-event interval")
+        if spec["same_day_effective"] and effective_from != value_date:
+            raise ValueError(f"{field} effective_from must equal its value date")
+
+        populated = [name for name in _VALUE_COLUMNS if row[name] is not None]
+        expected_column = {
+            "numeric": "value_numeric",
+            "string": "value_string",
+            "date": "value_date",
+        }[spec["value_kind"]]
+        if set(populated) != {expected_column}:
+            raise ValueError(
+                f"{field} must populate only {expected_column}; got {populated}"
+            )
+        if expected_column == "value_numeric":
+            value = float(row["value_numeric"])
+            if not isfinite(value) or value < 0:
+                raise ValueError(f"{field} must be finite and non-negative")
+        elif expected_column == "value_string":
+            if not str(row["value_string"]).strip():
+                raise ValueError(f"{field} must be a non-empty code")
+        elif value_date is None:
+            raise ValueError(f"{field} requires a value_date")
+
+        if row["evidence_class"] != spec["evidence_class"]:
+            raise ValueError(f"{field} has an invalid evidence_class")
+        if row["pit_grade"] != spec["pit_grade"] or row["quality"] != spec["quality"]:
+            raise ValueError(f"{field} does not meet its required source quality")
+        if row["is_exact"] is not True:
+            raise ValueError(f"{field} must carry is_exact=true")
+        dataset = str(row["source_dataset"])
+        if dataset not in spec["datasets"]:
+            raise ValueError(f"{field} is not permitted from source dataset {dataset}")
+        identity = identities.get(dataset)
+        if identity is None:
+            raise ValueError(f"source receipt identity is missing for dataset {dataset}")
+        if (
+            str(row["source_revision_id"]) != str(identity["revision_id"])
+            or row["source_contract_fingerprint"] != identity["contract_fingerprint"]
+            or row["source_receipt_id"] != identity["receipt_id"]
+        ):
+            raise ValueError(f"{field} row does not match its source receipt identity")
+
+        duplicate_key = (instrument, field, effective_from, available_at.isoformat())
+        if duplicate_key in seen:
+            raise ValueError("duplicate security metadata instrument/field/effective/available key")
+        seen.add(duplicate_key)
+
+        normalized_rows.append({
+            **row,
+            "instrument": instrument,
+            "field": field,
+            "effective_from": effective_from,
+            "effective_to": effective_to,
+            "value_date": value_date,
+            "available_at": available_at.isoformat(),
+        })
+
+    for row in normalized_rows:
+        spec = _FIELD_SPECS[row["field"]]
+        if spec["value_kind"] == "numeric" and row["effective_to"] is None:
+            raise ValueError(f"{row['field']} requires a bounded effective interval")
+
+    return pl.DataFrame(normalized_rows, schema=frame.schema).sort(
+        ["instrument", "field", "effective_from", "available_at"]
+    )
+
+
+def select_security_metadata_as_of(
+    observations: pl.DataFrame,
+    *,
+    source_identities: Mapping[str, Mapping[str, Any]],
+    instruments: Sequence[str],
+    fields: Sequence[str],
+    signal_date: str,
+    decision_at: str,
+) -> pl.DataFrame:
+    """Select metadata effective and knowable at one Shanghai signal timestamp.
+
+    For each instrument/field/effective date, the latest revision available by
+    decision_at wins. The effective interval must contain signal_date. No
+    future publication, future effective event, or forward-fill is allowed.
+    """
+    signal = _iso_date(signal_date, "signal_date")
+    if not instruments or len(set(instruments)) != len(instruments):
+        raise ValueError("instruments must be non-empty and unique")
+    if not fields or len(set(fields)) != len(fields):
+        raise ValueError("fields must be non-empty and unique")
+    unknown_fields = sorted(set(fields).difference(_FIELD_SPECS))
+    if unknown_fields:
+        raise ValueError(f"unsupported security metadata fields: {unknown_fields}")
+    cutoff = _aware_timestamp(decision_at, "decision_at")
+    if cutoff.date().isoformat() != signal:
+        raise ValueError("decision_at must fall on the supplied Shanghai signal_date")
+
+    frame = validate_security_metadata(
+        observations, source_identities=source_identities
+    )
+    instrument_set = {str(item) for item in instruments}
+    field_set = set(fields)
+    rows = [
+        row for row in frame.to_dicts()
+        if row["instrument"] in instrument_set
+        and row["field"] in field_set
+        and _aware_timestamp(row["available_at"], "available_at") <= cutoff
+        and row["effective_from"] <= signal
+        and (row["effective_to"] is None or signal < row["effective_to"])
+    ]
+
+    latest_by_start: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (row["instrument"], row["field"], row["effective_from"])
+        previous = latest_by_start.get(key)
+        if previous is None or row["available_at"] > previous["available_at"]:
+            latest_by_start[key] = row
+
+    by_instrument_field: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in latest_by_start.values():
+        by_instrument_field.setdefault((row["instrument"], row["field"]), []).append(row)
+
+    selected: list[dict[str, Any]] = []
+    for key, candidates in by_instrument_field.items():
+        ordered = sorted(candidates, key=lambda row: row["effective_from"])
+        previous: dict[str, Any] | None = None
+        for current in ordered:
+            if previous is not None:
+                previous_end = previous["effective_to"]
+                if previous_end is None or previous_end > current["effective_from"]:
+                    raise ValueError(
+                        f"overlapping effective intervals for {key[0]} / {key[1]}"
+                    )
+            previous = current
+        applicable = [
+            row for row in ordered
+            if row["effective_from"] <= signal
+            and (row["effective_to"] is None or signal < row["effective_to"])
+        ]
+        if len(applicable) > 1:
+            raise ValueError(f"ambiguous point-in-time metadata for {key[0]} / {key[1]}")
+        if applicable:
+            selected.append(applicable[0])
+
+    if selected:
+        return pl.DataFrame(selected, schema=frame.schema).sort(["instrument", "field"])
+    return frame.head(0)
+
+
+def audit_security_metadata_coverage(
+    selected: pl.DataFrame,
+    *,
+    instruments: Sequence[str],
+    fields: Sequence[str],
+) -> dict[str, Any]:
+    """Require one selected value for every requested instrument/field pair."""
+    if not isinstance(selected, pl.DataFrame):
+        raise TypeError("selected must be a Polars DataFrame")
+    if not instruments or len(set(instruments)) != len(instruments):
+        raise ValueError("instruments must be non-empty and unique")
+    if not fields or len(set(fields)) != len(fields):
+        raise ValueError("fields must be non-empty and unique")
+    if not {"instrument", "field"}.issubset(selected.columns):
+        raise ValueError("selected metadata must contain instrument and field")
+
+    required = {
+        (str(instrument), str(field))
+        for instrument in instruments
+        for field in fields
+    }
+    observed_rows = selected.select("instrument", "field").to_dicts()
+    observed = [
+        (str(row["instrument"]), str(row["field"]))
+        for row in observed_rows
+    ]
+    if len(observed) != len(set(observed)):
+        raise ValueError("selected metadata contains duplicate instrument/field pairs")
+    observed_set = set(observed)
+    missing = sorted(required - observed_set)
+    unexpected = sorted(observed_set - required)
+    expected_count = len(required)
+    observed_count = len(observed_set)
+    return {
+        "status": "PASS" if not missing and not unexpected else "FAIL",
+        "expected_pairs": expected_count,
+        "observed_pairs": observed_count,
+        "missing_pairs": len(missing),
+        "unexpected_pairs": len(unexpected),
+        "coverage_rate": observed_count / expected_count if expected_count else 0.0,
+        "missing_examples": [list(item) for item in missing[:20]],
+        "unexpected_examples": [list(item) for item in unexpected[:20]],
+        "fields": list(fields),
+        "instrument_count": len(instruments),
+        "selection_policy": (
+            "effective interval contains signal_date AND available_at <= "
+            "Shanghai decision_at; no forward-fill or proxy imputation"
+        ),
+    }
