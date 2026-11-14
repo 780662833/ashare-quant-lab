@@ -56,7 +56,7 @@ def _iso_date(value: Any, name: str) -> str:
     try:
         parsed = date.fromisoformat(value)
     except ValueError as exc:
-        raise ValueError(f"{name} must be an ISO YYYY-MM-DD string") from exc
+        raise ValueError(f"{name} must use canonical ISO YYYY-MM-DD format") from exc
     if parsed.isoformat() != value:
         raise ValueError(f"{name} must use canonical YYYY-MM-DD format")
     return value
