@@ -39,6 +39,8 @@ class LightGBMConfig:
     num_threads: int = 1
 
     def __post_init__(self) -> None:
+        if isinstance(self.seed, bool) or not isinstance(self.seed, int) or self.seed < 0:
+            raise ValueError("seed must be a non-negative integer")
         for name, value in (
             ("num_boost_round", self.num_boost_round),
             ("min_training_rows", self.min_training_rows),
@@ -73,6 +75,7 @@ class LightGBMRegressionModel:
     booster: Any
     feature_columns: tuple[str, ...]
     config: LightGBMConfig
+    acceptance_report_id: str
     training_cutoff: str
     training_rows: int
     source_fingerprint: str
@@ -139,13 +142,15 @@ class LightGBMRegressionModel:
                 "schema_version": _MODEL_SCHEMA_VERSION,
                 "feature_columns": list(self.feature_columns),
                 "config": asdict(self.config),
+                "acceptance_report_id": self.acceptance_report_id,
                 "training_cutoff": self.training_cutoff,
                 "training_rows": self.training_rows,
                 "source_fingerprint": self.source_fingerprint,
                 "feature_fingerprint": self.feature_fingerprint,
                 "label_fingerprint": self.label_fingerprint,
                 "model_sha256": digest,
-                "training_dataset_unlocked": False,
+                "admission_accepted": True,
+                "training_performed": True,
             }
             temporary_metadata.write_text(
                 json.dumps(metadata, sort_keys=True, ensure_ascii=False, indent=2) + "\n",
@@ -171,8 +176,8 @@ class LightGBMRegressionModel:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         if metadata.get("schema_version") != _MODEL_SCHEMA_VERSION:
             raise ValueError("Unsupported LightGBM model metadata schema")
-        if metadata.get("training_dataset_unlocked") is not False:
-            raise ValueError("Model metadata has an invalid training lock state")
+        if metadata.get("admission_accepted") is not True or metadata.get("training_performed") is not True:
+            raise ValueError("Model metadata does not confirm admitted training")
         digest = hashlib.sha256(model_path.read_bytes()).hexdigest()
         if digest != metadata.get("model_sha256"):
             raise ValueError("LightGBM model checksum does not match metadata")
@@ -183,6 +188,7 @@ class LightGBMRegressionModel:
             booster=booster,
             feature_columns=tuple(metadata["feature_columns"]),
             config=LightGBMConfig(**metadata["config"]),
+            acceptance_report_id=metadata["acceptance_report_id"],
             training_cutoff=metadata["training_cutoff"],
             training_rows=int(metadata["training_rows"]),
             source_fingerprint=metadata["source_fingerprint"],
@@ -269,6 +275,7 @@ def fit_lightgbm_regressor(
         booster=booster,
         feature_columns=feature_columns,
         config=cfg,
+        acceptance_report_id=admission.report_id,
         training_cutoff=admission.training_cutoff,
         training_rows=joined.height,
         source_fingerprint=admission.source_fingerprint,
