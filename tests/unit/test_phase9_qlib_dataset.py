@@ -4,10 +4,8 @@ import polars as pl
 import pytest
 
 from ashare_quant.research.admission import TrainingDatasetAdmission, _frame_fingerprint
-from ashare_quant.research.qlib_dataset import (
-    _complete_finite_feature_rows,
-    build_qlib_panel_rows,
-)
+from ashare_quant.research.feature_eligibility import feature_eligibility_expression
+from ashare_quant.research.qlib_dataset import build_qlib_panel_rows
 
 
 def frames(*, entry_dates=("2024-01-08", "2024-01-08")):
@@ -99,9 +97,9 @@ def test_qlib_panel_rows_rejects_noncanonical_entry_date():
         )
 
 
-def test_inference_feature_rows_exclude_null_nan_and_infinite_values():
+def test_inference_keeps_missing_pit_but_excludes_missing_or_nonfinite_market_features():
     frame = pl.DataFrame({
-        "signal_date": ["2024-01-19"] * 6,
+        "signal_date": ["2024-01-19"] * 8,
         "instrument": [
             "600000.SH",
             "000001.SZ",
@@ -109,21 +107,39 @@ def test_inference_feature_rows_exclude_null_nan_and_infinite_values():
             "000002.SZ",
             "000003.SZ",
             "000004.SZ",
+            "000005.SZ",
+            "000006.SZ",
         ],
-        "return_5": [0.04, None, float("nan"), float("inf"), 0.02, float("-inf")],
-        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25],
+        "return_5": [0.04, None, float("nan"), float("inf"), 0.02, float("-inf"), 0.01, 0.03],
+        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25, None, float("nan")],
     })
 
-    complete = _complete_finite_feature_rows(
-        frame, ("return_5", "pit_roe")
+    eligible = frame.filter(
+        feature_eligibility_expression(("return_5", "pit_roe"))
     )
 
-    assert complete["instrument"].to_list() == ["600000.SH", "000003.SZ"]
-    assert complete.select(
-        pl.all_horizontal(
-            pl.col("return_5").is_not_null(),
-            pl.col("return_5").is_finite(),
-            pl.col("pit_roe").is_not_null(),
-            pl.col("pit_roe").is_finite(),
-        ).all()
-    ).item()
+    assert eligible["instrument"].to_list() == [
+        "600000.SH", "000003.SZ", "000005.SZ"
+    ]
+
+
+def test_qlib_panel_rows_keeps_mature_rows_with_missing_pit_fundamentals():
+    features, labels = frames()
+    features = features.with_columns(
+        pl.when(pl.col("instrument") == "000001.SZ")
+        .then(None)
+        .otherwise(pl.col("pit_roe"))
+        .alias("pit_roe")
+    )
+    admission = admission_for(features, labels)
+
+    index, columns, targets = build_qlib_panel_rows(
+        features=features, labels=labels, admission=admission
+    )
+
+    assert index == [
+        ("2024-01-05", "000001.SZ"),
+        ("2024-01-05", "600000.SH"),
+    ]
+    assert columns == ["return_5", "pit_roe"]
+    assert targets == [-0.01, 0.03]
