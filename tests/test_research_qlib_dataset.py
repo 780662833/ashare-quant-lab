@@ -182,6 +182,7 @@ def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
     }
     assert result.admission == admission
     assert result.feature_columns == ("return_5",)
+    assert result.training_rows == 2
     assert captured["index"][1] == ["datetime", "instrument"]
     assert captured["index"][0][0] == ["2024-01-05", "2024-01-12", "2024-01-19"]
     assert captured["index"][0][1] == ["000001.SZ", "000002.SZ", "000003.SZ"]
@@ -225,6 +226,31 @@ def test_build_qlib_panel_rows_allows_feature_rows_without_mature_labels():
     ]
     assert columns == ["return_5"]
     assert targets == [0.03, 0.01]
+
+
+def test_build_qlib_panel_rows_excludes_null_feature_rows_without_imputation():
+    from dataclasses import replace
+    from ashare_quant.research.admission import _frame_fingerprint
+
+    features, labels, admission = _frames()
+    features = features.with_columns(
+        pl.when(pl.col("instrument") == "000002.SZ")
+        .then(None)
+        .otherwise(pl.col("return_5"))
+        .alias("return_5")
+    )
+    admission = replace(
+        admission,
+        feature_fingerprint=_frame_fingerprint(
+            features, keys=["signal_date", "instrument"]
+        ),
+    )
+    keys, columns, targets = build_qlib_panel_rows(
+        features=features, labels=labels, admission=admission
+    )
+    assert keys == [("2024-01-05", "000001.SZ")]
+    assert columns == ["return_5"]
+    assert targets == [0.03]
 
 def test_create_qlib_dataset_rejects_overlapping_segments():
     features, labels, admission = _frames()

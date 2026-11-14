@@ -46,6 +46,7 @@ branch is not part of `main` until GitHub reports it merged.
 | 9.6 | Optional Qlib DatasetH bridge | Merged in PR #64–#66 | Lazy Qlib bridge for admission-checked Polars features/labels, `(datetime, instrument)` index, feature/label groups and chronological segments. Synthetic-only conversion tests. |
 | 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Merged in PR #67 | Walk-forward runner builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. PR #67 main CI passed 286 synthetic tests. |
 | 9.8 | Real Qlib 0.9.7 API compatibility | Merged in PR #68 | Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3 and LightGBM 4.7.0; actual `DataHandlerLP.from_df`, `DatasetH.prepare`, learn/infer views, datetime MultiIndex and LightGBM Dataset construction passed one synthetic smoke test. `lightgbm.train` was stubbed; no model fit or real-data backtest. |
+| 9.9 | Full synthetic walk-forward integration with real Qlib | Merged in PR #69 | Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0. Real multi-fold runner exercised admission, DatasetH learn/infer, LightGBM Dataset construction, validation/test predictions, Top-20 targets, and shared model+momentum backtest paths; 2 real-API tests passed. `lightgbm.train` was replaced by a prediction-only Booster; no optimizer fit, local data lake or empirical result. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -181,6 +182,15 @@ LightGBM 4.7.0. The synthetic-only smoke test passed against the real
 MultiIndex and LightGBM Dataset constructor. `lightgbm.train` was stubbed; no
 model was fitted. The job did not access the local data lake, call CNEquity,
 run a real-data backtest or alter base dependencies/version locks.
+
+### Phase 9.9 — full synthetic walk-forward integration (merged in PR #69)
+
+Run the existing model runner with the real Qlib 0.9.7 DatasetH and LightGBM
+Dataset interfaces, real per-fold project admission, validation and test
+prediction, Top-20 equal-weight targets and the shared project backtest engine.
+The Qlib-specific workflow replaces only `lightgbm.train` with a deterministic
+prediction-only Booster. No model optimization, real data, CNEquity call or
+empirical backtest is performed.
 
 ## CNEquity data acquisition policy
 

@@ -313,6 +313,10 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         assert fold.benchmark_report["model_training_performed"] is False
         assert fold.benchmark_daily.height == fold.daily.height
         assert fold.benchmark_report["initial_nav"] == fold.report["initial_nav"]
+    assert any(
+        item.final_training_rows < item.final_admission.label_rows
+        for item in result.folds
+    )
     assert result.oos_daily.height == sum(item.fold.test_sessions for item in result.folds)
     assert result.benchmark_oos_daily.height == result.oos_daily.height
     assert "mean_fold_excess_return" in result.aggregate_report
@@ -356,3 +360,171 @@ def test_walk_forward_model_runner_rejects_bundle_acceptance_identity_mismatch(m
                 label_horizon_sessions=5, embargo_sessions=1,
             ),
         )
+
+
+
+def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
+    """Run the full model walk-forward orchestration through real Qlib APIs.
+
+    LightGBM Dataset objects and Qlib are real. Only lightgbm.train is replaced
+    with a prediction-only Booster, so no optimization/model fit occurs.
+    """
+    lgb = pytest.importorskip("lightgbm", reason="install optional LightGBM")
+    pytest.importorskip("pandas", reason="Qlib requires pandas")
+    qlib_handler = pytest.importorskip(
+        "qlib.data.dataset.handler",
+        reason="install optional Qlib 0.9.7",
+    )
+    DataHandlerLP = qlib_handler.DataHandlerLP
+    assert DataHandlerLP.DK_L is not None
+    assert DataHandlerLP.DK_I is not None
+
+    captured = []
+
+    class PredictionOnlyBooster:
+        def predict(self, matrix):
+            return [0.02 + index * 0.001 for index in range(len(matrix))]
+
+    def no_fit(params, dataset, num_boost_round):
+        # Construct the real LightGBM Dataset to test the real feature/label
+        # bridge; do not invoke LightGBM's optimizer.
+        dataset.construct()
+        captured.append(
+            {
+                "params": dict(params),
+                "rows": dataset.num_data(),
+                "features": dataset.num_feature(),
+                "feature_names": dataset.get_feature_name(),
+                "num_boost_round": num_boost_round,
+            }
+        )
+        return PredictionOnlyBooster()
+
+    monkeypatch.setattr(lgb, "train", no_fit)
+
+    inputs = make_bundle_inputs()
+    report = inputs["acceptance_report"]
+    bundle = build_research_data_bundle(**inputs)
+    pit_revision = {
+        "revision_id": "synthetic-pit-v1",
+        "contract_fingerprint": "synthetic-pit-contract",
+    }
+    pit_dependencies = {
+        **bundle.provenance["receipt_provenance"]["dependency_identities"],
+        "financial_statement_items": pit_revision,
+    }
+    bind_pit_fundamental_provenance(
+        bundle,
+        items=["roe", "net_profit"],
+        as_of_date=report["window"]["end"],
+        receipt={
+            "replayable": True,
+            "receipt_id": "synthetic-pit-adapter-receipt",
+            "dependencies": pit_dependencies,
+            "coverage": {"completeness": "audited"},
+        },
+        revision_identity=pit_revision,
+        row_count=6,
+    )
+
+    fundamentals = pl.DataFrame(
+        [
+            {
+                "instrument": symbol,
+                "item": item,
+                "report_period": "2023-09-30",
+                "available_at": "2023-10-30T10:00:00+08:00",
+                "value": value,
+                "pit_quality": "strict",
+                "pit_is_exact": True,
+            }
+            for symbol, _, _ in (
+                ("600000.SH", 10.0, 0.08),
+                ("000001.SZ", 20.0, 0.05),
+                ("600519.SH", 30.0, 0.03),
+            )
+            for item, value in (("roe", 0.12), ("net_profit", 100.0))
+        ]
+    )
+    features = build_cross_sectional_features(
+        adjusted_bars=bundle.adjusted_bars,
+        execution_bars=bundle.execution_bars,
+        universe_membership=bundle.universe_membership,
+        fundamentals=fundamentals,
+        trading_dates=bundle.trading_dates,
+        config=CrossSectionalFeatureConfig(
+            return_windows=(5, 10),
+            volatility_window=5,
+            activity_window=5,
+        ),
+    )
+    labels = build_forward_return_labels(
+        adjusted_bars=bundle.adjusted_bars,
+        universe_membership=bundle.universe_membership,
+        trading_dates=bundle.trading_dates,
+        horizon_sessions=5,
+    )
+
+    walk_config = WalkForwardConfig(
+        min_train_sessions=20,
+        validation_sessions=5,
+        test_sessions=10,
+        step_sessions=10,
+        label_horizon_sessions=5,
+        embargo_sessions=1,
+    )
+    learner_config = LightGBMConfig(
+        num_boost_round=2,
+        min_training_rows=2,
+        num_leaves=3,
+        min_data_in_leaf=1,
+    )
+    execution_config = BacktestConfig(initial_cash=100_000, top_n=2)
+    momentum_config = MomentumConfig(
+        top_n=2,
+        lookback_sessions=8,
+        skip_recent_sessions=2,
+    )
+
+    result = run_walk_forward_cross_sectional_model(
+        bundle,
+        acceptance_report=report,
+        features=features,
+        labels=labels,
+        walk_forward_config=walk_config,
+        model_config=learner_config,
+        backtest_config=execution_config,
+        top_n=2,
+        benchmark_config=momentum_config,
+    )
+
+    assert len(result.folds) >= 2
+    assert len(captured) == len(result.folds) * 2
+    assert all(call["rows"] >= 2 for call in captured)
+    assert all(call["features"] == len(features.columns) - 2 for call in captured)
+    assert all(call["feature_names"] for call in captured)
+    assert all(call["num_boost_round"] == 2 for call in captured)
+
+    for fold in result.folds:
+        assert fold.training_admission.admitted
+        assert fold.final_admission.admitted
+        assert fold.final_admission.training_cutoff == fold.fold.test_start
+        assert 0 < fold.final_training_rows <= fold.final_admission.label_rows
+        assert fold.final_training_rows == fold.model.training_rows
+        assert fold.validation_predictions.height > 0
+        assert fold.test_predictions.height > 0
+        assert fold.targets.height > 0
+        assert fold.targets.group_by("signal_date").agg(
+            pl.col("weight").sum().alias("weight_sum")
+        )["weight_sum"].to_list() == pytest.approx([1.0] * fold.targets["signal_date"].n_unique())
+        assert fold.daily.height == fold.fold.test_sessions
+        assert fold.daily["date"].min() == fold.fold.test_start
+        assert fold.daily["date"].max() == fold.fold.test_end
+        assert fold.benchmark_daily.height == fold.daily.height
+        assert fold.benchmark_report["initial_nav"] == fold.report["initial_nav"]
+        assert fold.provenance["walk_forward"]["model_training_performed"] is True
+
+    assert result.oos_daily.height == sum(item.fold.test_sessions for item in result.folds)
+    assert result.benchmark_oos_daily.height == result.oos_daily.height
+    assert result.aggregate_report["training_dataset_unlocked"] is False
+    assert result.aggregate_report["model_training_performed"] is True

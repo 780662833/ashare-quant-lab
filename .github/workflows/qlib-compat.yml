@@ -5,6 +5,7 @@ on:
     paths:
       - "src/ashare_quant/research/qlib_*.py"
       - "tests/integration/**"
+      - "tests/unit/test_phase9_walk_forward_model_runner.py"
       - "tests/test_research_qlib_dataset.py"
       - ".github/workflows/qlib-compat.yml"
       - "pyproject.toml"
@@ -33,5 +34,8 @@ jobs:
       - name: Report real research stack versions
         run: |
           python -c "import sys, pandas, qlib, lightgbm; print('Python:', sys.version); print('Qlib:', getattr(qlib, '__version__', 'version attribute unavailable')); print('Pandas:', pandas.__version__); print('LightGBM:', lightgbm.__version__)"
-      - name: Run real Qlib API smoke test (synthetic data; no model fit)
-        run: python -m pytest -q tests/integration/test_qlib_real_api_smoke.py
+      - name: Run real Qlib API and end-to-end walk-forward smoke tests (synthetic data; no model fit)
+        run: >-
+          python -m pytest -q
+          tests/integration/test_qlib_real_api_smoke.py
+          tests/unit/test_phase9_walk_forward_model_runner.py::test_real_qlib_walk_forward_pipeline_on_synthetic_bundle
