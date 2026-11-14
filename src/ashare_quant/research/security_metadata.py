@@ -321,8 +321,6 @@ def select_security_metadata_as_of(
         if row["instrument"] in instrument_set
         and row["field"] in field_set
         and _aware_timestamp(row["available_at"], "available_at") <= cutoff
-        and row["effective_from"] <= signal
-        and (row["effective_to"] is None or signal < row["effective_to"])
     ]
 
     latest_by_start: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -352,6 +350,10 @@ def select_security_metadata_as_of(
             row for row in ordered
             if row["effective_from"] <= signal
             and (row["effective_to"] is None or signal < row["effective_to"])
+            and (
+                not _FIELD_SPECS[row["field"]]["same_day_observation"]
+                or row["effective_from"] == signal
+            )
         ]
         if len(applicable) > 1:
             raise ValueError(f"ambiguous point-in-time metadata for {key[0]} / {key[1]}")
