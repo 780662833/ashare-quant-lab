@@ -1,21 +1,20 @@
-from __future__ import annotations
-
 """Print the CNEquity instruments backfill plan without fetching or writing data.
 
 The command invokes CNEquity's own plan-only path. It reads the local config
 and source policy but does not make network requests, create a run, or mutate
 the data lake.
 """
+from __future__ import annotations
 
 import argparse
 import json
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-
 from click.testing import CliRunner
 from cnequity.cli.main import cli
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
