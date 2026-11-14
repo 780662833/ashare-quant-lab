@@ -85,11 +85,13 @@ def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
 
     class FakeMultiIndex:
         @staticmethod
+        def from_arrays(values, names=None):
+            captured["index"] = (values, names)
+            return values
+
+        @staticmethod
         def from_tuples(values, names=None):
-            if names is not None:
-                captured["index"] = (values, names)
-            else:
-                captured["columns"] = values
+            captured["columns"] = values
             return values
 
     class FakeColumns:
@@ -118,6 +120,7 @@ def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
     pandas = types.ModuleType("pandas")
     pandas.MultiIndex = FakeMultiIndex
     pandas.DataFrame = FakeFrame
+    pandas.to_datetime = lambda values: values
     qlib = types.ModuleType("qlib")
     qlib_data = types.ModuleType("qlib.data")
     qlib_dataset = types.ModuleType("qlib.data.dataset")
@@ -158,11 +161,48 @@ def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
     assert result.admission == admission
     assert result.feature_columns == ("return_5",)
     assert captured["index"][1] == ["datetime", "instrument"]
+    assert captured["index"][0][0] == ["2024-01-05", "2024-01-12", "2024-01-19"]
+    assert captured["index"][0][1] == ["000001.SZ", "000002.SZ", "000003.SZ"]
     assert captured["columns"] == [("feature", "return_5"), ("label", "forward_return")]
     assert captured["values"][:2] == [[0.02, 0.03], [-0.01, 0.01]]
     assert captured["values"][2][0] == 0.04
     assert captured["values"][2][1] != captured["values"][2][1]
 
+
+
+def test_build_qlib_panel_rows_allows_feature_rows_without_mature_labels():
+    from dataclasses import replace
+    from ashare_quant.research.admission import _frame_fingerprint
+
+    features, labels, admission = _frames()
+    features = pl.concat(
+        [
+            features,
+            pl.DataFrame(
+                {
+                    "signal_date": ["2024-01-19"],
+                    "instrument": ["000003.SZ"],
+                    "return_5": [0.04],
+                }
+            ),
+        ]
+    )
+    admission = replace(
+        admission,
+        feature_rows=3,
+        feature_fingerprint=_frame_fingerprint(
+            features, keys=["signal_date", "instrument"]
+        ),
+    )
+    keys, columns, targets = build_qlib_panel_rows(
+        features=features, labels=labels, admission=admission
+    )
+    assert keys == [
+        ("2024-01-05", "000001.SZ"),
+        ("2024-01-12", "000002.SZ"),
+    ]
+    assert columns == ["return_5"]
+    assert targets == [0.03, 0.01]
 
 def test_create_qlib_dataset_rejects_overlapping_segments():
     features, labels, admission = _frames()
