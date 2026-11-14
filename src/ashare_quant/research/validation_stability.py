@@ -65,6 +65,7 @@ class ValidationRankingAcceptancePolicy:
     minimum_mean_spearman_rank_ic: float
     minimum_positive_spearman_rank_ic_ratio: float
     minimum_positive_top_n_excess_fold_ratio: float
+    minimum_positive_rank_ic_fold_ratio: float | None = None
     minimum_rank_icir: float | None = None
     minimum_mean_top_n_excess_forward_return: float | None = None
 
@@ -94,6 +95,11 @@ class ValidationRankingAcceptancePolicy:
             self.minimum_positive_top_n_excess_fold_ratio,
             "minimum_positive_top_n_excess_fold_ratio",
         )
+        if self.minimum_positive_rank_ic_fold_ratio is not None:
+            _ratio(
+                self.minimum_positive_rank_ic_fold_ratio,
+                "minimum_positive_rank_ic_fold_ratio",
+            )
         if self.minimum_rank_icir is not None:
             _finite_number(self.minimum_rank_icir, "minimum_rank_icir")
         if self.minimum_mean_top_n_excess_forward_return is not None:
@@ -195,6 +201,15 @@ def summarize_validation_stability(
             raise ValueError(f"{fold_id} label coverage does not match row counts")
         if (status == "evaluated") != (matched_count > 0):
             raise ValueError(f"{fold_id} validation status conflicts with matched label count")
+        expected_signal_dates = report.get("evaluated_signal_date_count")
+        if (
+            isinstance(expected_signal_dates, bool)
+            or not isinstance(expected_signal_dates, int)
+            or expected_signal_dates != diagnostics.height
+        ):
+            raise ValueError(f"{fold_id} evaluated signal-date count does not match diagnostics")
+        if status == "no_matched_validation_labels" and not diagnostics.is_empty():
+            raise ValueError(f"{fold_id} has diagnostics despite having no matched labels")
         total_predictions += prediction_count
         total_matched += matched_count
         evaluated_folds += int(status == "evaluated")
@@ -279,6 +294,10 @@ def summarize_validation_stability(
         sum(value > 0 for value in all_weekly_ic) / len(all_weekly_ic)
         if all_weekly_ic else None
     )
+    positive_rank_ic_fold_ratio = (
+        sum(value > 0 for value in fold_ic_means) / len(fold_ic_means)
+        if fold_ic_means else None
+    )
     positive_top_excess_fold_ratio = (
         sum(value > 0 for value in fold_top_excess_means) / len(fold_top_excess_means)
         if fold_top_excess_means else None
@@ -304,6 +323,11 @@ def summarize_validation_stability(
         "rank_ic_sample_std": std_ic,
         "rank_icir": icir,
         "positive_spearman_rank_ic_ratio": positive_ic_ratio,
+        "defined_rank_ic_fold_count": len(fold_ic_means),
+        "mean_fold_mean_spearman_rank_ic": (
+            mean(fold_ic_means) if fold_ic_means else None
+        ),
+        "positive_rank_ic_fold_ratio": positive_rank_ic_fold_ratio,
         "mean_top_n_excess_forward_return": (
             mean(all_weekly_top_excess) if all_weekly_top_excess else None
         ),
@@ -377,6 +401,12 @@ def summarize_validation_stability(
         positive_top_excess_fold_ratio,
         policy.minimum_positive_top_n_excess_fold_ratio,
     )
+    if policy.minimum_positive_rank_ic_fold_ratio is not None:
+        assess(
+            "minimum_positive_rank_ic_fold_ratio",
+            positive_rank_ic_fold_ratio,
+            policy.minimum_positive_rank_ic_fold_ratio,
+        )
     if policy.minimum_rank_icir is not None:
         assess("minimum_rank_icir", icir, policy.minimum_rank_icir)
     if policy.minimum_mean_top_n_excess_forward_return is not None:
