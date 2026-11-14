@@ -285,7 +285,7 @@ already be chronologically ordered. PR #74 CI: 321 unit tests passed,
 or run.
 
 
-### Phase 9.15 — enforce execution entry dates at low-level fit boundaries (in review)
+### Phase 9.15 — enforce execution entry dates at low-level fit boundaries (merged PR #75)
 
 The direct LightGBM fit adapter now requires canonical signal, entry and
 maturity dates and enforces
@@ -296,5 +296,8 @@ marker, and the Qlib LightGBM adapter rejects wrappers that have not passed
 the project conversion path. The walk-forward runner also verifies entry and
 maturity dates against the bundle's official session calendar. Synthetic
 tests cover legacy labels, invalid entry ordering, non-canonical dates,
-unverified Qlib wrappers and non-session execution dates. No real
-model fit or market backtest is performed.
+unverified Qlib wrappers and non-session execution dates. PR #75 CI:
+331 unit tests passed, 2 skipped; the Python 3.12.16 / Qlib 0.9.7 /
+Pandas 2.3.3 / LightGBM 4.7.0 real-API synthetic workflow passed 2 tests.
+The LightGBM optimizer remained stubbed; no real model fit or market
+backtest was performed. Merge commit: `728016f`.
