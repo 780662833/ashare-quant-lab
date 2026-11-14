@@ -512,3 +512,64 @@ def test_rejects_wrong_value_unit_for_market_cap():
     rows[0]["value_unit"] = "shares"
     with pytest.raises(ValueError, match="value_unit=CNY"):
         validate_security_metadata(frame(*rows), source_identities=IDENTITIES)
+
+
+def test_coverage_audit_rejects_cross_taxonomy_rows_for_same_snapshot():
+    eastmoney_rows = [observation(
+        "industry_l1_code",
+        source_dataset="industry_members",
+        classification_system="eastmoney",
+        effective_from="2024-01-01",
+        effective_to=None,
+        value_string="EM-01",
+    )]
+    sw_rows = [observation(
+        "industry_l1_code",
+        source_dataset="sw_industry_history",
+        classification_system="sw",
+        effective_from="2024-01-01",
+        effective_to=None,
+        value_string="SW-01",
+        instrument="000001.SZ",
+    )]
+    eastmoney = select(eastmoney_rows, classification_system="eastmoney")
+    shenwan = select(sw_rows, classification_system="sw", instruments=("000001.SZ",))
+    mixed = pl.concat([eastmoney, shenwan], how="vertical")
+    with pytest.raises(ValueError, match="cannot mix industry classification systems"):
+        audit_security_metadata_coverage(
+            mixed,
+            instruments=("600000.SH", "000001.SZ"),
+            fields=("industry_l1_code",),
+            classification_system="eastmoney",
+        )
+
+
+def test_empty_coverage_audit_requires_explicit_signal_and_decision_time():
+    selected = select(
+        [observation(
+            "listing_date",
+            effective_from="2020-03-10",
+            effective_to=None,
+            available_at="2020-03-10T23:59:59+08:00",
+            value_date="2020-03-10",
+            instrument="600001.SH",
+        )],
+        instruments=("000001.SZ",),
+        fields=("listing_date",),
+    )
+    assert selected.is_empty()
+    with pytest.raises(ValueError, match="empty coverage audit requires explicit"):
+        audit_security_metadata_coverage(
+            selected,
+            instruments=("600000.SH",),
+            fields=("listing_date",),
+        )
+    report = audit_security_metadata_coverage(
+        selected,
+        instruments=("600000.SH",),
+        fields=("listing_date",),
+        signal_date="2024-01-05",
+        decision_at="2024-01-05T16:00:00+08:00",
+    )
+    assert report["status"] == "FAIL"
+    assert report["signal_date"] == "2024-01-05"
