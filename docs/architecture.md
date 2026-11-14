@@ -106,14 +106,21 @@ flowchart TD
 
 ### Qlib and LightGBM
 
-- Optional research dependencies, not prerequisites for current synthetic
-  backtest and momentum development.
-- Qlib may be reused for feature workflow, dataset handling, model training,
-  and prediction where its contracts fit.
-- A-share universe, PIT availability, exchange execution, costs, and order
-  fills remain project-owned and must not be delegated to generic defaults.
-- No model fit or training dataset build is permitted before the four-gate
-  acceptance contract is passed and enforced by a future builder.
+- Qlib and pandas are optional research dependencies; base synthetic backtest
+  and momentum workflows do not require Qlib.
+- Phase 9 provides a lazy Qlib `DataHandlerLP.from_df` / `DatasetH` bridge
+  for an already-admitted Polars training panel. The bridge verifies admission
+  fingerprints, complete key alignment, finite values and label maturity
+  before conversion to Qlib's `(datetime, instrument)` index and
+  `(feature, label)` column groups.
+- Project-owned Polars features/labels, CNEquity receipts, PIT availability,
+  historical universe, trading status, walk-forward splits and admission
+  remain authoritative. Qlib is a dataset/workflow adapter, not a data source
+  of truth or an admission bypass.
+- A-share execution, costs, price limits, order fills and portfolio accounting
+  remain project-owned and must not be delegated to generic defaults.
+- Synthetic CI stubs the optional Qlib API. No real Qlib training, model fit,
+  real-data backtest or empirical performance claim has been made.
 
 ## 4. Canonical data and time contract
 
