@@ -671,12 +671,14 @@ def run_walk_forward_cross_sectional_model(
             "validation_top_n_excess_forward_return": (
                 item.validation_report["mean_top_n_excess_forward_return"]
             ),
-            "validation_any_pit_missing_prediction_rate": item.validation_feature_missingness_report[
-                "by_feature"]["__any_pit_missing__"]["prediction_missing_rate"]
-            ],
-            "validation_any_pit_missing_top_n_rate": item.validation_feature_missingness_report[
-                "by_feature"]["__any_pit_missing__"]["top_n_missing_rate"]
-            ],
+            "validation_any_pit_missing_prediction_rate": (
+                item.validation_feature_missingness_report["by_feature"]
+                ["__any_pit_missing__"]["prediction_missing_rate"]
+            ),
+            "validation_any_pit_missing_top_n_rate": (
+                item.validation_feature_missingness_report["by_feature"]
+                ["__any_pit_missing__"]["top_n_missing_rate"]
+            ),
             "validation_top_minus_bottom_forward_return": (
                 item.validation_report["mean_top_minus_bottom_forward_return"]
             ),
