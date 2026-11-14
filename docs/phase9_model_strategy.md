@@ -116,11 +116,15 @@ The primary walk-forward training path is Qlib `DatasetH` ->
 - `weekly_cross_sectional_model_targets(...)` ranks each signal-date
   cross-section by predicted five-session return and delegates Top-20
   equal-weight target construction to the shared engine.
-- Training and inference use the same row-eligibility rule: every configured
-  feature must be non-null and finite. Incomplete rows (including NaN and
-  positive/negative infinity) are omitted before fitting or prediction; they
-  are never imputed. A security omitted for incomplete inputs cannot displace
-  an eligible security in the Top-20 ranking.
+- Training and inference use one explicit feature-eligibility rule:
+  market-derived features must be non-null and finite; `pit_*` fundamentals
+  may remain null when no strict fact was knowable at the signal close.
+  Only true null PIT values are converted to NaN for LightGBM's native
+  missing-value handling (`use_missing=true`, `zero_as_missing=false`).
+  Source NaN/Inf values and missing market features remain ineligible; no
+  imputation, zero-fill or forward-fill is performed. This reduces row loss
+  caused only by unavailable point-in-time fundamentals without introducing
+  future information.
 
 Qlib segment selection does not replace the project's walk-forward planner,
 label-horizon purge, embargo or admission. PIT availability, source receipts,
