@@ -607,12 +607,7 @@ def test_walk_forward_model_runner_rejects_label_execution_dates_outside_calenda
         "label_entry_date": [bundle.trading_dates[5]],
         "label_end_date": [bundle.trading_dates[10]],
         "forward_return": [0.03],
-    }).with_columns(
-        pl.when(pl.lit(date_column) == "label_entry_date")
-        .then(pl.col("label_entry_date"))
-        .otherwise(pl.col("label_entry_date"))
-        .alias("label_entry_date")
-    )
+    })
     labels = labels.with_columns(
         pl.lit("2099-01-01").alias(date_column)
     )
