@@ -124,8 +124,10 @@ flowchart TD
   versioned and fingerprinted. No test labels feed policy decisions.
 - Project-owned Polars features/labels, CNEquity receipts, PIT availability,
   historical universe, trading status, walk-forward splits and admission
-  remain authoritative. Qlib is a dataset/workflow adapter, not a data source
-  of truth or an admission bypass.
+  remain authoritative. Weekly feature construction requires exact HFQ
+  adjustment evidence for every adjusted-close row; strict PIT facts must be
+  finite and duplicate availability keys are rejected. Qlib is a
+  dataset/workflow adapter, not a data source of truth or an admission bypass.
 - A-share execution, costs, price limits, order fills and portfolio accounting
   remain project-owned and must not be delegated to generic defaults.
 - Qlib and pandas stay optional/lazy in the Python 3.13 development
