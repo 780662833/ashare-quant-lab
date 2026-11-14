@@ -36,12 +36,15 @@ matured. Those examples form the final `train` segment; test rows are added
 only as feature-only inference rows.
 
 The Qlib bridge rechecks the admission fingerprints, label-key coverage,
-finite training values, maturity cutoff and non-overlapping segment bounds.
-Admission fingerprints cover the complete input feature and label frames.
-Some feature rows may legitimately have no future label (for example, an
-unavailable future price endpoint); every admitted label must match a feature,
-but only complete feature/label pairs are included in the Qlib learn segment.
-These unmatched feature rows are not silently promoted to training examples.
+maturity cutoff and non-overlapping segment bounds. Admission fingerprints
+cover the complete input feature and label frames. Some feature rows may
+legitimately have no future label (for example, an unavailable future price
+endpoint), and some historical feature vectors may contain null values while
+rolling windows warm up. Every admitted label must match a feature; only rows
+with a mature label and a complete finite feature vector enter the Qlib learn
+segment. Null features are excluded, never imputed. The bundle records the
+actual materialized training-row count separately from admission source-row
+counts, and the LightGBM fit adapter verifies that count.
 
 Inference feature rows are checked for unique keys, numeric completeness and
 their assigned non-train segment. The Qlib index uses a pandas datetime level
