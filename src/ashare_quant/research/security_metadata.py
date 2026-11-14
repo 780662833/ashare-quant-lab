@@ -17,8 +17,8 @@ import polars as pl
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 _REQUIRED_COLUMNS = {
-    "instrument", "field", "value_numeric", "value_string", "value_date",
-    "effective_from", "effective_to", "available_at", "evidence_class",
+    "instrument", "field", "classification_system", "value_numeric", "value_string", "value_date",
+    "value_unit", "effective_from", "effective_to", "available_at", "evidence_class",
     "pit_grade", "quality", "is_exact", "source", "source_dataset",
     "source_revision_id", "source_contract_fingerprint", "source_receipt_id",
 }
@@ -27,6 +27,8 @@ _VALUE_COLUMNS = ("value_numeric", "value_string", "value_date")
 _FIELD_SPECS: dict[str, dict[str, Any]] = {
     "listing_date": {
         "value_kind": "date",
+        "value_unit": "date",
+        "taxonomy": False,
         "evidence_class": "immutable_event",
         "pit_grade": "event_verified",
         "quality": "verified",
@@ -37,6 +39,13 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
     },
     "industry_l1_code": {
         "value_kind": "string",
+        "value_unit": "classification_code",
+        "taxonomy": True,
+        "classification_systems": {"eastmoney", "sw"},
+        "datasets_by_classification_system": {
+            "eastmoney": {"industry_members"},
+            "sw": {"sw_industry_history"},
+        },
         "evidence_class": "strict_pit",
         "pit_grade": "strict",
         "quality": "strict",
@@ -47,6 +56,13 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
     },
     "industry_l2_code": {
         "value_kind": "string",
+        "value_unit": "classification_code",
+        "taxonomy": True,
+        "classification_systems": {"eastmoney", "sw"},
+        "datasets_by_classification_system": {
+            "eastmoney": {"industry_members"},
+            "sw": {"sw_industry_history"},
+        },
         "evidence_class": "strict_pit",
         "pit_grade": "strict",
         "quality": "strict",
@@ -57,6 +73,13 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
     },
     "industry_l3_code": {
         "value_kind": "string",
+        "value_unit": "classification_code",
+        "taxonomy": True,
+        "classification_systems": {"eastmoney", "sw"},
+        "datasets_by_classification_system": {
+            "eastmoney": {"industry_members"},
+            "sw": {"sw_industry_history"},
+        },
         "evidence_class": "strict_pit",
         "pit_grade": "strict",
         "quality": "strict",
@@ -67,6 +90,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
     },
     "market_cap_total": {
         "value_kind": "numeric",
+        "value_unit": "CNY",
+        "taxonomy": False,
         "evidence_class": "strict_pit",
         "pit_grade": "strict",
         "quality": "strict",
@@ -77,6 +102,8 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
     },
     "market_cap_float": {
         "value_kind": "numeric",
+        "value_unit": "CNY",
+        "taxonomy": False,
         "evidence_class": "strict_pit",
         "pit_grade": "strict",
         "quality": "strict",
@@ -174,9 +201,11 @@ def validate_security_metadata(
     frame = observations.select(sorted(_REQUIRED_COLUMNS)).with_columns(
         pl.col("instrument").cast(pl.String, strict=True),
         pl.col("field").cast(pl.String, strict=True),
+        pl.col("classification_system").cast(pl.String, strict=True),
         pl.col("value_numeric").cast(pl.Float64, strict=True),
         pl.col("value_string").cast(pl.String, strict=True),
         pl.col("value_date").cast(pl.String, strict=True),
+        pl.col("value_unit").cast(pl.String, strict=True),
         pl.col("effective_from").cast(pl.String, strict=True),
         pl.col("effective_to").cast(pl.String, strict=True),
         pl.col("available_at").cast(pl.String, strict=True),
@@ -192,7 +221,7 @@ def validate_security_metadata(
     )
 
     for column in (
-        "instrument", "field", "effective_from", "available_at",
+        "instrument", "field", "effective_from", "available_at", "value_unit",
         "evidence_class", "pit_grade", "quality", "source",
         "source_dataset", "source_revision_id",
         "source_contract_fingerprint", "source_receipt_id",
@@ -223,6 +252,14 @@ def validate_security_metadata(
             raise ValueError(f"{field} must use an open-ended immutable-event interval")
         if spec["value_date_matches_effective_from"] and effective_from != value_date:
             raise ValueError(f"{field} effective_from must equal its value date")
+        if row["value_unit"] != spec["value_unit"]:
+            raise ValueError(f"{field} must use value_unit={spec['value_unit']}")
+        classification_system = row["classification_system"]
+        if spec["taxonomy"]:
+            if classification_system not in spec["classification_systems"]:
+                raise ValueError(f"{field} requires a supported classification_system")
+        elif classification_system is not None:
+            raise ValueError(f"{field} must not set classification_system")
 
         populated = [name for name in _VALUE_COLUMNS if row[name] is not None]
         expected_column = {
@@ -251,8 +288,14 @@ def validate_security_metadata(
         if row["is_exact"] is not True:
             raise ValueError(f"{field} must carry is_exact=true")
         dataset = str(row["source_dataset"])
-        if dataset not in spec["datasets"]:
-            raise ValueError(f"{field} is not permitted from source dataset {dataset}")
+        if spec["taxonomy"]:
+            permitted_datasets = spec["datasets_by_classification_system"][classification_system]
+        else:
+            permitted_datasets = spec["datasets"]
+        if dataset not in permitted_datasets:
+            raise ValueError(
+                f"{field} from {classification_system} is not permitted from {dataset}"
+            )
         identity = identities.get(dataset)
         if identity is None:
             raise ValueError(f"source receipt identity is missing for dataset {dataset}")
@@ -267,7 +310,9 @@ def validate_security_metadata(
         ):
             raise ValueError(f"{field} row does not match its source receipt identity")
 
-        duplicate_key = (instrument, field, effective_from, available_at.isoformat())
+        duplicate_key = (
+            instrument, field, classification_system, effective_from, available_at.isoformat()
+        )
         if duplicate_key in seen:
             raise ValueError("duplicate security metadata instrument/field/effective/available key")
         seen.add(duplicate_key)
@@ -299,6 +344,7 @@ def select_security_metadata_as_of(
     instruments: Sequence[str],
     fields: Sequence[str],
     signal_date: str,
+    classification_system: str | None = None,
     decision_at: str,
 ) -> pl.DataFrame:
     """Select metadata effective and knowable at one Shanghai signal timestamp.
@@ -315,6 +361,18 @@ def select_security_metadata_as_of(
     unknown_fields = sorted(set(fields).difference(_FIELD_SPECS))
     if unknown_fields:
         raise ValueError(f"unsupported security metadata fields: {unknown_fields}")
+    taxonomy_fields = [field for field in fields if _FIELD_SPECS[field]["taxonomy"]]
+    if taxonomy_fields:
+        allowed_systems = set.intersection(*[
+            set(_FIELD_SPECS[field]["classification_systems"])
+            for field in taxonomy_fields
+        ])
+        if classification_system not in allowed_systems:
+            raise ValueError(
+                "industry metadata selection requires one explicit classification_system"
+            )
+    elif classification_system is not None:
+        raise ValueError("classification_system is only valid for industry metadata fields")
     cutoff = _aware_timestamp(decision_at, "decision_at")
     if cutoff.date().isoformat() != signal:
         raise ValueError("decision_at must fall on the supplied Shanghai signal_date")
@@ -328,19 +386,28 @@ def select_security_metadata_as_of(
         row for row in frame.to_dicts()
         if row["instrument"] in instrument_set
         and row["field"] in field_set
+        and (
+            not _FIELD_SPECS[row["field"]]["taxonomy"]
+            or row["classification_system"] == classification_system
+        )
         and _aware_timestamp(row["available_at"], "available_at") <= cutoff
     ]
 
     latest_by_start: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in rows:
-        key = (row["instrument"], row["field"], row["effective_from"])
+        key = (
+            row["instrument"], row["field"], row["classification_system"],
+            row["effective_from"],
+        )
         previous = latest_by_start.get(key)
         if previous is None or row["available_at"] > previous["available_at"]:
             latest_by_start[key] = row
 
-    by_instrument_field: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    by_instrument_field: dict[tuple[str, str, str | None], list[dict[str, Any]]] = {}
     for row in latest_by_start.values():
-        by_instrument_field.setdefault((row["instrument"], row["field"]), []).append(row)
+        by_instrument_field.setdefault(
+            (row["instrument"], row["field"], row["classification_system"]), []
+        ).append(row)
 
     selected: list[dict[str, Any]] = []
     for key, candidates in by_instrument_field.items():
@@ -436,6 +503,11 @@ def audit_security_metadata_coverage(
         "instrument_count": len(instruments),
         "signal_date": selected["signal_date"].item(0) if selected.height else None,
         "decision_at": selected["decision_at"].item(0) if selected.height else None,
+        "classification_system": (
+            selected["classification_system"].drop_nulls().unique().item(0)
+            if selected.height and selected["classification_system"].drop_nulls().n_unique() == 1
+            else None
+        ),
         "selection_policy": (
             "effective interval contains signal_date AND available_at <= "
             "Shanghai decision_at; no forward-fill or proxy imputation"
