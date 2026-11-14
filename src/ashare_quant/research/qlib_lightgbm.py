@@ -89,8 +89,6 @@ def _numpy_values(frame: Any, *, field: str):
 
 
 def _training_arrays(prepared: Any, feature_columns: tuple[str, ...]):
-    import numpy as np
-
     try:
         feature_frame = prepared["feature"]
         label_frame = prepared["label"]
@@ -105,6 +103,10 @@ def _training_arrays(prepared: Any, feature_columns: tuple[str, ...]):
         raise ValueError("Qlib training must expose exactly one forward_return label")
 
     keys = _index_keys(prepared)
+    feature_keys = _index_keys(feature_frame)
+    label_keys = _index_keys(label_frame)
+    if feature_keys != keys or label_keys != keys:
+        raise ValueError("Qlib feature, label and segment indexes are not identically aligned")
     matrix = _numpy_values(feature_frame, field="feature")
     target = _numpy_values(label_frame, field="label")
     if matrix.ndim != 2 or matrix.shape[1] != len(feature_columns):
