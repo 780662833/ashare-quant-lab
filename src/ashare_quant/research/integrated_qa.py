@@ -4,12 +4,17 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any, Mapping
 
 from ashare_quant.research.qa import (
     build_research_qa_report,
     validate_research_qa_report,
 )
+
+def _is_sha256_digest(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
 
 def _verified_fill_stress_section(
     payload: Mapping[str, Any], *, baseline_experiment_id: str,
@@ -53,14 +58,14 @@ def _verified_fill_stress_section(
     for field, expected_length in (("config_sha256", 5),):
         values = integrity.get(field)
         if not isinstance(values, list) or len(values) != expected_length or any(
-            not isinstance(value, str) or len(value) != 64 for value in values
+            not _is_sha256_digest(value) for value in values
         ):
             raise ValueError(f"P10.5 fill-stress {field} values are missing or invalid")
     provenance_hash = integrity.get("data_provenance_sha256")
-    if not isinstance(provenance_hash, str) or len(provenance_hash) != 64:
+    if not _is_sha256_digest(provenance_hash):
         raise ValueError("P10.5 fill-stress data provenance hash is missing or invalid")
     declared_hash = integrity.get("report_sha256")
-    if not isinstance(declared_hash, str) or len(declared_hash) != 64:
+    if not _is_sha256_digest(declared_hash):
         raise ValueError("P10.5 fill-stress report hash is missing or invalid")
     unhashed = dict(payload)
     unhashed_integrity = dict(integrity)
@@ -165,8 +170,46 @@ def build_integrated_research_qa_report(
         if not isinstance(decisions, list) or len(decisions) != 4 or any(item != "PRICE_ONLY_ELIGIBLE" for item in decisions):
             raise ValueError("P10.4 cost-stress admission was not PRICE_ONLY_ELIGIBLE for every scenario")
         experiment_ids = cost_stress_report.get("experiment_ids")
-        if not isinstance(experiment_ids, list) or not experiment_ids or experiment_ids[0] != experiment_id:
-            raise ValueError("P10.4 cost-stress experiment IDs do not include the QA baseline")
+        expected_scenario_ids = ["C0", "C1", "C2", "C3"]
+        if (
+            not isinstance(experiment_ids, list)
+            or len(experiment_ids) != 4
+            or any(not isinstance(item, str) or not item for item in experiment_ids)
+            or len(set(experiment_ids)) != 4
+            or experiment_ids[0] != experiment_id
+        ):
+            raise ValueError("P10.4 cost-stress experiment IDs must be four unique IDs beginning with the QA baseline")
+        scenario_ids = [item.get("scenario_id") for item in scenarios]
+        scenario_experiment_ids = [item.get("experiment_id") for item in scenarios]
+        if scenario_ids != expected_scenario_ids:
+            raise ValueError("P10.4 cost-stress scenarios must be C0-C3 in protocol order")
+        if scenario_experiment_ids != experiment_ids:
+            raise ValueError("P10.4 cost-stress scenario experiment IDs do not match the verified artifact list")
+        expected_multipliers = [1.0, 1.5, 2.0, 3.0]
+        registered_multipliers = cost_stress_report.get("scenario_multipliers")
+        if (
+            not isinstance(registered_multipliers, list)
+            or len(registered_multipliers) != 4
+            or any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in registered_multipliers)
+            or registered_multipliers != expected_multipliers
+        ):
+            raise ValueError("P10.4 registered cost-stress multipliers do not match the protocol")
+        scenario_multipliers = [item.get("cost_multiplier") for item in scenarios]
+        if (
+            any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in scenario_multipliers)
+            or scenario_multipliers != expected_multipliers
+        ):
+            raise ValueError("P10.4 cost-stress multipliers do not match the registered protocol")
+        config_hashes = integrity.get("config_sha256")
+        if (
+            not isinstance(config_hashes, list)
+            or len(config_hashes) != 4
+            or any(not isinstance(value, str) or len(value) != 64 for value in config_hashes)
+        ):
+            raise ValueError("P10.4 cost-stress config hashes are missing or invalid")
+        provenance_hash = integrity.get("data_provenance_sha256")
+        if not isinstance(provenance_hash, str) or len(provenance_hash) != 64:
+            raise ValueError("P10.4 cost-stress data provenance hash is missing or invalid")
         declared_hash = integrity.get("report_sha256")
         if not isinstance(declared_hash, str) or len(declared_hash) != 64:
             raise ValueError("P10.4 cost-stress report hash is missing or invalid")
