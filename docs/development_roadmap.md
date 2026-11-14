@@ -38,10 +38,10 @@ branch is not part of `main` until GitHub reports it merged.
 | 6 | Chronological walk-forward fold planner | Merged in PR #11 | Expanding/rolling folds, label-maturity purge, embargo and non-overlapping test windows; no model fitting |
 | 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
 | 8 | Walk-forward runner, artifact persistence, verification and comparison | Merged in PR #13, #15, #16, #29, #30, #31 and #32 | Cutoff-isolated momentum folds; price-limit audit bound to assembled evidence rows and rule revision; experiment persistence/verification bound to structured adapter receipts; builder-only bundle admission at benchmark and walk-forward entry points; no model fitting |
-| 9.1 | Cross-sectional feature and forward-label contracts | Implemented in PR under review | Weekly as-of feature builder: 5/20/60/120-session HFQ returns, rolling volatility, raw amount/volume activity and strict PIT ROE/net-profit; forward 5-session return labels carry exact label_end_date. Synthetic tests cover future-publication isolation, missing-session nulls and signal-date membership. No training or empirical run |
-| 9.2 | Training dataset admission | Implemented in PR under review; LightGBM still blocked | Fail-closed exact-window/profile acceptance, replayable source provenance, all five evidence gates, numeric feature validation, unique keys and label maturity before cutoff. Admission returns an auditable decision only; it does not fit or unlock a model |
-| 9.3 | LightGBM adapter and weekly model selection strategy | Not implemented | Fit/predict/save/load only after admission is wired into a dedicated training runner; rank weekly predictions and emit Top 20 equal-weight targets |
-| 9.3 | Weekly model selection strategy | Not implemented | Rank predictions cross-sectionally, Top 20 equal weight, shared backtest engine; compare against fixed momentum benchmark on identical folds |
+| 9.1 | Cross-sectional feature and forward-label contracts | Merged in PR #58 | Weekly as-of features: 5/20/60/120-session HFQ returns, rolling volatility, raw amount/volume activity and strict PIT ROE/net-profit; exact 5-session forward-return labels carry label_end_date. Synthetic tests cover future-publication isolation, missing-session nulls and signal-date membership. |
+| 9.2 | Training dataset admission | Merged in PR #59 | Fail-closed exact-window/profile acceptance, replayable source provenance, all five evidence entries, numeric feature validation, unique keys and label maturity before cutoff. Admission returns an auditable decision only; the acceptance report remains training_dataset_unlocked=false. |
+| 9.3 | LightGBM adapter and weekly model target strategy | Merged in PR #60 | Deterministic LightGBM fit/predict/save/load requires a matching admission decision and exact feature/label fingerprints. Weekly predictions become Top-20 equal-weight target weights through the shared engine. No real model fit has been run. |
+| 9.4 | Walk-forward cross-sectional model runner | Implemented in PR #61; CI pending | Per fold: train-only admission/fit, validation prediction, label-maturity re-admission/refit on train+validation, test-only predictions and shared-engine OOS ledgers. CI uses a fake LightGBM module and synthetic bundle; no real training or empirical run. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -135,10 +135,13 @@ windows. No data assembly, scheduler or model-training unlock is added. See
   provides the first model.
 - The model uses the same target-weight interface, engine, cost settings and
   report as momentum.
-- A builder must verify all four acceptance gates for the exact same window,
-  profile and source revisions and retain the report/receipts with the dataset.
-- `training_dataset_unlocked` remains false until that independent builder is
-  implemented, tested and explicitly approves the exact dataset.
+- Phase 9 admission verifies the exact acceptance window/profile, all five
+  report evidence entries (historical universe, replayable universe receipt,
+  HFQ, strict PIT and trading status), replayable source revisions, feature
+  schema/keys and label maturity before the fold cutoff.
+- The acceptance report and bundle provenance retain
+  `training_dataset_unlocked=false`; the model runner consumes a successful
+  per-fold admission object before each explicit LightGBM fit.
 
 ## CNEquity data acquisition policy
 
