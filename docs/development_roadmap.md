@@ -515,3 +515,31 @@ real exchange endpoints or establish provider completeness. No API was
 invoked, no data rows were downloaded, no local data-lake access or CNEquity
 query/backfill occurred, and no real training, optimizer fit or empirical
 backtest was run. No dependency or CNEquity version-lock change was made.
+
+
+### Phase 9.25 — executable listing-event evidence envelope
+
+Added the pure `validate_listing_event_evidence(...)` validator for exchange
+listing-event document records. It requires an exchange-qualified symbol,
+initial-listing event type, exchange-specific dataset namespace, official
+HTTPS host, document ID/kind, retained-document SHA-256, page/table/row
+locator, publication date and precision, a separate document/signature date,
+published/available/captured timestamps, explicit BSE transfer classification,
+and receipt/revision/contract provenance.
+
+Date-only publication is conservatively cut off at 23:59:59 Asia/Shanghai;
+`available_at` must equal the actual documented publication time. Document
+signature date is never substituted for public release time. Precise
+publication timestamps must include timezone. BSE Select-Layer transfer
+records fail closed until the legal listing-age start is proven separately
+from the code migration date. Evidence rows are then checked by the Phase 9.23
+receipt-bound, field-scoped immutable-event metadata contract.
+
+Synthetic tests cover all three exchange namespaces, official domain and code
+matching, date/timestamp publication semantics, digest/locator validation,
+receipt drift, duplicate evidence and BSE transfer rejection. This validator
+does not fetch URLs, hash external documents, authenticate auditors, or prove
+full PIT-universe coverage. It is not wired into bundle assembly, features,
+training admission or walk-forward. No source API or data rows were accessed;
+no local lake read, CNEquity query/backfill, real training, optimizer fit or
+empirical backtest was run. No dependency or version-lock changes were made.
