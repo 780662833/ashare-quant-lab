@@ -481,3 +481,37 @@ walk-forward runner.
 Synthetic CI covers missing/legacy capability declarations, receipt/revision
 drift, field-scope mismatch and normal as-of behavior. No local data-lake
 access, CNEquity query/backfill, model fit or empirical backtest is performed.
+
+
+### Phase 9.24 — qualify listing-date evidence sources before feature use
+
+Reviewed official SSE, SZSE and BSE public listing-event and archive material,
+plus the public contract for a third-party A-share basic-information API.
+The SSE monthly archive/report provides code, name and listing-date entries,
+but the displayed archive and period table do not establish complete
+1990-to-present, delisted-symbol coverage or first publication time. The SZSE
+announcement archive provides event-level listing and termination notices;
+its sample exposes a difference between the page publication date and the
+document signature date, so `available_at` cannot be inferred from the
+document footer. BSE old/new code mapping helps with identifier reconciliation,
+but migrated Select-Layer companies have a special legal listing-time
+continuity rule that must be resolved before a migrated code's date can be
+admitted. CnOpenData publicly claims tri-exchange coverage back to 1990-12 and
+delisted-security records, but its public API description does not expose
+row-level original document provenance, first-publication timestamps or
+replayable historical row revisions.
+
+The immutable listing-date contract now allows the future
+`sse_listing_events`, `szse_listing_events` and `bse_listing_events`
+dataset namespaces. This is only a schema capability path: no source adapter
+is registered and no source is qualified. Added a source evidence envelope,
+availability-time rule, full-universe reconciliation gates, BSE migration
+edge-case policy and public source references in
+`docs/listing_date_source_qualification.md`.
+
+Synthetic tests verify that the three exchange-specific namespaces can
+validate a receipt-bound immutable listing-date observation. They do not test
+real exchange endpoints or establish provider completeness. No API was
+invoked, no data rows were downloaded, no local data-lake access or CNEquity
+query/backfill occurred, and no real training, optimizer fit or empirical
+backtest was run. No dependency or CNEquity version-lock change was made.

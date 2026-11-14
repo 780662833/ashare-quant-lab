@@ -49,6 +49,18 @@ IDENTITIES = {
         "instruments", "instruments-r1", "instruments-contract",
         ["listing_date"], "immutable_event",
     ),
+    "sse_listing_events": source_identity(
+        "sse_listing_events", "sse-events-r1", "sse-events-contract",
+        ["listing_date"], "immutable_event",
+    ),
+    "szse_listing_events": source_identity(
+        "szse_listing_events", "szse-events-r1", "szse-events-contract",
+        ["listing_date"], "immutable_event",
+    ),
+    "bse_listing_events": source_identity(
+        "bse_listing_events", "bse-events-r1", "bse-events-contract",
+        ["listing_date"], "immutable_event",
+    ),
     "industry_members": source_identity(
         "industry_members", "industry-r1", "industry-contract",
         ["industry_l1_code", "industry_l2_code", "industry_l3_code"], "strict_pit",
@@ -398,6 +410,27 @@ def test_rejects_non_finite_market_cap_values():
     )]
     with pytest.raises(ValueError, match="finite and non-negative"):
         validate_security_metadata(frame(*rows), source_identities=IDENTITIES)
+
+
+@pytest.mark.parametrize(
+    "dataset",
+    ["sse_listing_events", "szse_listing_events", "bse_listing_events"],
+)
+def test_official_exchange_listing_event_datasets_support_immutable_listing_date(dataset):
+    row = observation(
+        "listing_date",
+        source_dataset=dataset,
+        effective_from="2020-03-10",
+        effective_to=None,
+        available_at="2020-03-10T23:59:59+08:00",
+        value_date="2020-03-10",
+    )
+    result = validate_security_metadata(
+        frame(row),
+        source_identities={dataset: IDENTITIES[dataset]},
+    )
+    assert result.height == 1
+    assert result["source_dataset"].item() == dataset
 
 
 def test_rejects_missing_field_semantic_capability_audit():

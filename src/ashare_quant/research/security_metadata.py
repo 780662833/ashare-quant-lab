@@ -32,7 +32,12 @@ _FIELD_SPECS: dict[str, dict[str, Any]] = {
         "evidence_class": "immutable_event",
         "pit_grade": "event_verified",
         "quality": "verified",
-        "datasets": {"instruments"},
+        "datasets": {
+            "instruments",
+            "sse_listing_events",
+            "szse_listing_events",
+            "bse_listing_events",
+        },
         "requires_open_interval": True,
         "value_date_matches_effective_from": True,
         "same_day_observation": False,
