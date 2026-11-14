@@ -261,3 +261,13 @@ open-to-open holding horizon before the configured embargo. Folded momentum
 replays retain weekly signal dates from the original full calendar rather
 than inventing a rebalance at a midweek cutoff. No real training or market
 run is performed.
+
+
+### Phase 9.13 — fail-fast execution-label contract (merged PR #73)
+
+The model runner now requires `label_entry_date` in its public label schema
+before fold planning, admission, Qlib dataset construction, or model fitting.
+Legacy label frames lacking the executable entry date fail at the runner
+boundary with a specific contract error. PR #73 CI: 314 unit tests passed,
+2 skipped; real Qlib/LightGBM synthetic API smoke tests passed (2). No
+optimizer fit or empirical market run was performed.
