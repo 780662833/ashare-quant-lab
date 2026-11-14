@@ -99,3 +99,55 @@ The metadata field may be integrated only after all gates pass on the accepted P
 - CnOpenData A-share basic-information API description: https://v2026-sso.cnopendata.com/api-store/ashare-basic-api
 
 No source API was invoked and no data rows were downloaded during this review.
+
+
+## Executable evidence-envelope contract (Phase 9.25)
+
+The repository now includes
+`ashare_quant.research.listing_event_evidence.validate_listing_event_evidence(...)`.
+This is a pure validator over caller-supplied, already captured evidence rows; it
+does not open URLs or call any exchange/vendor service.
+
+Each event row must carry the exchange-qualified instrument, exchange, initial
+listing event type, listing date, exchange-specific source-dataset namespace,
+document kind and ID, official HTTPS URL, SHA-256 digest of the captured source
+document/response, exact record locator, public publication date and precision,
+published timestamp, availability timestamp, optional document/signature date,
+capture timestamp, BSE Select-Layer transfer flag, and the source revision,
+contract fingerprint and receipt ID.
+
+The validator applies these controls:
+
+- SSE rows must use `.SH` identifiers and an SSE official domain; SZSE rows
+  must use `.SZ` and an SZSE official domain; BSE rows must use `.BJ` and a
+  BSE official domain. Host matching is exact-or-subdomain, so lookalike
+  suffixes such as `sse.com.cn.evil.example` are rejected.
+- `listing_notice` is accepted for each exchange. `monthly_listing_report`
+  is accepted only for SSE; it is supporting evidence, not an assurance of
+  complete universe coverage.
+- A date-only public release is conservatively normalized to 23:59:59
+  Asia/Shanghai on the publication date. `available_at` must equal that
+  documented public release time. The document/signature date remains a
+  separate field and cannot replace the publication date.
+- A precise timestamp must be timezone-aware and consistent with the
+  publication date. The evidence capture timestamp cannot precede publication.
+- The source document digest must be 64-character SHA-256 hex, the record
+  locator and document ID must be non-empty, and the dataset/revision/
+  fingerprint/receipt must pass the Phase 9.23 field-scoped capability
+  validator.
+- All BSE Select-Layer transfer rows are rejected until the source evidence
+  proves the legally defined listing-age start separately from the BSE
+  code-migration date. No date is inferred from a current code mapping.
+
+The function validates digest shape and records the digest; it does not hash
+or download an external document. The adapter/capture layer must compute the
+digest over the retained original bytes, preserve those bytes, and keep the
+audit evidence independently retrievable. Passing this envelope also does not
+prove full PIT-universe completeness or authenticate the upstream reviewer.
+The validator is not connected to bundle assembly, feature construction,
+training admission or walk-forward execution.
+
+Synthetic tests exercise allowed exchange domains and identifiers, publication
+timestamp precision, signature-date separation, digest and record-locator
+requirements, receipt mismatch, duplicate events and BSE transfer rejection.
+No external endpoint, source record or real market data was accessed.
