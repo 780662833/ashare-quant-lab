@@ -7,12 +7,18 @@ from pathlib import Path
 
 from ashare_quant.data.acceptance import DEFAULT_PIT_ITEMS, render_markdown, run_acceptance
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run fail-closed four-gate acceptance against a local CNEquity lake."
     )
-    parser.add_argument("--data-root", default=r"F:\cnEquity")
+    parser.add_argument(
+        "--data-root",
+        default=str(ROOT / "data" / "cnequity"),
+        help="CNEquity lake directory (default: project data/cnequity)",
+    )
     parser.add_argument("--start-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument(
