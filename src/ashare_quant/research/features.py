@@ -287,15 +287,20 @@ def build_cross_sectional_features(
             (pl.col("adj_close") / pl.col("adj_close").shift(window).over("instrument") - 1.0)
             .alias(f"return_{window}")
         )
+    volume_mean = (
+        pl.col("volume")
+        .rolling_mean(window_size=cfg.activity_window)
+        .over("instrument")
+    )
     expressions.extend([
         pl.col("_daily_return").rolling_std(window_size=cfg.volatility_window)
         .over("instrument").alias(f"volatility_{cfg.volatility_window}"),
         pl.col("amount").rolling_mean(window_size=cfg.activity_window)
         .over("instrument").alias(f"avg_amount_{cfg.activity_window}"),
-        (
-            pl.col("volume")
-            / pl.col("volume").rolling_mean(window_size=cfg.activity_window).over("instrument")
-        ).alias(f"volume_ratio_{cfg.activity_window}"),
+        pl.when(volume_mean > 0)
+        .then(pl.col("volume") / volume_mean)
+        .otherwise(None)
+        .alias(f"volume_ratio_{cfg.activity_window}"),
     ])
     panel = panel.with_columns(expressions)
     market_features = panel.filter(pl.col("date").is_in(weekly_dates)).rename({"date": "signal_date"})

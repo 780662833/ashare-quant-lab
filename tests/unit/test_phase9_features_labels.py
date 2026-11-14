@@ -366,3 +366,30 @@ def test_pit_features_reject_noncanonical_or_future_report_period(bad_period):
                 return_windows=(5,), volatility_window=5, activity_window=5
             ),
         )
+
+
+
+def test_zero_volume_window_produces_null_volume_ratio_not_nonfinite_values():
+    adj, raw, members, fundamentals, sessions = market()
+    zero_volume = raw.with_columns(
+        pl.when(pl.col("instrument") == "600000.SH")
+        .then(0.0).otherwise(pl.col("volume")).alias("volume"),
+        pl.when(pl.col("instrument") == "600000.SH")
+        .then(0.0).otherwise(pl.col("amount")).alias("amount"),
+    )
+    features = build_cross_sectional_features(
+        adjusted_bars=adj,
+        execution_bars=zero_volume,
+        universe_membership=members,
+        fundamentals=fundamentals,
+        trading_dates=sessions,
+        config=CrossSectionalFeatureConfig(
+            return_windows=(5,), volatility_window=5, activity_window=5
+        ),
+    )
+    row = features.filter(
+        (pl.col("signal_date") == sessions[14])
+        & (pl.col("instrument") == "600000.SH")
+    ).row(0, named=True)
+    assert row["avg_amount_5"] == pytest.approx(0.0)
+    assert row["volume_ratio_5"] is None

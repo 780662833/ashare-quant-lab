@@ -34,6 +34,10 @@ Open, high, low, close, volume, amount, adjustment/corporate-action basis,
 suspension status, price-limit status/price, and source provenance. The raw
 open/close and same-session HFQ adjusted close are retained together so the
 research layer can reconstruct an adjusted open without mixing price bases.
+Rolling activity features retain raw zero-volume observations. When the rolling
+mean volume is zero, volume_ratio is represented as missing/null rather than
+NaN or an invented zero ratio; downstream training and inference only use
+complete finite feature rows.
 
 ## Signal-to-execution return labels
 
