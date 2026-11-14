@@ -107,3 +107,31 @@ def test_inspection_preserves_dataset_read_errors() -> None:
     assert report["datasets"]["instruments"]["status"] == "ERROR"
     assert "dataset missing" in report["datasets"]["instruments"]["error"]
     assert report["overall_read_status"] == "ERROR"
+
+
+def test_missing_datasets_are_not_misreported_as_reader_errors() -> None:
+    def loader(dataset: str, **kwargs: object) -> SimpleNamespace:
+        raise RuntimeError(
+            f"ReaderError: no parquet data for dataset '{dataset}' under lake/{dataset}"
+        )
+
+    report = inspect_cnequity_metadata(
+        "fake-lake",
+        loader=loader,
+        schema_reader=lambda _: {"symbol": pl.String},
+        as_of=date(2026, 11, 14),
+    )
+
+    assert report["datasets"]["instruments"]["status"] == "MISSING"
+    assert (
+        report["datasets"]["instruments"]["dataset_role"]
+        == "required_for_historical_universe"
+    )
+    assert "plan_cnequity_instruments_backfill.py" in report["datasets"]["instruments"]["next_step"]
+    assert report["datasets"]["delisting_events"]["status"] == "MISSING"
+    assert (
+        report["datasets"]["delisting_events"]["dataset_role"]
+        == "derived_supplementary_dataset"
+    )
+    assert "Do not run" in report["datasets"]["delisting_events"]["next_step"]
+    assert report["overall_read_status"] == "MISSING"
