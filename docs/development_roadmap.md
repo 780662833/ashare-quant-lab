@@ -48,6 +48,7 @@ branch is not part of `main` until GitHub reports it merged.
 | 9.8 | Real Qlib 0.9.7 API compatibility | Merged in PR #68 | Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3 and LightGBM 4.7.0; actual `DataHandlerLP.from_df`, `DatasetH.prepare`, learn/infer views, datetime MultiIndex and LightGBM Dataset construction passed one synthetic smoke test. `lightgbm.train` was stubbed; no model fit or real-data backtest. |
 | 9.9 | Full synthetic walk-forward integration with real Qlib | Merged in PR #69 | Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0. Real multi-fold runner exercised admission, DatasetH learn/infer, LightGBM Dataset construction, validation/test predictions, Top-20 targets, and shared model+momentum backtest paths; 2 real-API tests passed. `lightgbm.train` was replaced by a prediction-only Booster; no optimizer fit, local data lake or empirical result. |
 | 9.10 | Matured validation ranking diagnostics | Merged in PR #70 | Per-week validation Rank IC / Pearson IC / Top-N excess vs labeled universe / equal-sized Top-Bottom spread; labels must mature strictly before test start. Test labels are rejected, metrics are archived per fold and do not tune model parameters. Base CI: 294 passed, 2 skipped; real Qlib API integration: 2 passed. |
+| 9.11 | Cross-fold validation stability and explicit acceptance policy | Implemented in PR under review | Summarizes weekly Rank IC distribution/ICIR, positive-week and positive-fold ratios, Top-N excess stability and pooled label coverage. Acceptance thresholds are caller-supplied, versioned and fingerprinted; absent policy means NOT_ASSESSED. No test metrics or automatic parameter selection. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -184,7 +185,7 @@ MultiIndex and LightGBM Dataset constructor. `lightgbm.train` was stubbed; no
 model was fitted. The job did not access the local data lake, call CNEquity,
 run a real-data backtest or alter base dependencies/version locks.
 
-### Phase 9.10 — matured validation ranking diagnostics (in PR under review)
+### Phase 9.10 — matured validation ranking diagnostics (merged in PR #70)
 
 The diagnostic model's feature-only validation predictions are now joined to
 validation forward-return labels only after those labels mature strictly before
@@ -194,6 +195,21 @@ an equal-sized Top-Bottom spread. Fold and aggregate summaries are persisted
 with the experiment. These metrics are post-hoc validation diagnostics: test
 labels are rejected, and no automatic hyperparameter tuning or model selection
 is performed from them.
+
+### Phase 9.11 — cross-fold validation stability and explicit acceptance policy
+
+The runner summarizes weekly validation Rank IC across folds, including
+mean/median/sample standard deviation, descriptive ICIR, positive-week ratio,
+fold-level consistency, Top-N excess stability and pooled label coverage. An
+optional `ValidationRankingAcceptancePolicy` applies predeclared thresholds.
+There are no implicit financial cutoffs: the caller must supply a policy ID
+and every required threshold. The exact policy values and SHA-256 fingerprint
+are persisted with the aggregate report and fold provenance. Without a policy,
+the decision remains `NOT_ASSESSED`; insufficient sample/coverage yields
+`INSUFFICIENT_EVIDENCE`. These decisions use validation only and do not imply
+test-period profitability or unlock training.
+
+See [validation_ranking_policy.md](validation_ranking_policy.md).
 
 ### Phase 9.9 — full synthetic walk-forward integration (merged in PR #69)
 
