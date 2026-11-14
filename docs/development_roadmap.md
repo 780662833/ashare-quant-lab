@@ -283,3 +283,16 @@ fail closed instead of relying on provider row order. Feature calendars must
 already be chronologically ordered. PR #74 CI: 321 unit tests passed,
 2 skipped. No Qlib/LightGBM API, real training or market backtest was changed
 or run.
+
+
+### Phase 9.15 — enforce execution entry dates at low-level fit boundaries (in review)
+
+The direct LightGBM fit adapter now requires canonical signal, entry and
+maturity dates and enforces
+`signal_date < label_entry_date < label_end_date < training_cutoff`.
+The Qlib panel bridge independently requires and validates the entry date
+before converting rows; Qlib dataset wrappers carry a verified-entry-contract
+marker, and the Qlib LightGBM adapter rejects wrappers that have not passed
+the project conversion path. Synthetic tests cover legacy labels, invalid
+entry ordering, non-canonical dates and unverified Qlib wrappers. No real
+model fit or market backtest is performed.
