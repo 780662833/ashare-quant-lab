@@ -139,6 +139,7 @@ def persist_walk_forward_model_run(
             frames = {
                 "validation_predictions.parquet": fold.validation_predictions,
                 "validation_diagnostics.parquet": fold.validation_diagnostics,
+                "validation_feature_missingness.parquet": fold.validation_feature_missingness,
                 "test_predictions.parquet": fold.test_predictions,
                 "model_targets.parquet": fold.targets,
                 "daily.parquet": fold.daily,
@@ -179,6 +180,7 @@ def persist_walk_forward_model_run(
                     "metadata_path": metadata_path.relative_to(staging).as_posix(),
                 },
                 "validation_report": fold.validation_report,
+                "validation_feature_missingness_report": fold.validation_feature_missingness_report,
                 "report": fold.report,
                 "benchmark_report": fold.benchmark_report,
                 "provenance": fold.provenance,
@@ -194,6 +196,14 @@ def persist_walk_forward_model_run(
                 "validation_status": fold.validation_report["status"],
                 "validation_mean_spearman_rank_ic": (
                     fold.validation_report["mean_spearman_rank_ic"]
+                ),
+                "validation_any_pit_missing_prediction_rate": (
+                    fold.validation_feature_missingness_report["by_feature"]
+                    ["__any_pit_missing__"]["prediction_missing_rate"]
+                ),
+                "validation_any_pit_missing_top_n_rate": (
+                    fold.validation_feature_missingness_report["by_feature"]
+                    ["__any_pit_missing__"]["top_n_missing_rate"]
                 ),
             })
 
