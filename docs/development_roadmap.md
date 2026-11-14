@@ -422,3 +422,36 @@ No local data-lake access, CNEquity queries/backfills, real-data training or
 empirical market backtest was performed. Merge commit:
 `c5667a06c5209a118c6ef67a7f58791cba479253`.
 
+### Phase 9.22 — define receipt-bound PIT security metadata contract
+
+A provider-agnostic, fail-closed metadata contract now defines typed
+observations for immutable listing-date events, effective-dated industry
+classifications, and same-session market capitalization. Every observation
+requires an effective interval, a timezone-aware availability timestamp,
+source revision, contract fingerprint, receipt ID and source-certified
+evidence capability. Selection resolves revisions only as knowable at the
+Shanghai signal cutoff, forbids market-cap carry-forward, and stamps the
+selected snapshot with its signal date and decision timestamp. Coverage
+auditing requires every requested signal-universe instrument/field pair and
+fails on missing or unexpected rows.
+
+Industry classification systems are explicit and isolated: EastMoney and
+Shenwan codes cannot be merged into one taxonomy. Field units are fixed by
+the schema (date, classification code or CNY), and coverage audits reject
+unknown fields and mixed taxonomies.
+
+The locked CNEquity 0.21.0 contract and the reviewed 0.23.0 contract retain
+material source limitations: industry_members and valuation_metrics are
+non-PIT snapshots; share_structure is partial/reconstructed PIT; instruments
+listing dates remain only conditional immutable-event candidates pending
+source verification and complete historical-universe coverage. The selector
+is not wired into the feature builder, admission or model runner. No
+market-cap, listing-age or industry feature is enabled by this phase.
+
+PR #82 is merged. Final-head GitHub Actions: 374 unit tests passed, 2 skipped.
+These are synthetic contract/temporal-boundary tests only. No local data-lake
+access, CNEquity reads/queries/backfills, real-data training, optimizer fit
+or empirical market backtest was performed. No dependency or version-lock
+change was made. Merge commit:
+`a93291fb464b89c417de97868da2d42ca200ce17`.
+
