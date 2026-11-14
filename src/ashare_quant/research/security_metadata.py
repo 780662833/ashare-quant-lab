@@ -467,6 +467,9 @@ def audit_security_metadata_coverage(
         raise ValueError("instruments must be non-empty and unique")
     if not fields or len(set(fields)) != len(fields):
         raise ValueError("fields must be non-empty and unique")
+    unknown_fields = sorted(set(fields).difference(_FIELD_SPECS))
+    if unknown_fields:
+        raise ValueError(f"unsupported security metadata fields: {unknown_fields}")
     required_columns = {
         "instrument", "field", "classification_system", "signal_date", "decision_at"
     }
