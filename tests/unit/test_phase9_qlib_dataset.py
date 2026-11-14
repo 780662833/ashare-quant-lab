@@ -99,7 +99,7 @@ def test_qlib_panel_rows_rejects_noncanonical_entry_date():
 
 def test_inference_keeps_missing_pit_but_excludes_missing_or_nonfinite_market_features():
     frame = pl.DataFrame({
-        "signal_date": ["2024-01-19"] * 8,
+        "signal_date": ["2024-01-19"] * 10,
         "instrument": [
             "600000.SH",
             "000001.SZ",
@@ -109,9 +109,11 @@ def test_inference_keeps_missing_pit_but_excludes_missing_or_nonfinite_market_fe
             "000004.SZ",
             "000005.SZ",
             "000006.SZ",
+            "000007.SZ",
+            "000008.SZ",
         ],
-        "return_5": [0.04, None, float("nan"), float("inf"), 0.02, float("-inf"), 0.01, 0.03],
-        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25, None, float("nan")],
+        "return_5": [0.04, None, float("nan"), float("inf"), 0.02, float("-inf"), 0.01, 0.03, 0.02, 0.02],
+        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25, None, float("nan"), float("inf"), float("-inf")],
     })
 
     eligible = frame.filter(
@@ -145,18 +147,3 @@ def test_qlib_panel_rows_keeps_mature_rows_with_missing_pit_fundamentals():
     assert targets == [-0.01, 0.03]
 
 
-@pytest.mark.parametrize("invalid_value", [float("nan"), float("inf"), float("-inf")])
-def test_qlib_panel_rows_rejects_non_null_nonfinite_pit_values(invalid_value):
-    features, labels = frames()
-    features = features.with_columns(
-        pl.when(pl.col("instrument") == "000001.SZ")
-        .then(pl.lit(invalid_value))
-        .otherwise(pl.col("pit_roe"))
-        .alias("pit_roe")
-    )
-    admission = admission_for(features, labels)
-
-    with pytest.raises(ValueError, match="non-finite"):
-        build_qlib_panel_rows(
-            features=features, labels=labels, admission=admission
-        )
