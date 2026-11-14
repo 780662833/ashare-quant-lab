@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -57,7 +58,7 @@ class LightGBMConfig:
             ("lambda_l1", self.lambda_l1),
             ("lambda_l2", self.lambda_l2),
         ):
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not float(value) >= 0:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)) or float(value) < 0:
                 raise ValueError(f"{name} must be a finite non-negative number")
         if not 0 < self.learning_rate <= 1:
             raise ValueError("learning_rate must be in (0, 1]")
@@ -207,6 +208,7 @@ def fit_lightgbm_regressor(
         raise ValueError("Feature frame differs from the admitted feature fingerprint")
     if _frame_fingerprint(labels, keys=_KEYS) != admission.label_fingerprint:
         raise ValueError("Label frame differs from the admitted label fingerprint")
+    cfg = config or LightGBMConfig()
     feature_columns = tuple(admission.feature_columns)
     if not feature_columns:
         raise ValueError("Admission contains no model feature columns")
@@ -231,13 +233,11 @@ def fit_lightgbm_regressor(
         )
     ).height:
         raise ValueError("Training matrix contains non-finite feature or label values")
-    if joined.height < (config or LightGBMConfig()).min_training_rows:
+    if joined.height < cfg.min_training_rows:
         raise ValueError(
             "Insufficient complete training rows: "
-            f"observed={joined.height}, required={(config or LightGBMConfig()).min_training_rows}"
+            f"observed={joined.height}, required={cfg.min_training_rows}"
         )
-
-    cfg = config or LightGBMConfig()
     import lightgbm as lgb
 
     matrix = joined.select(*feature_columns).to_numpy()
