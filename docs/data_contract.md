@@ -184,3 +184,22 @@ entry-date check before the Qlib LightGBM fit adapter accepts it. The model
 runner also requires entry and maturity dates to exist in the validated
 bundle's official exchange calendar. This keeps legacy close-to-close labels
 and non-session execution dates from entering a lower-level training API.
+
+
+## Historical security metadata (Phase 9.22)
+
+Listing age, industry and market capitalization are not accepted merely
+because CNEquity returns list_date, as_of_date, trade_date or announce_date.
+A metadata record needs both an effective interval and a separate
+timezone-aware available_at timestamp, plus a replayable receipt, revision ID,
+contract fingerprint and source-certified evidence class. The generic,
+fail-closed selector and exact-universe coverage audit are implemented in
+`research/security_metadata.py`; see
+[security_metadata_contract.md](security_metadata_contract.md).
+
+The locked CNEquity 0.21.0 contract and the inspected 0.23.0 contract mark
+industry_members and valuation_metrics as non-PIT snapshots. share_structure
+is partial/reconstructed PIT. Those facts do not pass the strict historical
+feature contract. instruments.list_date is only an immutable-event candidate
+after a source-specific audit and complete historical-universe coverage. No
+industry or market-cap feature is enabled by this phase.
