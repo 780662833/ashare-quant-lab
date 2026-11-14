@@ -182,6 +182,15 @@ MultiIndex and LightGBM Dataset constructor. `lightgbm.train` was stubbed; no
 model was fitted. The job did not access the local data lake, call CNEquity,
 run a real-data backtest or alter base dependencies/version locks.
 
+### Phase 9.9 — full synthetic walk-forward integration (in PR under review)
+
+Run the existing model runner with the real Qlib 0.9.7 DatasetH and LightGBM
+Dataset interfaces, real per-fold project admission, validation and test
+prediction, Top-20 equal-weight targets and the shared project backtest engine.
+The Qlib-specific workflow replaces only `lightgbm.train` with a deterministic
+prediction-only Booster. No model optimization, real data, CNEquity call or
+empirical backtest is performed.
+
 ## CNEquity data acquisition policy
 
 The user's current Windows lake root is:
