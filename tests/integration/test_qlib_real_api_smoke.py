@@ -18,7 +18,11 @@ from ashare_quant.research.qlib_lightgbm import (
 class SyntheticBooster:
     """Prediction stub; this smoke test must never fit a real model."""
 
+    def __init__(self):
+        self.last_matrix = None
+
     def predict(self, matrix):
+        self.last_matrix = matrix
         return [0.01 + 0.01 * index for index in range(len(matrix))]
 
 
@@ -172,3 +176,4 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
         {"signal_date": "2024-01-19", "instrument": "600000.SH"},
     ]
     assert predictions["predicted_return"].to_list() == [0.01, 0.02]
+    assert np.isnan(model.booster.last_matrix[0, 1])
