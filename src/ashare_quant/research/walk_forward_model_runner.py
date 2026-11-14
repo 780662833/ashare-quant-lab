@@ -30,8 +30,8 @@ from ashare_quant.research.qlib_lightgbm import (
     fit_qlib_lightgbm_regressor,
     predict_qlib_lightgbm_regressor,
 )
-from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
 from ashare_quant.research.missingness_diagnostics import evaluate_validation_feature_missingness
+from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
 from ashare_quant.research.validation_stability import (
     ValidationRankingAcceptancePolicy,
     summarize_validation_stability,
