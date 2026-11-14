@@ -14,6 +14,7 @@ from typing import Any
 import polars as pl
 
 from ashare_quant.backtest import BacktestConfig, BacktestResult, summarize_backtest
+from ashare_quant.backtest.engine import weekly_rebalance_dates
 from ashare_quant.research.benchmark import run_momentum_benchmark
 from ashare_quant.research.bundle import ResearchDataBundle
 from ashare_quant.research.walk_forward import (
@@ -280,10 +281,18 @@ def run_walk_forward_momentum(
             if frame.filter(pl.col("date").cast(pl.String) > fold.test_end).height:
                 raise AssertionError(f"{name} contains observations after fold cutoff")
 
+        # Use the original full-calendar weekly signal schedule. A fold cutoff
+        # can fall mid-week; treating that truncated final session as a new
+        # signal would invent a rebalance without a PIT membership snapshot.
+        fold_signal_dates = [
+            signal_date for signal_date in weekly_rebalance_dates(sessions)
+            if signal_date <= fold.test_end
+        ]
         benchmark = run_momentum_benchmark(
             prefix,
             strategy_config=strategy,
             backtest_config=execution,
+            signal_dates=fold_signal_dates,
         )
         full_daily = benchmark.result.daily.sort("date")
         baseline = full_daily.filter(pl.col("date").cast(pl.String) == baseline_date)
