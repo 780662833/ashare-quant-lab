@@ -63,10 +63,15 @@ training or validation use.
 
 Input rows must carry instrument, item, report_period, available_at, value,
 pit_quality, and pit_is_exact. Only pit_quality='strict' and
-pit_is_exact=true facts are eligible. available_at must be timezone-aware.
-The builder compares it with the signal-date close cutoff (16:00
-Asia/Shanghai), then selects the latest known report for each instrument/item.
-A report period is never treated as its publication timestamp.
+pit_is_exact=true facts are eligible. `assemble_cnequity_pit_fundamentals(...)`
+reads the receipt-backed CNEquity financial_statement_items dataset and
+normalizes symbol/item_code/item_value/announce_date. Because announce_date
+may contain only a date, the adapter conservatively sets availability to
+23:59:59 Asia/Shanghai on that date; same-day after-close publication can
+therefore never leak into that day's 16:00 signal. The helper pins the PIT
+adapter receipt and revision into bundle provenance. The feature builder then
+selects the latest known report for each instrument/item. A report period is
+never treated as its publication timestamp.
 
 ## Training admission — implemented, model fitting still gated
 
