@@ -132,7 +132,8 @@ def test_exact_scope_passes_and_returns_auditable_admission_without_fitting():
     assert not hasattr(result, "model")
 
 
-def test_admission_allows_true_missing_pit_values_but_rejects_nan():
+@pytest.mark.parametrize("invalid_value", [float("nan"), float("inf"), float("-inf")])
+def test_admission_allows_true_missing_pit_values_but_rejects_nonfinite(invalid_value):
     features, labels = frames()
     features = features.with_columns(
         pl.when(pl.col("instrument") == "000001.SZ")
@@ -143,7 +144,7 @@ def test_admission_allows_true_missing_pit_values_but_rejects_nan():
     result = admit(features=features)
     assert result.admitted is True
 
-    invalid = features.with_columns(pl.lit(float("nan")).alias("pit_roe"))
+    invalid = features.with_columns(pl.lit(invalid_value).alias("pit_roe"))
     rejected = admit(features=invalid)
     assert rejected.admitted is False
     assert any("non-finite" in reason for reason in rejected.rejection_reasons)
