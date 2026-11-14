@@ -240,11 +240,16 @@ def test_qlib_training_rejects_admission_mismatch(monkeypatch):
 def test_qlib_training_rejects_cutoff_or_row_count_mismatch(monkeypatch):
     _install_qlib(monkeypatch)
     admission = _admission()
-    dataset = _dataset(admission)
-    dataset.segment_bounds = {
-        "train": ("2024-01-01", "2024-01-15"),
-        "valid": ("2024-01-19", "2024-01-19"),
-    }
+    original = _dataset(admission)
+    dataset = QlibDatasetBundle(
+        dataset=original.dataset,
+        admission=admission,
+        feature_columns=original.feature_columns,
+        segment_bounds={
+            "train": ("2024-01-01", "2024-01-15"),
+            "valid": ("2024-01-19", "2024-01-19"),
+        },
+    )
     with pytest.raises(ValueError, match="cutoff"):
         fit_qlib_lightgbm_regressor(
             dataset=dataset,
