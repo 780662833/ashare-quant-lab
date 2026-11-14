@@ -185,6 +185,9 @@ third-party accuracy certification.
 ### Universe and availability
 
 - Universe membership is point-in-time on every signal date.
+- The walk-forward model runner revalidates caller-supplied feature and label
+  keys against the bundle's same-date membership snapshot; data prepared
+  outside the canonical feature builder cannot introduce non-members.
 - Historical listing/delisting, ST/risk-warning, exchange, and board history
   must not be reconstructed from today's listed names.
 - Delisted securities remain in historical research where they were eligible.

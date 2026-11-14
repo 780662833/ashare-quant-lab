@@ -27,6 +27,10 @@ acceptance runner; strategy/model modules must not query CNEquity internals.
 - Decision timestamp: Asia/Shanghai timestamp when all inputs are known.
 - Availability timestamp: earliest time a source fact was knowable.
 - Every panel row is uniquely keyed by (instrument, trading_date).
+- Every model feature and label key at a weekly signal must also exist in
+  that signal date's point-in-time universe snapshot. The walk-forward runner
+  rechecks this against the validated bundle, even when frames are supplied
+  by an external caller rather than the canonical feature builder.
 
 ## Required market fields
 

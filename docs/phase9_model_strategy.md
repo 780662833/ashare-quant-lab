@@ -15,6 +15,9 @@ not the model strategy and must not be used as a proxy for one.
 - Decision: after the final supplied exchange session in each ISO week.
 - Execution: no earlier than the next eligible session open.
 - Universe: SH/SZ research profile, membership as-of each signal date.
+- The public walk-forward runner rechecks every supplied feature and label
+  `(signal_date, instrument)` key against the validated bundle's exact
+  same-date membership snapshot before planning folds or admitting training.
 - Portfolio: top 20 predicted names, equal weight, no leverage.
 - First learner: LightGBM regression, trained only on chronological folds.
 - First label: exact HFQ close-to-close forward return over 5 exchange sessions.

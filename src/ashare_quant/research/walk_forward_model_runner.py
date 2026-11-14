@@ -305,6 +305,30 @@ def run_walk_forward_cross_sectional_model(
                         f"labels contain {column} outside the bundle trading calendar"
                     )
 
+    # The feature builder normally intersects rows with the PIT universe, but
+    # callers may supply prebuilt frames. Re-check the exact signal-date keys
+    # against the validated bundle before any fold admission or model fitting.
+    membership_keys = bundle.universe_membership.select(
+        pl.col("date").cast(pl.String).alias("signal_date"),
+        pl.col("instrument").cast(pl.String),
+    ).unique()
+    for name, frame in (("features", features), ("labels", labels)):
+        observed_keys = frame.select(
+            pl.col("signal_date").cast(pl.String),
+            pl.col("instrument").cast(pl.String),
+        ).unique()
+        outside_universe = observed_keys.join(
+            membership_keys,
+            on=["signal_date", "instrument"],
+            how="anti",
+        )
+        if outside_universe.height:
+            examples = outside_universe.head(5).to_dicts()
+            raise ValueError(
+                f"{name} contains rows outside the point-in-time universe "
+                f"for their signal date: {examples}"
+            )
+
     report_window = acceptance_report["window"]
     start_date = str(report_window["start"])
     end_date = str(report_window["end"])

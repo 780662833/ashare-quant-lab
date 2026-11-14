@@ -344,3 +344,14 @@ the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 synthetic
 compatibility workflow passed 2 tests. Merge commit:
 `e68c0d27a4d488dcba3f57df39e39dc539aa326e`. No optimizer fit, real-data
 training or empirical market backtest was performed.
+
+
+### Phase 9.19 — enforce PIT universe at the walk-forward boundary
+
+The model runner now validates every caller-supplied feature and label key
+against the validated bundle's same-date point-in-time membership snapshot.
+A frame cannot introduce a security outside the historical eligible universe
+even if it bypasses the canonical feature builder. The failure occurs before
+fold planning, admission, or model fitting. A synthetic regression test adds
+an out-of-universe instrument and confirms the runner rejects the frame at
+its public boundary. No empirical data, model fit, or market backtest is used.
