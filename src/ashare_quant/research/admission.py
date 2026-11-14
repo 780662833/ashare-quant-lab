@@ -184,6 +184,22 @@ def _validate_acceptance(
             reasons.append("source provenance acceptance receipts do not match the report")
         pit_binding = source_provenance.get("pit_fundamentals")
         pit_revision = source_provenance.get("source_revisions", {}).get("financial_statement_items")
+        acceptance_pit = receipts.get("pit") if isinstance(receipts, Mapping) else None
+        acceptance_pit_dependencies = (
+            acceptance_pit.get("dependencies")
+            if isinstance(acceptance_pit, Mapping) else None
+        )
+        acceptance_pit_identity = (
+            acceptance_pit_dependencies.get("financial_statement_items")
+            if isinstance(acceptance_pit_dependencies, Mapping) else None
+        )
+        if not isinstance(acceptance_pit_identity, Mapping):
+            reasons.append("acceptance PIT receipt does not pin financial_statement_items revision")
+        elif not isinstance(pit_revision, Mapping) or (
+            acceptance_pit_identity.get("revision_id") != pit_revision.get("revision_id")
+            or acceptance_pit_identity.get("contract_fingerprint") != pit_revision.get("contract_fingerprint")
+        ):
+            reasons.append("acceptance PIT receipt revision does not match the adapter PIT revision")
         pit_records = [
             record for record in source_provenance.get("source_receipts", [])
             if isinstance(record, Mapping) and record.get("dataset") == "financial_statement_items"
