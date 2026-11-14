@@ -122,10 +122,13 @@ flowchart TD
 - A-share execution, costs, price limits, order fills and portfolio accounting
   remain project-owned and must not be delegated to generic defaults.
 - Qlib and pandas stay optional/lazy in the Python 3.13 development
-  environment. Separate Python 3.12 real-API compatibility validation remains
-  pending; no dependency or CNEquity version lock was changed.
-- Synthetic CI stubs Qlib and LightGBM APIs. No real-data training, backtest
-  or empirical performance claim has been made.
+  environment. A separate Python 3.12 Qlib 0.9.7 workflow exercises the real
+  Qlib data APIs and LightGBM Dataset constructor with synthetic frames; the
+  LightGBM optimizer remains stubbed. No dependency or CNEquity version lock
+  is changed.
+- Base synthetic CI still stubs optional Qlib and LightGBM APIs. Real API
+  smoke coverage does not constitute real-data training, a backtest or an
+  empirical performance claim.
 
 ## 4. Canonical data and time contract
 
@@ -314,6 +317,6 @@ As of 2026-11-14:
 | Walk-forward momentum runner | Merged in PR #13; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
 | Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
 | Cross-sectional feature/label + strict admission | Implemented; empirical use remains gated by local data acceptance |
-| Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Implemented in Phase 9.7 PR under review; synthetic tests only |
-| Real Qlib 0.9.7 / Python 3.12 compatibility | Pending isolated optional-environment verification |
+| Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Merged in PR #67; 286 synthetic CI tests passed |
+| Real Qlib 0.9.7 / Python 3.12 compatibility | Dedicated real-API smoke workflow in PR under review; synthetic inputs only |
 | Live trading | Out of scope |
