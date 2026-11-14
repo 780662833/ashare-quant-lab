@@ -40,6 +40,7 @@ class QlibDatasetBundle:
     admission: TrainingDatasetAdmission
     feature_columns: tuple[str, ...]
     segment_bounds: Mapping[str, tuple[str, str]]
+    training_rows: int | None = None
 
     def prepare(self, *args: Any, **kwargs: Any) -> Any:
         """Delegate the Qlib DatasetH prepare interface."""
@@ -107,19 +108,20 @@ def build_qlib_panel_rows(
         | (pl.col("label_end_date") >= admission.training_cutoff)
     ).height:
         raise ValueError("Qlib panel contains labels that are not mature before the cutoff")
-    if joined.filter(
-        pl.any_horizontal(
-            pl.col("forward_return").is_null(),
-            ~pl.col("forward_return").is_finite(),
-            *[
-                pl.col(name).is_null() | ~pl.col(name).is_finite()
-                for name in admission.feature_columns
-            ],
-        )
-    ).height:
-        raise ValueError("Qlib panel contains null or non-finite training values")
-
-    ordered = joined.sort(_KEYS)
+    # Admission fingerprints and counts describe the complete source frames.
+    # Supervised Qlib training uses only rows with a mature label and a complete
+    # finite feature vector. Do not impute null features or silently mutate the
+    # admitted source frames.
+    complete_row = pl.all_horizontal(
+        pl.col("forward_return").is_not_null() & pl.col("forward_return").is_finite(),
+        *[
+            pl.col(name).is_not_null() & pl.col(name).is_finite()
+            for name in admission.feature_columns
+        ],
+    )
+    ordered = joined.filter(complete_row).sort(_KEYS)
+    if ordered.is_empty():
+        raise ValueError("Qlib panel has no complete finite feature/label rows")
     dates = ordered["signal_date"].to_list()
     instruments = ordered["instrument"].to_list()
     for value in dates:
@@ -170,6 +172,11 @@ def create_qlib_dataset(
     if any(not train_start <= signal_date <= train_end for signal_date, _ in index):
         raise ValueError("admitted training rows must fall inside the Qlib train segment")
 
+    eligible_keys = pl.DataFrame(
+        index,
+        schema={"signal_date": pl.String, "instrument": pl.String},
+        orient="row",
+    )
     training_panel = (
         features.select(
             pl.col("signal_date").cast(pl.String),
@@ -186,6 +193,7 @@ def create_qlib_dataset(
             how="inner",
             validate="1:1",
         )
+        .join(eligible_keys, on=_KEYS, how="inner", validate="1:1")
         .sort(_KEYS)
     )
 
@@ -276,4 +284,5 @@ def create_qlib_dataset(
         admission=admission,
         feature_columns=tuple(feature_names),
         segment_bounds=dict(normalized),
+        training_rows=len(index),
     )
