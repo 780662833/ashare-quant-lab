@@ -279,8 +279,12 @@ def run_walk_forward_cross_sectional_model(
         raise ValueError("Acceptance report profile does not match the validated research bundle")
     if not {"signal_date", "instrument"}.issubset(features.columns):
         raise ValueError("features require signal_date and instrument")
-    if not {"signal_date", "instrument", "label_end_date", "forward_return"}.issubset(labels.columns):
-        raise ValueError("labels do not satisfy the forward-return label contract")
+    if not {
+        "signal_date", "instrument", "label_entry_date", "label_end_date", "forward_return"
+    }.issubset(labels.columns):
+        raise ValueError(
+            "labels do not satisfy the execution-aligned forward-return label contract"
+        )
 
     sessions = list(bundle.trading_dates)
     session_set = set(sessions)
