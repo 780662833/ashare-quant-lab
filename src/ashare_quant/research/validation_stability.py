@@ -163,7 +163,6 @@ def summarize_validation_stability(
     total_matched = 0
     evaluated_folds = 0
     fold_details: list[dict[str, Any]] = []
-    total_diagnostic_dates = 0
     missing_ic_dates = 0
 
     for fold_id, diagnostics, report in zip(ids, fold_diagnostics, fold_reports, strict=True):
@@ -230,8 +229,6 @@ def summarize_validation_stability(
             if signal_date in all_dates:
                 raise ValueError("Validation signal dates overlap across folds")
             all_dates.add(signal_date)
-            total_diagnostic_dates += 1
-
             sample_count = row["sample_count"]
             if isinstance(sample_count, bool) or not isinstance(sample_count, int) or sample_count < 1:
                 raise ValueError(f"{fold_id} sample_count must be a positive integer")
