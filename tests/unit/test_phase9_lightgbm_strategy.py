@@ -174,6 +174,27 @@ def test_model_prediction_allows_missing_pit_but_excludes_invalid_market_feature
     assert model.booster.last_matrix[2, 1] != model.booster.last_matrix[2, 1]
 
 
+@pytest.mark.parametrize("invalid_value", [float("nan"), float("inf"), float("-inf")])
+def test_fit_rejects_non_null_nonfinite_pit_source_values(monkeypatch, invalid_value):
+    features, labels = frames()
+    features = features.with_columns(
+        pl.when(pl.col("instrument") == "600000.SH")
+        .then(pl.lit(invalid_value))
+        .otherwise(pl.col("pit_roe"))
+        .alias("pit_roe")
+    )
+    decision = admitted(features, labels)
+    fake_lightgbm(monkeypatch)
+
+    with pytest.raises(ValueError, match="non-finite"):
+        fit_lightgbm_regressor(
+            features=features,
+            labels=labels,
+            admission=decision,
+            config=LightGBMConfig(min_training_rows=1),
+        )
+
+
 def test_fit_keeps_missing_pit_as_native_nan_but_excludes_missing_market_feature(monkeypatch):
     features, labels = frames()
     features = features.with_columns(
