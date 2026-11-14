@@ -21,7 +21,7 @@ def _inputs():
             {
                 "signal_date": ["2024-01-19", "2024-01-26"],
                 "spearman_rank_ic": [0.3, 0.0],
-                "top_n_excess_forward_return": [0.03, -0.005],
+                "top_n_excess_forward_return": [-0.03, -0.005],
                 "top_minus_bottom_forward_return": [0.05, -0.01],
             }
         ),
@@ -57,7 +57,7 @@ def _policy(**overrides):
         "minimum_positive_spearman_rank_ic_ratio": 0.7,
         "minimum_positive_top_n_excess_fold_ratio": 0.5,
         "minimum_rank_icir": 0.5,
-        "minimum_mean_top_n_excess_forward_return": 0.005,
+        "minimum_mean_top_n_excess_forward_return": -0.01,
     }
     values.update(overrides)
     return ValidationRankingAcceptancePolicy(**values)
@@ -137,6 +137,10 @@ def test_cross_fold_stability_rejects_overlapping_validation_signal_dates():
     diagnostics[1] = diagnostics[1].with_columns(
         pl.Series("signal_date", ["2024-01-12", "2024-01-26"])
     )
+    reports[1] = {
+        **reports[1],
+        "validation_period": {"start": "2024-01-12", "end": "2024-01-26"},
+    }
     with pytest.raises(ValueError, match="overlap across folds"):
         summarize_validation_stability(diagnostics, reports)
 
