@@ -44,6 +44,8 @@ class TrainingDatasetAdmission:
     feature_columns: tuple[str, ...]
     label_horizon_sessions: int
     source_fingerprint: str
+    feature_fingerprint: str
+    label_fingerprint: str
     rejection_reasons: tuple[str, ...]
 
     def to_dict(self) -> dict[str, Any]:
@@ -60,6 +62,21 @@ def _iso_date(value: Any, name: str) -> str:
     if parsed.isoformat() != value:
         raise ValueError(f"{name} must use canonical YYYY-MM-DD format")
     return value
+
+
+def _frame_fingerprint(frame: pl.DataFrame, *, keys: list[str]) -> str:
+    """Hash a deterministic, schema-aware canonical row representation."""
+    ordered = frame.sort(keys)
+    payload = {
+        "columns": ordered.columns,
+        "schema": {name: str(dtype) for name, dtype in ordered.schema.items()},
+        "rows": ordered.to_dicts(),
+    }
+    encoded = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"),
+        ensure_ascii=False, allow_nan=False, default=str,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _validate_acceptance(
@@ -287,6 +304,12 @@ def admit_training_dataset(
     ).encode("utf-8")
     fingerprint = hashlib.sha256(provenance_bytes).hexdigest()
     report_id = str(acceptance_report.get("report_id", ""))
+    feature_fingerprint = _frame_fingerprint(
+        features, keys=["signal_date", "instrument"]
+    ) if _REQUIRED_FEATURE_KEYS.issubset(features.columns) else ""
+    label_fingerprint = _frame_fingerprint(
+        labels, keys=["signal_date", "instrument"]
+    ) if _REQUIRED_LABEL_COLUMNS.issubset(labels.columns) else ""
     return TrainingDatasetAdmission(
         admitted=not reasons,
         report_id=report_id,
@@ -299,5 +322,7 @@ def admit_training_dataset(
         feature_columns=feature_columns,
         label_horizon_sessions=label_horizon_sessions,
         source_fingerprint=fingerprint,
+        feature_fingerprint=feature_fingerprint,
+        label_fingerprint=label_fingerprint,
         rejection_reasons=tuple(reasons),
     )
