@@ -160,6 +160,8 @@ def bind_pit_fundamental_provenance(
     if not isinstance(dependencies, Mapping) or "financial_statement_items" not in dependencies:
         raise ResearchBundleError("Strict PIT receipt must pin financial_statement_items")
     pit_dependency = dependencies["financial_statement_items"]
+    if not isinstance(pit_dependency, Mapping):
+        raise ResearchBundleError("Strict PIT receipt financial_statement_items identity is malformed")
     normalized_identity = {
         "revision_id": revision_identity.get("revision_id"),
         "contract_fingerprint": revision_identity.get("contract_fingerprint"),
@@ -290,6 +292,8 @@ def assemble_cnequity_pit_fundamentals(
             raise ResearchBundleError("Strict PIT announce_date is not a valid date") from exc
         if parsed_announce.isoformat() != announced_date or announced_date > as_of_date:
             raise ResearchBundleError("Strict PIT fact announcement date is outside as_of window")
+        if isinstance(row["item_value"], bool):
+            raise ResearchBundleError("Strict PIT item_value must be numeric, not boolean")
         try:
             value = float(row["item_value"])
         except (TypeError, ValueError) as exc:
