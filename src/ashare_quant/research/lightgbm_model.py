@@ -100,7 +100,13 @@ class LightGBMRegressionModel:
             pl.any_horizontal(pl.col("signal_date").is_null(), pl.col("instrument").is_null()).any()
         ).item():
             raise ValueError("Prediction features contain null keys")
-        frame = frame.drop_nulls(subset=list(self.feature_columns))
+        complete_features = pl.all_horizontal(
+            *[
+                pl.col(name).is_not_null() & pl.col(name).is_finite()
+                for name in self.feature_columns
+            ]
+        )
+        frame = frame.filter(complete_features)
         if frame.is_empty():
             return pl.DataFrame(
                 schema={
@@ -109,12 +115,6 @@ class LightGBMRegressionModel:
                     "predicted_return": pl.Float64,
                 }
             )
-        if frame.filter(
-            pl.any_horizontal(
-                *[~pl.col(name).is_finite() for name in self.feature_columns]
-            )
-        ).height:
-            raise ValueError("Prediction features contain non-finite values")
         matrix = frame.select(*self.feature_columns).to_numpy()
         values = self.booster.predict(matrix)
         predictions = [float(value) for value in values]

@@ -326,3 +326,16 @@ and inference therefore both exclude incomplete rows instead of allowing a
 single NaN to invalidate an entire inference cross-section. Synthetic CI:
 337 unit tests passed, 2 skipped. No real model fit or market backtest was
 performed. Merge commit: `c8e94f10154710be78044bf4c55425798504ed6e`.
+
+
+### Phase 9.18 — consistent finite-feature inference eligibility
+
+Qlib inference-panel construction and the direct model prediction adapter now
+use the same row eligibility rule as supervised training: every configured
+feature must be present and finite. Null, NaN, positive-infinity and
+negative-infinity feature rows are excluded before prediction rather than
+allowing one incomplete security to invalidate the entire weekly cross-section.
+The model's keyed predictions retain only eligible instruments, and the shared
+Top-20 selector ranks that available set without imputation. Synthetic tests
+cover all four invalid-value cases in both inference adapters. No model fitting,
+real market backtest, local data-lake access or CNEquity operation is performed.

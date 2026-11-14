@@ -132,8 +132,11 @@ flowchart TD
   finite and duplicate availability keys are rejected. PIT values select the
   latest report period known at the signal timestamp and then the latest
   revision within that period. Zero-volume rolling windows produce a null
-  volume-ratio feature, never a NaN 0/0 result. Qlib is a dataset/workflow
-  adapter, not a data source of truth or an admission bypass.
+  volume-ratio feature, never a NaN 0/0 result. Training and both model
+  inference adapters admit only rows whose complete feature vector is
+  non-null and finite; null, NaN and infinite rows are excluded without
+  imputation. Qlib is a dataset/workflow adapter, not a data source of truth
+  or an admission bypass.
 - A-share execution, costs, price limits, order fills and portfolio accounting
   remain project-owned and must not be delegated to generic defaults.
 - Qlib and pandas stay optional/lazy in the Python 3.13 development

@@ -133,6 +133,39 @@ def test_model_predicts_only_complete_rows_and_returns_model_scores(monkeypatch)
     assert result.height == 3
 
 
+def test_model_prediction_excludes_null_nan_and_infinite_feature_rows(monkeypatch):
+    fake_lightgbm(monkeypatch)
+    model = LightGBMRegressionModel(
+        booster=FakeBooster(),
+        feature_columns=("return_5", "pit_roe"),
+        config=LightGBMConfig(min_training_rows=2),
+        acceptance_report_id="acceptance-fixture",
+        training_cutoff="2024-01-15",
+        training_rows=2,
+        source_fingerprint="a" * 64,
+        feature_fingerprint="b" * 64,
+        label_fingerprint="c" * 64,
+    )
+    features = pl.DataFrame({
+        "signal_date": ["2024-01-19"] * 6,
+        "instrument": [
+            "600000.SH",
+            "000001.SZ",
+            "600519.SH",
+            "000002.SZ",
+            "000003.SZ",
+            "000004.SZ",
+        ],
+        "return_5": [0.04, None, float("nan"), float("inf"), 0.03, float("-inf")],
+        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25],
+    })
+
+    predictions = model.predict(features)
+
+    assert predictions["instrument"].to_list() == ["600000.SH", "000003.SZ"]
+    assert predictions["predicted_return"].to_list() == pytest.approx([0.05, 0.06])
+
+
 def test_model_save_load_checks_sidecar_checksum(tmp_path, monkeypatch):
     fake_lightgbm(monkeypatch)
     model = LightGBMRegressionModel(

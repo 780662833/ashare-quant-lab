@@ -113,6 +113,11 @@ The primary walk-forward training path is Qlib `DatasetH` ->
 - `weekly_cross_sectional_model_targets(...)` ranks each signal-date
   cross-section by predicted five-session return and delegates Top-20
   equal-weight target construction to the shared engine.
+- Training and inference use the same row-eligibility rule: every configured
+  feature must be non-null and finite. Incomplete rows (including NaN and
+  positive/negative infinity) are omitted before fitting or prediction; they
+  are never imputed. A security omitted for incomplete inputs cannot displace
+  an eligible security in the Top-20 ranking.
 
 Qlib segment selection does not replace the project's walk-forward planner,
 label-horizon purge, embargo or admission. PIT availability, source receipts,

@@ -32,6 +32,20 @@ def _iso_date(value: Any, field: str) -> str:
     return value
 
 
+def _complete_finite_feature_rows(
+    frame: pl.DataFrame,
+    feature_columns: tuple[str, ...] | list[str],
+) -> pl.DataFrame:
+    """Keep only rows with a non-null, finite value in every model feature."""
+    complete = pl.all_horizontal(
+        *[
+            pl.col(name).is_not_null() & pl.col(name).is_finite()
+            for name in feature_columns
+        ]
+    )
+    return frame.filter(complete)
+
+
 @dataclass(frozen=True, slots=True)
 class QlibDatasetBundle:
     """Qlib DatasetH bound to the exact project admission that created it."""
@@ -233,11 +247,11 @@ def create_qlib_dataset(
             raise ValueError("inference features contain null keys")
         for signal_date in inference_panel["signal_date"].to_list():
             _iso_date(signal_date, "inference_features.signal_date")
-        inference_panel = inference_panel.drop_nulls(subset=feature_names)
-        if inference_panel.filter(
-            pl.any_horizontal(*[~pl.col(name).is_finite() for name in feature_names])
-        ).height:
-            raise ValueError("inference features contain non-finite values")
+        # Use the same complete-finite feature policy as supervised training:
+        # incomplete or non-finite names are omitted from this inference segment.
+        inference_panel = _complete_finite_feature_rows(
+            inference_panel, feature_names
+        )
         for signal_date in inference_panel["signal_date"].unique().to_list():
             matching = [
                 name
