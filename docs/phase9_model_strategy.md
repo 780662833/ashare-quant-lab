@@ -135,6 +135,12 @@ The primary walk-forward training path is Qlib `DatasetH` ->
   imputation, zero-fill or forward-fill is performed. This reduces row loss
   caused only by unavailable point-in-time fundamentals without introducing
   future information.
+- Validation folds also emit post-prediction PIT missingness diagnostics. These
+  report per-item and any-PIT-missing coverage, model-eligible prediction
+  coverage, Top-20 missingness, and matured validation return/score comparisons.
+  They are descriptive only and never tune the model. Market-cap, listing-age,
+  and industry slices remain deferred until the canonical bundle has a
+  receipt-backed point-in-time metadata dimension.
 
 Qlib segment selection does not replace the project's walk-forward planner,
 label-horizon purge, embargo or admission. PIT availability, source receipts,
