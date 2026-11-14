@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from math import isfinite
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -43,6 +44,55 @@ def _verified_fill_stress_section(
         raise ValueError("P10.5 fill-stress scenarios must all be VERIFIED")
     if [x.get("target_fill_ratio") for x in scenarios] != expected_ratios:
         raise ValueError("P10.5 fill-stress target ratios do not match the registered protocol")
+    for item in scenarios:
+        share_fields = (
+            "target_requested_shares", "target_fill_cap_shares", "filled_shares",
+            "order_count", "filled_order_count", "partially_filled_order_count",
+            "no_fill_order_count",
+        )
+        for field in share_fields:
+            value = item.get(field)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} has invalid {field}")
+        requested = item["target_requested_shares"]
+        cap = item["target_fill_cap_shares"]
+        filled = item["filled_shares"]
+        if cap > requested or filled > cap:
+            raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} exceeds its target/cap shares")
+        counts = (
+            item["filled_order_count"] + item["partially_filled_order_count"]
+            + item["no_fill_order_count"]
+        )
+        if counts != item["order_count"]:
+            raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} order counts do not reconcile")
+        reasons = item.get("no_fill_reasons")
+        if not isinstance(reasons, Mapping) or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in reasons.values()
+        ) or sum(reasons.values()) != item["no_fill_order_count"]:
+            raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} no-fill reasons do not reconcile")
+        cap_ratio = item.get("target_fill_cap_ratio")
+        achieved_ratio = item.get("achieved_fill_ratio")
+        if requested == 0:
+            if cap_ratio is not None or achieved_ratio is not None or cap or filled:
+                raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} has ratios without requested shares")
+        else:
+            expected_cap_ratio = cap / requested
+            expected_achieved_ratio = filled / requested
+            for field, value, expected in (
+                ("target_fill_cap_ratio", cap_ratio, expected_cap_ratio),
+                ("achieved_fill_ratio", achieved_ratio, expected_achieved_ratio),
+            ):
+                if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+                    raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} has invalid {field}")
+            if cap_ratio > item["target_fill_ratio"] + 1e-9 or achieved_ratio > cap_ratio + 1e-9:
+                raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} achieved fills exceed its cap")
+            for field, value, expected in (
+                ("target_fill_cap_ratio", cap_ratio, expected_cap_ratio),
+                ("achieved_fill_ratio", achieved_ratio, expected_achieved_ratio),
+            ):
+                if abs(float(value) - expected) > 1e-9:
+                    raise ValueError(f"P10.5 fill-stress scenario {item['scenario_id']} {field} does not match share counts")
     experiment_ids = payload.get("experiment_ids")
     if not isinstance(experiment_ids, list) or len(experiment_ids) != 5 or not experiment_ids or experiment_ids[0] != baseline_experiment_id:
         raise ValueError("P10.5 fill-stress experiment IDs do not include the matching F0 baseline")
