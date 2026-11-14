@@ -1,12 +1,12 @@
 """Optional Qlib DatasetH bridge for admitted Phase 9 training panels.
 
-CNEquity assembly, PIT checks, label maturity and admission remain project-owned.
-This adapter only translates an already-admitted Polars panel into Qlib's
-(datetime, instrument) MultiIndex / (feature, label) column contract.
+Project-owned Polars frames remain the source of truth. Qlib receives only
+admitted training rows plus explicitly separated, feature-only inference rows.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -18,6 +18,7 @@ from ashare_quant.research.admission import (
 )
 
 _KEYS = ["signal_date", "instrument"]
+
 
 def _iso_date(value: Any, field: str) -> str:
     if not isinstance(value, str):
@@ -31,16 +32,40 @@ def _iso_date(value: Any, field: str) -> str:
     return value
 
 
+@dataclass(frozen=True, slots=True)
+class QlibDatasetBundle:
+    """Qlib DatasetH bound to the exact project admission that created it."""
+
+    dataset: Any
+    admission: TrainingDatasetAdmission
+    feature_columns: tuple[str, ...]
+    segment_bounds: Mapping[str, tuple[str, str]]
+
+    def prepare(self, *args: Any, **kwargs: Any) -> Any:
+        """Delegate the Qlib DatasetH prepare interface."""
+        return self.dataset.prepare(*args, **kwargs)
+
+    @property
+    def handler(self) -> Any:
+        """Expose the underlying handler for diagnostics and compatibility."""
+        return getattr(self.dataset, "handler", None)
+
+    @property
+    def segments(self) -> dict[str, tuple[str, str]]:
+        """Return a defensive copy of the Qlib segment mapping."""
+        return dict(self.segment_bounds)
+
+
 def build_qlib_panel_rows(
     *,
     features: pl.DataFrame,
     labels: pl.DataFrame,
     admission: TrainingDatasetAdmission,
 ) -> tuple[list[tuple[str, str]], list[str], list[float]]:
-    """Return sorted Qlib index keys, feature names and mature labels.
+    """Return sorted Qlib keys, feature names and mature training labels.
 
-    The full input fingerprints must match the admission decision. This prevents
-    a caller from swapping frames between admission and Qlib conversion.
+    Both complete frame fingerprints must match the successful admission. This
+    prevents a caller from swapping or trimming training frames after admission.
     """
     if not isinstance(admission, TrainingDatasetAdmission) or not admission.admitted:
         raise ValueError("Qlib conversion requires an admitted training dataset")
@@ -69,8 +94,8 @@ def build_qlib_panel_rows(
         pl.col("forward_return").cast(pl.Float64),
     )
     joined = feature_frame.join(label_frame, on=_KEYS, how="inner", validate="1:1")
-    if joined.height != admission.label_rows:
-        raise ValueError("Qlib training panel must contain every admitted label row")
+    if joined.height != admission.feature_rows or joined.height != admission.label_rows:
+        raise ValueError("Qlib training panel must contain every admitted feature and label row")
     if joined.is_empty():
         raise ValueError("Qlib training panel is empty")
     if joined.filter(
@@ -107,8 +132,14 @@ def create_qlib_dataset(
     labels: pl.DataFrame,
     admission: TrainingDatasetAdmission,
     segments: Mapping[str, tuple[str, str]],
-) -> Any:
-    """Create Qlib DatasetH lazily; Qlib/pandas are never base dependencies."""
+    inference_features: pl.DataFrame | None = None,
+) -> QlibDatasetBundle:
+    """Create an admission-bound DatasetH with feature-only inference segments.
+
+    features/labels contain only the rows approved for model fitting. Optional
+    inference_features contain validation or test signal rows and are kept
+    label-free inside Qlib. The project admission never includes those rows.
+    """
     if not isinstance(segments, Mapping) or not segments:
         raise ValueError("segments must be a non-empty mapping")
     normalized: dict[str, tuple[str, str]] = {}
@@ -122,6 +153,8 @@ def create_qlib_dataset(
         if start > end:
             raise ValueError(f"segment {name!r} starts after it ends")
         normalized[name] = (start, end)
+    if "train" not in normalized:
+        raise ValueError("Qlib DatasetH requires an explicit train segment")
     chronological = sorted(normalized.items(), key=lambda item: item[1][0])
     for (_, previous), (_, current) in zip(chronological, chronological[1:]):
         if current[0] <= previous[1]:
@@ -130,6 +163,87 @@ def create_qlib_dataset(
     index, feature_names, _targets = build_qlib_panel_rows(
         features=features, labels=labels, admission=admission
     )
+    train_start, train_end = normalized["train"]
+    if any(not train_start <= signal_date <= train_end for signal_date, _ in index):
+        raise ValueError("admitted training rows must fall inside the Qlib train segment")
+
+    training_panel = (
+        features.select(
+            pl.col("signal_date").cast(pl.String),
+            pl.col("instrument").cast(pl.String),
+            *[pl.col(name).cast(pl.Float64) for name in feature_names],
+        )
+        .join(
+            labels.select(
+                pl.col("signal_date").cast(pl.String),
+                pl.col("instrument").cast(pl.String),
+                pl.col("forward_return").cast(pl.Float64),
+            ),
+            on=_KEYS,
+            how="inner",
+            validate="1:1",
+        )
+        .sort(_KEYS)
+    )
+
+    frames = [training_panel]
+    if inference_features is not None:
+        if not isinstance(inference_features, pl.DataFrame):
+            raise TypeError("inference_features must be a Polars DataFrame")
+        required_inference = set(_KEYS).union(feature_names)
+        if not required_inference.issubset(inference_features.columns):
+            raise ValueError("inference features do not match the admitted feature schema")
+        inference_panel = inference_features.select(
+            pl.col("signal_date").cast(pl.String),
+            pl.col("instrument").cast(pl.String),
+            *[pl.col(name).cast(pl.Float64) for name in feature_names],
+        )
+        if inference_panel.select(pl.struct(_KEYS).is_duplicated().any()).item():
+            raise ValueError("inference features contain duplicate signal_date/instrument keys")
+        if inference_panel.select(
+            pl.any_horizontal(
+                pl.col("signal_date").is_null(),
+                pl.col("instrument").is_null(),
+            ).any()
+        ).item():
+            raise ValueError("inference features contain null keys")
+        for signal_date in inference_panel["signal_date"].to_list():
+            _iso_date(signal_date, "inference_features.signal_date")
+        inference_panel = inference_panel.drop_nulls(subset=feature_names)
+        if inference_panel.filter(
+            pl.any_horizontal(*[~pl.col(name).is_finite() for name in feature_names])
+        ).height:
+            raise ValueError("inference features contain non-finite values")
+        for signal_date in inference_panel["signal_date"].unique().to_list():
+            matching = [
+                name
+                for name, (start, end) in normalized.items()
+                if name != "train" and start <= signal_date <= end
+            ]
+            if len(matching) != 1:
+                raise ValueError(
+                    "inference feature rows must fall inside exactly one non-train segment"
+                )
+        inference_panel = inference_panel.with_columns(
+            pl.lit(float("nan"), dtype=pl.Float64).alias("forward_return")
+        )
+        frames.append(inference_panel)
+
+    combined = pl.concat(frames, how="vertical").sort(_KEYS)
+    if combined.select(pl.struct(_KEYS).is_duplicated().any()).item():
+        raise ValueError("Qlib dataset contains duplicate signal_date/instrument keys")
+    combined_index = list(
+        zip(
+            combined["signal_date"].to_list(),
+            combined["instrument"].to_list(),
+            strict=True,
+        )
+    )
+    values = [
+        [float(value) for value in row]
+        for row in combined.select(*feature_names, "forward_return").rows()
+    ]
+
     try:
         import pandas as pd
         from qlib.data.dataset import DatasetH
@@ -140,23 +254,19 @@ def create_qlib_dataset(
         ) from exc
 
     multi_index = pd.MultiIndex.from_tuples(
-        index, names=["datetime", "instrument"]
+        combined_index, names=["datetime", "instrument"]
     )
     column_keys = (
         [("feature", name) for name in feature_names]
         + [("label", "forward_return")]
     )
     columns = pd.MultiIndex.from_tuples(column_keys)
-    panel = features.select(*_KEYS, *feature_names).join(
-        labels.select(*_KEYS, "forward_return"),
-        on=_KEYS,
-        how="inner",
-        validate="1:1",
-    ).sort(_KEYS)
-    values = [
-        [float(row[name]) for name in feature_names] + [float(row["forward_return"])]
-        for row in panel.to_dicts()
-    ]
     frame = pd.DataFrame(values, index=multi_index, columns=columns)
     handler = DataHandlerLP.from_df(frame)
-    return DatasetH(handler=handler, segments=normalized)
+    dataset = DatasetH(handler=handler, segments=normalized)
+    return QlibDatasetBundle(
+        dataset=dataset,
+        admission=admission,
+        feature_columns=tuple(feature_names),
+        segment_bounds=dict(normalized),
+    )
