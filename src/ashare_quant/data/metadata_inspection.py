@@ -187,6 +187,33 @@ def _contract_metadata(dataset: str) -> dict[str, Any]:
         return {"available": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
+
+def _missing_dataset_status(exc: Exception) -> bool:
+    """Distinguish an absent dataset from an API or storage failure."""
+    return "no parquet data for dataset" in str(exc).lower()
+
+
+def _dataset_role(dataset: str) -> dict[str, str]:
+    if dataset == "instruments":
+        return {
+            "role": "required_for_historical_universe",
+            "next_step": (
+                "Inspect the supported instruments backfill plan before any fetch. "
+                "Use scripts/plan_cnequity_instruments_backfill.py; it only prints a plan."
+            ),
+        }
+    if dataset == "delisting_events":
+        return {
+            "role": "derived_supplementary_dataset",
+            "next_step": (
+                "This is a derived output, not a normal source backfill. Do not run "
+                "cne backfill delisting_events; the CNEquity delisted_ops workflow "
+                "owns its one-off rebuild and coverage checks."
+            ),
+        }
+    return {"role": "unknown", "next_step": "Inspect the dataset-specific contract."}
+
+
 def _receipt_summary(receipt: Any) -> dict[str, Any]:
     if not isinstance(receipt, Mapping):
         return {"available": False}
@@ -330,10 +357,14 @@ def inspect_cnequity_metadata(
                 summary["contract_schema_error"] = schema_error
             report["datasets"][dataset] = summary
         except Exception as exc:
+            missing = _missing_dataset_status(exc)
+            role = _dataset_role(dataset)
             report["datasets"][dataset] = {
-                "status": "ERROR",
+                "status": "MISSING" if missing else "ERROR",
                 "error": f"{type(exc).__name__}: {exc}",
                 "contract": _contract_metadata(dataset),
+                "dataset_role": role["role"],
+                "next_step": role["next_step"],
                 "contract_schema_error": schema_error,
             }
 
