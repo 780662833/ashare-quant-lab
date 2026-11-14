@@ -89,6 +89,8 @@ def _numpy_values(frame: Any, *, field: str):
 
 
 def _training_arrays(prepared: Any, feature_columns: tuple[str, ...]):
+    import numpy as np
+
     try:
         feature_frame = prepared["feature"]
         label_frame = prepared["label"]
