@@ -271,3 +271,15 @@ Legacy label frames lacking the executable entry date fail at the runner
 boundary with a specific contract error. PR #73 CI: 314 unit tests passed,
 2 skipped; real Qlib/LightGBM synthetic API smoke tests passed (2). No
 optimizer fit or empirical market run was performed.
+
+
+### Phase 9.14 — exact HFQ and deterministic PIT feature inputs (merged PR #74)
+
+The cross-sectional feature builder now requires the adjusted-close exactness
+flag and rejects any null, non-finite, non-positive or non-exact HFQ rows.
+Strict PIT facts must have a non-empty report period and finite numeric value;
+duplicate (instrument, item, report period, availability timestamp) facts
+fail closed instead of relying on provider row order. Feature calendars must
+already be chronologically ordered. PR #74 CI: 321 unit tests passed,
+2 skipped. No Qlib/LightGBM API, real training or market backtest was changed
+or run.
