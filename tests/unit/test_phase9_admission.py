@@ -132,6 +132,23 @@ def test_exact_scope_passes_and_returns_auditable_admission_without_fitting():
     assert not hasattr(result, "model")
 
 
+def test_admission_allows_true_missing_pit_values_but_rejects_nan():
+    features, labels = frames()
+    features = features.with_columns(
+        pl.when(pl.col("instrument") == "000001.SZ")
+        .then(None)
+        .otherwise(pl.col("pit_roe"))
+        .alias("pit_roe")
+    )
+    result = admit(features=features)
+    assert result.admitted is True
+
+    invalid = features.with_columns(pl.lit(float("nan")).alias("pit_roe"))
+    rejected = admit(features=invalid)
+    assert rejected.admitted is False
+    assert any("non-finite" in reason for reason in rejected.rejection_reasons)
+
+
 def test_any_failed_gate_blocks_training_dataset_admission():
     report = valid_report()
     report["gates"][2]["status"] = "FAIL"
