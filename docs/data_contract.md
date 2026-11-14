@@ -40,8 +40,12 @@ open/close and same-session HFQ adjusted close are retained together so the
 research layer can reconstruct an adjusted open without mixing price bases.
 Rolling activity features retain raw zero-volume observations. When the rolling
 mean volume is zero, volume_ratio is represented as missing/null rather than
-NaN or an invented zero ratio; downstream training and inference only use
-complete finite feature rows.
+NaN or an invented zero ratio. All market-derived model features must remain
+complete and finite. A strict PIT fundamental feature may be null when no
+eligible fact was knowable at the signal close; only that true PIT null is
+transported as NaN to LightGBM's native missing-value handling. Non-null NaN
+or infinite source values are invalid, and no missing fact is imputed,
+zero-filled, or forward-filled.
 
 ## Signal-to-execution return labels
 
@@ -72,6 +76,11 @@ override a newer reporting period that was already published. Report periods
 must be canonical YYYY-MM-DD dates and cannot be later than their
 publication date. Publication timestamp, not report period, controls
 historical eligibility.
+When no strict fact was knowable by a particular signal close, the corresponding
+`pit_*` feature remains null. That is an as-of missing observation, not a
+zero value and not permission to carry a later report backward in time. The
+model adapters preserve it for native LightGBM missing handling while still
+requiring complete finite market-derived features.
 
 ## Four-gate data admission
 
