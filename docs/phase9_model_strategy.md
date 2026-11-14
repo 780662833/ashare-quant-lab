@@ -1,3 +1,16 @@
+## Historical security metadata availability
+
+Phase 9.22 defines a receipt-bound, effective-time and availability-time
+contract for listing date, industry classifications and market capitalization.
+The pure selector is not wired into the feature builder or walk-forward model.
+The locked CNEquity 0.21.0 contract, and the reviewed 0.23.0 contract, still
+mark industry_members and valuation_metrics as non-PIT snapshots and
+share_structure as partial/reconstructed PIT. Listing date remains a
+conditional immutable-event candidate only after source verification and
+full signal-universe coverage. Until a source passes those checks, no
+market-cap, listing-age or industry slice is admitted to model features or
+training. See [security_metadata_contract.md](security_metadata_contract.md).
+
 # Phase 9 — cross-sectional model strategy
 
 ## Purpose and boundaries

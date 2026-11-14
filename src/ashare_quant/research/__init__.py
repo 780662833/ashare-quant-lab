@@ -8,6 +8,11 @@ from ashare_quant.research.missingness_diagnostics import (
     evaluate_validation_feature_missingness,
 )
 from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
+from ashare_quant.research.security_metadata import (
+    audit_security_metadata_coverage,
+    select_security_metadata_as_of,
+    validate_security_metadata,
+)
 from ashare_quant.research.validation_stability import (
     ValidationRankingAcceptancePolicy,
     summarize_validation_stability,
@@ -78,6 +83,9 @@ __all__ = [
     "build_cross_sectional_features",
     "build_forward_return_labels",
     "evaluate_validation_ranking",
+    "validate_security_metadata",
+    "select_security_metadata_as_of",
+    "audit_security_metadata_coverage",
     "evaluate_feature_coverage",
     "evaluate_validation_feature_missingness",
     "ValidationRankingAcceptancePolicy",
