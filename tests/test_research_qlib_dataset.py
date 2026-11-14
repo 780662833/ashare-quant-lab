@@ -133,16 +133,35 @@ def test_create_qlib_dataset_uses_lazy_optional_api(monkeypatch):
     }.items():
         monkeypatch.setitem(sys.modules, name, module)
 
+    inference_features = pl.DataFrame(
+        {
+            "signal_date": ["2024-01-19"],
+            "instrument": ["000003.SZ"],
+            "return_5": [0.04],
+        }
+    )
     result = create_qlib_dataset(
         features=features,
         labels=labels,
         admission=admission,
-        segments={"train": ("2024-01-01", "2024-01-19")},
+        segments={
+            "train": ("2024-01-01", "2024-01-12"),
+            "valid": ("2024-01-19", "2024-01-19"),
+        },
+        inference_features=inference_features,
     )
     assert result.handler == "handler"
-    assert result.segments == {"train": ("2024-01-01", "2024-01-19")}
+    assert result.segments == {
+        "train": ("2024-01-01", "2024-01-12"),
+        "valid": ("2024-01-19", "2024-01-19"),
+    }
+    assert result.admission == admission
+    assert result.feature_columns == ("return_5",)
     assert captured["index"][1] == ["datetime", "instrument"]
     assert captured["columns"] == [("feature", "return_5"), ("label", "forward_return")]
+    assert captured["values"][:2] == [[0.02, 0.03], [-0.01, 0.01]]
+    assert captured["values"][2][0] == 0.04
+    assert captured["values"][2][1] != captured["values"][2][1]
 
 
 def test_create_qlib_dataset_rejects_overlapping_segments():
