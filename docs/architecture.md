@@ -115,8 +115,11 @@ flowchart TD
 - LightGBM is the single cross-sectional regression model. It reads Qlib's
   learn view for fitting and infer view for keyed predictions; project-owned
   Top-20 equal-weight target generation remains downstream.
-- Validation predictions are evaluated against validation labels only after
-  label maturity strictly before test start. Cross-fold stability summaries
+- Walk-forward purge calculations distinguish the one-session next-open
+  entry lag from the open-to-open holding horizon; maturity dates include both
+  before adding the configured embargo. Validation predictions are evaluated
+  against validation labels only after label maturity strictly before test
+  start. Cross-fold stability summaries
   are descriptive by default; any acceptance policy must be explicit,
   versioned and fingerprinted. No test labels feed policy decisions.
 - Project-owned Polars features/labels, CNEquity receipts, PIT availability,
