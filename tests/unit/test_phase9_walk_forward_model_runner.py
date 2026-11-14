@@ -13,6 +13,7 @@ from ashare_quant.research.features import (
 from ashare_quant.research.labels import build_forward_return_labels
 from ashare_quant.research.lightgbm_model import LightGBMConfig
 from ashare_quant.research.walk_forward import WalkForwardConfig
+from ashare_quant.strategies.momentum import MomentumConfig
 from ashare_quant.research.walk_forward_model_runner import (
     run_walk_forward_cross_sectional_model,
 )
@@ -233,6 +234,7 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         ),
         backtest_config=BacktestConfig(initial_cash=100_000, top_n=2),
         top_n=2,
+        benchmark_config=MomentumConfig(top_n=2, lookback_sessions=8, skip_recent_sessions=2),
     )
 
     assert len(result.folds) >= 2
@@ -248,7 +250,12 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         assert fold.daily["date"].min() == fold.fold.test_start
         assert fold.daily["date"].max() == fold.fold.test_end
         assert fold.provenance["walk_forward"]["model_training_performed"] is True
+        assert fold.benchmark_report["model_training_performed"] is False
+        assert fold.benchmark_daily.height == fold.daily.height
+        assert fold.benchmark_report["initial_nav"] == fold.report["initial_nav"]
     assert result.oos_daily.height == sum(item.fold.test_sessions for item in result.folds)
+    assert result.benchmark_oos_daily.height == result.oos_daily.height
+    assert "mean_fold_excess_return" in result.aggregate_report
 
 
 def test_walk_forward_model_runner_rejects_bundle_acceptance_identity_mismatch(monkeypatch):
