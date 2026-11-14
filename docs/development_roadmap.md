@@ -382,3 +382,11 @@ views and that the real LightGBM Dataset constructor accepts those NaNs; the
 optimizer remains stubbed. No real data, optimizer fit or market backtest is
 performed. This refines the all-feature-complete eligibility policy recorded
 under Phase 9.18.
+
+PR #80 is merged. Final-head CI: 344 unit tests passed, 2 skipped; the
+Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 compatibility
+workflow passed 2 synthetic API tests. The compatibility job verified
+DatasetH learn/inference views and LightGBM Dataset construction, while
+stubbing `lightgbm.train`; no optimizer fit, real-data training, local
+data-lake access or empirical market backtest was performed. Merge commit:
+`3b60cd624bc1e3dfcafddb8a2e46b80ea7091a14`.
