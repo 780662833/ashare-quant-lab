@@ -31,6 +31,10 @@ from ashare_quant.research.qlib_lightgbm import (
     predict_qlib_lightgbm_regressor,
 )
 from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
+from ashare_quant.research.validation_stability import (
+    ValidationRankingAcceptancePolicy,
+    summarize_validation_stability,
+)
 from ashare_quant.research.walk_forward import (
     WalkForwardConfig,
     WalkForwardFold,
@@ -144,6 +148,7 @@ def _aggregate(
     *,
     trading_dates: list[str],
     annualization: int,
+    validation_policy: ValidationRankingAcceptancePolicy | None = None,
 ) -> dict[str, Any]:
     returns = [float(item.report["total_return"]) for item in folds]
     benchmark_returns = [float(item.benchmark_report["total_return"]) for item in folds]
@@ -169,6 +174,12 @@ def _aggregate(
 
     validation_fold_count = sum(
         item.validation_report.get("status") == "evaluated" for item in folds
+    )
+    validation_stability = summarize_validation_stability(
+        [item.validation_diagnostics for item in folds],
+        [item.validation_report for item in folds],
+        fold_ids=[item.fold.fold_id for item in folds],
+        policy=validation_policy,
     )
     return {
         "fold_count": len(folds),
@@ -200,6 +211,7 @@ def _aggregate(
                 "mean_top_minus_bottom_forward_return"
             ),
             "mean_label_coverage_rate": validation_mean("label_coverage_rate"),
+            "cross_fold_stability": validation_stability,
             "interpretation": (
                 "Validation predictions are scored against labels matured strictly "
                 "before each fold test cutoff. These diagnostics are not computed "
@@ -228,6 +240,7 @@ def run_walk_forward_cross_sectional_model(
     top_n: int = 20,
     benchmark_config: MomentumConfig | None = None,
     annualization: int = 252,
+    validation_policy: ValidationRankingAcceptancePolicy | None = None,
 ) -> WalkForwardCrossSectionalModelRun:
     """Fit and evaluate the cross-sectional model in chronological OOS folds.
 
@@ -250,6 +263,10 @@ def run_walk_forward_cross_sectional_model(
         raise ValueError("top_n must be a positive integer")
     if not isinstance(acceptance_report, Mapping):
         raise TypeError("acceptance_report must be a mapping")
+    if validation_policy is not None and not isinstance(
+        validation_policy, ValidationRankingAcceptancePolicy
+    ):
+        raise TypeError("validation_policy must be a ValidationRankingAcceptancePolicy")
     if not isinstance(features, pl.DataFrame) or not isinstance(labels, pl.DataFrame):
         raise TypeError("features and labels must be Polars DataFrames")
     if bundle.provenance.get("training_dataset_unlocked") is not False:
@@ -506,6 +523,12 @@ def run_walk_forward_cross_sectional_model(
                 "baseline_date": baseline_date,
                 "baseline_nav": baseline_nav,
                 "validation_ranking": validation_report,
+                "validation_acceptance_policy": (
+                    validation_policy.to_dict() if validation_policy is not None else None
+                ),
+                "validation_acceptance_policy_fingerprint": (
+                    validation_policy.fingerprint if validation_policy is not None else None
+                ),
                 "training_admission": train_admission.to_dict(),
                 "final_admission": final_admission.to_dict(),
                 "diagnostic_model": {
@@ -627,5 +650,10 @@ def run_walk_forward_cross_sectional_model(
         benchmark_oos_orders=benchmark_oos_orders,
         benchmark_oos_holdings=benchmark_oos_holdings,
         benchmark_oos_pending_targets=benchmark_oos_pending,
-        aggregate_report=_aggregate(folds, trading_dates=sessions, annualization=annualization),
+        aggregate_report=_aggregate(
+            folds,
+            trading_dates=sessions,
+            annualization=annualization,
+            validation_policy=validation_policy,
+        ),
     )
