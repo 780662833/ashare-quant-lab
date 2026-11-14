@@ -31,7 +31,23 @@ acceptance runner; strategy/model modules must not query CNEquity internals.
 ## Required market fields
 
 Open, high, low, close, volume, amount, adjustment/corporate-action basis,
-suspension status, price-limit status/price, and source provenance.
+suspension status, price-limit status/price, and source provenance. The raw
+open/close and same-session HFQ adjusted close are retained together so the
+research layer can reconstruct an adjusted open without mixing price bases.
+
+## Signal-to-execution return labels
+
+A signal is formed after the close. Its supervised return starts at the
+adjusted open of the next exchange session, when the backtest can first execute
+the target. It ends at the adjusted open of the first session after the next
+weekly signal, when the backtest can first execute the replacement target.
+The per-session adjusted open is derived by multiplying raw open by that
+session's HFQ multiplier (adjusted close divided by raw close). No price or
+adjustment factor is forward-filled. Labels carry label_entry_date and
+label_end_date; the latter is the true maturity date for walk-forward purge
+checks. A label with either missing endpoint is omitted. Holiday-shortened
+weeks follow the official exchange calendar rather than a fixed five-session
+offset.
 
 ## Universe and PIT fundamentals
 
