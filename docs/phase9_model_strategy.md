@@ -20,7 +20,10 @@ not the model strategy and must not be used as a proxy for one.
   same-date membership snapshot before planning folds or admitting training.
 - Portfolio: top 20 predicted names, equal weight, no leverage.
 - First learner: LightGBM regression, trained only on chronological folds.
-- First label: exact HFQ close-to-close forward return over 5 exchange sessions.
+- First label: exact HFQ open-to-open return from the next session's executable
+  open to the first executable open after the following weekly signal. The
+  official exchange calendar determines the holding window, including holiday
+  shortening.
 - Benchmark: existing 126/21 weekly momentum strategy.
 - No feature may use information published after the signal close.
 - No label may enter training until its label_end_date is before the fold's
@@ -52,15 +55,22 @@ baseline is validated.
 
 ## Label contract
 
-For signal date t and horizon h=5:
+For signal date t, let entry be the first official exchange session after t,
+and let exit be the first official exchange session after the next weekly
+signal date:
 
-forward_return = HFQ_close(t+h) / HFQ_close(t) - 1
+forward_return = HFQ_adjusted_open(exit) / HFQ_adjusted_open(entry) - 1
 
-Both endpoints must exist exactly. The label row carries label_end_date.
-Rows without a future endpoint are omitted, not filled. Membership is frozen
-as-of t; the future universe is not used to decide which historical names
-receive labels. Label maturity must be checked against fold cutoffs before any
-training or validation use.
+Each adjusted open is reconstructed from that session's raw open and exact
+same-session HFQ multiplier (adjusted close divided by raw close). Both
+execution endpoints must exist exactly; no price or factor is forward-filled.
+The label row carries label_entry_date and label_end_date, where the latter is
+the actual exit execution/maturity date. Holiday-shortened weeks follow the
+official exchange calendar, not a fixed five-session offset. Rows without an
+executable endpoint are omitted. Membership is frozen as-of signal date; the
+future universe is never used to decide which historical names receive labels.
+Label maturity must be checked against fold cutoffs before any training or
+validation use.
 
 ## PIT fundamental handling
 
@@ -114,8 +124,8 @@ The primary walk-forward training path is Qlib `DatasetH` ->
   model persistence. The lower-level Polars fit adapter remains available for
   isolated compatibility tests; the walk-forward runner uses Qlib.
 - `weekly_cross_sectional_model_targets(...)` ranks each signal-date
-  cross-section by predicted five-session return and delegates Top-20
-  equal-weight target construction to the shared engine.
+  cross-section by the predicted execution-aligned weekly open-to-open return
+  and delegates Top-20 equal-weight target construction to the shared engine.
 - Training and inference use one explicit feature-eligibility rule:
   market-derived features must be non-null and finite; `pit_*` fundamentals
   may remain null when no strict fact was knowable at the signal close.
