@@ -184,6 +184,11 @@ third-party accuracy certification.
 - Delisted securities remain in historical research where they were eligible.
 - Fundamental facts use strict as-of availability. Revisions must not rewrite
   what was knowable at an earlier decision timestamp.
+- For each instrument/item, select the latest report period known at the
+  signal timestamp, then the latest available revision within that report
+  period. A later restatement of an older period cannot displace a newer
+  period already published. Report periods must be canonical dates and cannot
+  be later than their publication date.
 - Empty strict PIT output is a coverage failure, not permission to use
   best-effort mode.
 
