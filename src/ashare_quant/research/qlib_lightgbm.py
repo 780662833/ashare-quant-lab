@@ -156,8 +156,10 @@ def fit_qlib_lightgbm_regressor(
     matrix, target, keys = _training_arrays(prepared, dataset.feature_columns)
     if any(signal_date >= admission.training_cutoff for signal_date, _ in keys):
         raise ValueError("Qlib train segment contains signal rows at or beyond the cutoff")
-    if len(keys) != admission.label_rows:
-        raise ValueError("Qlib train segment row count differs from the admitted dataset")
+    if len(keys) > admission.label_rows:
+        raise ValueError("Qlib train segment exceeds the admitted label row count")
+    if dataset.training_rows is not None and len(keys) != dataset.training_rows:
+        raise ValueError("Qlib train segment row count differs from the materialized training panel")
 
     cfg = config or LightGBMConfig()
     if len(keys) < cfg.min_training_rows:
