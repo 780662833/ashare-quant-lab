@@ -246,3 +246,25 @@ def test_acceptance_pit_receipt_must_match_adapter_revision():
     result = admit(report=report)
     assert result.admitted is False
     assert any("acceptance PIT receipt revision" in reason for reason in result.rejection_reasons)
+
+
+def test_admission_rejects_invalid_execution_label_entry_date():
+    features, labels = frames()
+    labels = labels.with_columns(
+        pl.Series("label_entry_date", ["2024-01-05", "2024-01-04"])
+    )
+    result = admit(labels=labels)
+    assert result.admitted is False
+    assert any(
+        "label entry date must be after signal and before exit maturity" in reason
+        for reason in result.rejection_reasons
+    )
+
+
+def test_admission_accepts_valid_execution_label_entry_date():
+    features, labels = frames()
+    labels = labels.with_columns(
+        pl.Series("label_entry_date", ["2024-01-08", "2024-01-08"])
+    )
+    result = admit(labels=labels)
+    assert result.admitted is True
