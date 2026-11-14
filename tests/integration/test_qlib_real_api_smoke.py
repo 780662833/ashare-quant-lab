@@ -97,6 +97,7 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
     )
 
     assert isinstance(dataset_bundle.handler, DataHandlerLP)
+    assert dataset_bundle.training_rows == 2
     train = dataset_bundle.prepare(
         "train",
         col_set=["feature", "label"],
