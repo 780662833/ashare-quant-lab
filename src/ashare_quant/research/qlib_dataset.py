@@ -94,8 +94,11 @@ def build_qlib_panel_rows(
         pl.col("forward_return").cast(pl.Float64),
     )
     joined = feature_frame.join(label_frame, on=_KEYS, how="inner", validate="1:1")
-    if joined.height != admission.feature_rows or joined.height != admission.label_rows:
-        raise ValueError("Qlib training panel must contain every admitted feature and label row")
+    # Admission allows feature rows whose forward label is not available
+    # (for example, missing future price endpoints). Every admitted label must
+    # still match one admitted feature; only complete mature pairs enter Qlib.
+    if joined.height != admission.label_rows:
+        raise ValueError("Qlib training panel must contain every admitted label row")
     if joined.is_empty():
         raise ValueError("Qlib training panel is empty")
     if joined.filter(
@@ -253,8 +256,12 @@ def create_qlib_dataset(
             "Qlib dataset support requires the optional 'research' dependencies"
         ) from exc
 
-    multi_index = pd.MultiIndex.from_tuples(
-        combined_index, names=["datetime", "instrument"]
+    multi_index = pd.MultiIndex.from_arrays(
+        [
+            pd.to_datetime([signal_date for signal_date, _ in combined_index]),
+            [instrument for _, instrument in combined_index],
+        ],
+        names=["datetime", "instrument"],
     )
     column_keys = (
         [("feature", name) for name in feature_names]
