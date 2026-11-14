@@ -456,6 +456,9 @@ def audit_security_metadata_coverage(
     *,
     instruments: Sequence[str],
     fields: Sequence[str],
+    classification_system: str | None = None,
+    signal_date: str | None = None,
+    decision_at: str | None = None,
 ) -> dict[str, Any]:
     """Require one selected value for every requested instrument/field pair."""
     if not isinstance(selected, pl.DataFrame):
@@ -464,14 +467,60 @@ def audit_security_metadata_coverage(
         raise ValueError("instruments must be non-empty and unique")
     if not fields or len(set(fields)) != len(fields):
         raise ValueError("fields must be non-empty and unique")
-    required_columns = {"instrument", "field", "signal_date", "decision_at"}
+    required_columns = {
+        "instrument", "field", "classification_system", "signal_date", "decision_at"
+    }
     if not required_columns.issubset(selected.columns):
-        raise ValueError("selected metadata must contain instrument, field and selection timestamp")
+        raise ValueError(
+            "selected metadata must contain instrument, field, taxonomy and selection timestamp"
+        )
+    taxonomy_fields = [field for field in fields if field in _FIELD_SPECS and _FIELD_SPECS[field]["taxonomy"]]
+    if taxonomy_fields:
+        allowed_systems = set.intersection(*[
+            set(_FIELD_SPECS[field]["classification_systems"])
+            for field in taxonomy_fields
+        ])
+        if classification_system not in allowed_systems:
+            raise ValueError("coverage audit requires an explicit industry classification_system")
+    elif classification_system is not None:
+        raise ValueError("classification_system is only valid for industry metadata fields")
+
     if selected.height:
         signal_dates = selected["signal_date"].unique().to_list()
         decision_times = selected["decision_at"].unique().to_list()
         if len(signal_dates) != 1 or len(decision_times) != 1:
             raise ValueError("coverage audit accepts one signal-date metadata snapshot at a time")
+        observed_signal = _iso_date(signal_dates[0], "selected.signal_date")
+        observed_decision = _aware_timestamp(decision_times[0], "selected.decision_at")
+        if observed_decision.date().isoformat() != observed_signal:
+            raise ValueError("selected metadata decision_at does not match signal_date")
+        if signal_date is not None and _iso_date(signal_date, "signal_date") != observed_signal:
+            raise ValueError("selected metadata signal_date differs from audit signal_date")
+        if decision_at is not None:
+            requested_decision = _aware_timestamp(decision_at, "decision_at")
+            if requested_decision != observed_decision:
+                raise ValueError("selected metadata decision_at differs from audit decision_at")
+    else:
+        if signal_date is None or decision_at is None:
+            raise ValueError("empty coverage audit requires explicit signal_date and decision_at")
+        observed_signal = _iso_date(signal_date, "signal_date")
+        observed_decision = _aware_timestamp(decision_at, "decision_at")
+        if observed_decision.date().isoformat() != observed_signal:
+            raise ValueError("decision_at must fall on signal_date")
+
+    if taxonomy_fields:
+        taxonomy_rows = selected.filter(pl.col("field").is_in(taxonomy_fields))
+        if taxonomy_rows.height and taxonomy_rows.filter(
+            pl.col("classification_system") != classification_system
+        ).height:
+            raise ValueError("coverage audit cannot mix industry classification systems")
+    if selected.filter(
+        pl.col("field").is_in([field for field in fields if field not in taxonomy_fields])
+        & pl.col("classification_system").is_not_null()
+    ).height:
+        raise ValueError("non-taxonomy metadata rows must have null classification_system")
+    if selected.filter(~pl.col("field").is_in(list(fields))).height:
+        raise ValueError("selected metadata contains fields outside the coverage request")
 
     required = {
         (str(instrument), str(field))
@@ -501,13 +550,9 @@ def audit_security_metadata_coverage(
         "unexpected_examples": [list(item) for item in unexpected[:20]],
         "fields": list(fields),
         "instrument_count": len(instruments),
-        "signal_date": selected["signal_date"].item(0) if selected.height else None,
-        "decision_at": selected["decision_at"].item(0) if selected.height else None,
-        "classification_system": (
-            selected["classification_system"].drop_nulls().unique().item(0)
-            if selected.height and selected["classification_system"].drop_nulls().n_unique() == 1
-            else None
-        ),
+        "signal_date": observed_signal,
+        "decision_at": observed_decision.isoformat(),
+        "classification_system": classification_system,
         "selection_policy": (
             "effective interval contains signal_date AND available_at <= "
             "Shanghai decision_at; no forward-fill or proxy imputation"
