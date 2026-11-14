@@ -50,6 +50,7 @@ def valid_report():
         "training_dataset_unlocked": False,
         "window": {"start": "2024-01-01", "end": "2024-04-30"},
         "profile": "cn_a_sh_sz_research_v1",
+        "pit_items": ["roe", "net_profit"],
         "gates": [
             {"name": "historical_universe", "status": "PASS",
              "supported_window": {"start": "2018-01-01", "end": "2026-12-31"}},
@@ -57,6 +58,7 @@ def valid_report():
             {"name": "hfq_adjustment", "status": "PASS", "diagnostics_assessed": True,
              "missing_factor_rows": 0, "related_historical_events": 0},
             {"name": "point_in_time_fundamentals", "status": "PASS", "mode": "strict",
+             "items": ["roe", "net_profit"],
              "missing_symbol_item_pairs": 0},
             {"name": "trading_status", "status": "PASS", "missing_status_rows": 0,
              "unknown_risk_warning_rows": 0, "contradictory_rows": 0,
