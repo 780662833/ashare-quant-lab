@@ -115,6 +115,10 @@ flowchart TD
 - LightGBM is the single cross-sectional regression model. It reads Qlib's
   learn view for fitting and infer view for keyed predictions; project-owned
   Top-20 equal-weight target generation remains downstream.
+- Validation predictions are evaluated against validation labels only after
+  label maturity strictly before test start. Cross-fold stability summaries
+  are descriptive by default; any acceptance policy must be explicit,
+  versioned and fingerprinted. No test labels feed policy decisions.
 - Project-owned Polars features/labels, CNEquity receipts, PIT availability,
   historical universe, trading status, walk-forward splits and admission
   remain authoritative. Qlib is a dataset/workflow adapter, not a data source
@@ -318,6 +322,7 @@ As of 2026-11-14:
 | Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
 | Cross-sectional feature/label + strict admission | Implemented; empirical use remains gated by local data acceptance |
 | Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Merged in PR #67; 286 synthetic CI tests passed |
-| Validation-only ranking diagnostics | Implemented in Phase 9.10; per-week Rank IC, Pearson IC, Top-N excess and Top-Bottom spread, maturity checked before test start; no test labels or automated tuning |
+| Validation-only ranking diagnostics | Merged in PR #70; per-week Rank IC, Pearson IC, Top-N excess and Top-Bottom spread, maturity checked before test start; no test labels or automated tuning |
+| Cross-fold validation stability policy | Implemented in Phase 9.11; descriptive weekly IC distribution/ICIR, positive-week and positive-fold ratios, coverage and Top-N excess stability; acceptance thresholds must be explicit, versioned and fingerprinted |
 | Real Qlib 0.9.7 / Python 3.12 compatibility | Verified in PR #68 and #69: Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3, LightGBM 4.7.0; DatasetH API and full multi-fold runner both passed synthetic integration tests; optimizer stubbed, no model fit |
 | Live trading | Out of scope |

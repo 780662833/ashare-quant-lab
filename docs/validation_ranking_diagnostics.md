@@ -58,3 +58,13 @@ diagnostic status; it is not silently converted into zero IC.
 These diagnostics are descriptive validation evidence, not a license to tune
 against validation repeatedly. Any later model/config selection protocol must
 be declared separately and keep the walk-forward test windows untouched.
+
+## Cross-fold stability
+
+The walk-forward runner passes each fold's diagnostics to
+`summarize_validation_stability(...)`. The resulting report aggregates weekly
+Rank IC observations and per-fold Top-N excess outcomes while preserving each
+fold's validation window and test cutoff. A caller may supply an explicit
+`ValidationRankingAcceptancePolicy`; otherwise the result is descriptive and
+remains `NOT_ASSESSED`. See
+[validation_ranking_policy.md](validation_ranking_policy.md).

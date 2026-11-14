@@ -22,8 +22,23 @@ from ashare_quant.research.model_experiment_store import (
     persist_walk_forward_model_run,
     verify_walk_forward_model_run,
 )
+from ashare_quant.research.validation_stability import ValidationRankingAcceptancePolicy
 
 PROFILE = "cn_a_sh_sz_research_v1"
+
+
+def _synthetic_validation_policy():
+    return ValidationRankingAcceptancePolicy(
+        policy_id="synthetic-lenient-v1",
+        minimum_fold_count=2,
+        minimum_signal_date_count=2,
+        minimum_rank_ic_observation_count=2,
+        minimum_cross_section_size=2,
+        minimum_label_coverage_rate=0.0,
+        minimum_mean_spearman_rank_ic=-1.0,
+        minimum_positive_spearman_rank_ic_ratio=0.0,
+        minimum_positive_top_n_excess_fold_ratio=0.0,
+    )
 
 
 class FakeDataset:
@@ -295,6 +310,7 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         backtest_config=execution_config,
         top_n=2,
         benchmark_config=momentum_config,
+        validation_policy=_synthetic_validation_policy(),
     )
 
     assert len(result.folds) >= 2
@@ -325,7 +341,12 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert result.benchmark_oos_daily.height == result.oos_daily.height
     assert "mean_fold_excess_return" in result.aggregate_report
     assert result.aggregate_report["validation_ranking"]["folds_with_mature_validation_labels"] == len(result.folds)
+    assert result.aggregate_report["validation_ranking"]["cross_fold_stability"]["decision"] == "ACCEPTED"
     assert result.aggregate_report["validation_ranking"]["mean_spearman_rank_ic"] is not None
+    stability = result.aggregate_report["validation_ranking"]["cross_fold_stability"]
+    assert stability["decision"] == "ACCEPTED"
+    assert stability["policy_id"] == "synthetic-lenient-v1"
+    assert stability["fold_count"] == len(result.folds)
 
     saved = persist_walk_forward_model_run(
         result,
@@ -345,7 +366,10 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert any(item["path"].endswith("validation_diagnostics.parquet") for item in manifest["artifacts"])
     fold_manifest = saved / "folds" / result.folds[0].fold.fold_id / "fold.json"
     assert fold_manifest.is_file()
-    assert '"validation_report"' in fold_manifest.read_text(encoding="utf-8")
+    fold_manifest_text = fold_manifest.read_text(encoding="utf-8")
+    assert '"validation_report"' in fold_manifest_text
+    assert '"validation_acceptance_policy"' in fold_manifest_text
+    assert manifest["aggregate_report"]["validation_ranking"]["cross_fold_stability"]["policy_id"] == "synthetic-lenient-v1"
     artifact = saved / manifest["artifacts"][0]["path"]
     artifact.write_bytes(artifact.read_bytes() + b"tamper")
     with pytest.raises(ValueError, match="checksum mismatch"):
@@ -506,6 +530,7 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
         backtest_config=execution_config,
         top_n=2,
         benchmark_config=momentum_config,
+        validation_policy=_synthetic_validation_policy(),
     )
 
     assert len(result.folds) >= 2
