@@ -215,3 +215,82 @@ def test_forward_labels_reject_unsorted_calendar_without_reordering():
             adjusted_bars=adj, execution_bars=raw,
             universe_membership=members, trading_dates=unsorted,
         )
+
+
+
+def test_feature_builder_rejects_non_exact_hfq_prices():
+    adj, raw, members, fundamentals, sessions = market()
+    bad = adj.with_columns(
+        pl.when(pl.col("date") == sessions[5])
+        .then(False).otherwise(pl.col("adj_is_exact")).alias("adj_is_exact")
+    )
+    with pytest.raises(ValueError, match="finite, positive and exact"):
+        build_cross_sectional_features(
+            adjusted_bars=bad, execution_bars=raw,
+            universe_membership=members, fundamentals=fundamentals,
+            trading_dates=sessions,
+            config=CrossSectionalFeatureConfig(
+                return_windows=(5,), volatility_window=5, activity_window=5
+            ),
+        )
+
+
+def test_feature_builder_requires_exactness_provenance_column():
+    adj, raw, members, fundamentals, sessions = market()
+    with pytest.raises(ValueError, match="adj_is_exact"):
+        build_cross_sectional_features(
+            adjusted_bars=adj.drop("adj_is_exact"), execution_bars=raw,
+            universe_membership=members, fundamentals=fundamentals,
+            trading_dates=sessions,
+            config=CrossSectionalFeatureConfig(
+                return_windows=(5,), volatility_window=5, activity_window=5
+            ),
+        )
+
+
+def test_feature_builder_rejects_duplicate_strict_pit_fact_keys():
+    adj, raw, members, fundamentals, sessions = market()
+    duplicate = pl.concat([fundamentals, fundamentals.head(1)])
+    with pytest.raises(ValueError, match="duplicate strict PIT fact keys"):
+        build_cross_sectional_features(
+            adjusted_bars=adj, execution_bars=raw,
+            universe_membership=members, fundamentals=duplicate,
+            trading_dates=sessions,
+            config=CrossSectionalFeatureConfig(
+                return_windows=(5,), volatility_window=5, activity_window=5
+            ),
+        )
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_feature_builder_rejects_non_finite_strict_pit_values(bad_value):
+    adj, raw, members, fundamentals, sessions = market()
+    bad = fundamentals.with_columns(
+        pl.when(
+            (pl.col("instrument") == "600000.SH")
+            & (pl.col("item") == "roe")
+        ).then(bad_value).otherwise(pl.col("value")).alias("value")
+    )
+    with pytest.raises(ValueError, match="strict PIT value must be finite"):
+        build_cross_sectional_features(
+            adjusted_bars=adj, execution_bars=raw,
+            universe_membership=members, fundamentals=bad,
+            trading_dates=sessions,
+            config=CrossSectionalFeatureConfig(
+                return_windows=(5,), volatility_window=5, activity_window=5
+            ),
+        )
+
+
+def test_feature_builder_rejects_unsorted_calendar_without_reordering():
+    adj, raw, members, fundamentals, sessions = market()
+    unsorted = [sessions[1], sessions[0], *sessions[2:]]
+    with pytest.raises(ValueError, match="strictly chronological"):
+        build_cross_sectional_features(
+            adjusted_bars=adj, execution_bars=raw,
+            universe_membership=members, fundamentals=fundamentals,
+            trading_dates=unsorted,
+            config=CrossSectionalFeatureConfig(
+                return_windows=(5,), volatility_window=5, activity_window=5
+            ),
+        )

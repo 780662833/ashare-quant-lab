@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from math import isfinite
 from zoneinfo import ZoneInfo
 from typing import Any
 
@@ -14,7 +15,7 @@ import polars as pl
 
 from ashare_quant.backtest.engine import weekly_rebalance_dates
 
-PRICE_REQUIRED = {"instrument", "date", "adj_close"}
+PRICE_REQUIRED = {"instrument", "date", "adj_close", "adj_is_exact"}
 EXECUTION_REQUIRED = {"instrument", "date", "volume", "amount"}
 MEMBERSHIP_REQUIRED = {"instrument", "date"}
 FUNDAMENTAL_REQUIRED = {
@@ -65,7 +66,9 @@ def _normalize_dates(values: list[Any]) -> list[str]:
         raise ValueError("Trading calendar contains duplicate sessions")
     if not normalized:
         raise ValueError("Trading calendar must not be empty")
-    return sorted(normalized)
+    if normalized != sorted(normalized):
+        raise ValueError("Trading calendar must be strictly chronological")
+    return normalized
 
 
 def _validate_frame(frame: pl.DataFrame, required: set[str], name: str) -> pl.DataFrame:
@@ -105,11 +108,14 @@ def _pit_values(
 
     rows = fundamentals.select(sorted(FUNDAMENTAL_REQUIRED)).to_dicts()
     eligible: list[dict[str, Any]] = []
+    seen_fact_keys: set[tuple[str, str, str, str]] = set()
     for row in rows:
         if row["item"] not in items or row["instrument"] not in instruments:
             continue
         if row["pit_quality"] != "strict" or row["pit_is_exact"] is not True:
             continue
+        if row["report_period"] is None or not str(row["report_period"]).strip():
+            raise ValueError("strict PIT report_period must be non-empty")
         available = row["available_at"]
         if isinstance(available, str):
             try:
@@ -119,7 +125,29 @@ def _pit_values(
         if not isinstance(available, datetime) or available.tzinfo is None:
             raise ValueError("available_at must be timezone-aware")
         available = available.astimezone(SHANGHAI)
-        eligible.append({**row, "_available": available})
+
+        # A duplicate source fact with the same availability timestamp is
+        # ambiguous: choosing the first/last input row would make PIT features
+        # depend on provider row order rather than a documented revision rule.
+        fact_key = (
+            str(row["instrument"]),
+            str(row["item"]),
+            str(row["report_period"]),
+            available.isoformat(),
+        )
+        if fact_key in seen_fact_keys:
+            raise ValueError("fundamentals contains duplicate strict PIT fact keys")
+        seen_fact_keys.add(fact_key)
+
+        if isinstance(row["value"], bool):
+            raise ValueError("strict PIT value must be numeric, not boolean")
+        try:
+            value = float(row["value"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("strict PIT value must be numeric") from exc
+        if not isfinite(value):
+            raise ValueError("strict PIT value must be finite")
+        eligible.append({**row, "value": value, "_available": available})
 
     selected: list[dict[str, Any]] = []
     for signal_date in signal_dates:
@@ -180,12 +208,21 @@ def build_cross_sectional_features(
         if frame.select(pl.any_horizontal(pl.col("instrument").is_null(), pl.col("date").is_null()).any()).item():
             raise ValueError(f"{name} contains null keys")
 
+    try:
+        prices = prices.with_columns(
+            pl.col("adj_close").cast(pl.Float64, strict=True),
+            pl.col("adj_is_exact").cast(pl.Boolean, strict=True),
+        )
+    except Exception as exc:
+        raise ValueError("adjusted_bars must contain canonical numeric prices and exactness flags") from exc
     if prices.filter(
         pl.col("adj_close").is_null()
-        | (~pl.col("adj_close").cast(pl.Float64).is_finite())
-        | (pl.col("adj_close").cast(pl.Float64) <= 0)
+        | (~pl.col("adj_close").is_finite())
+        | (pl.col("adj_close") <= 0)
+        | pl.col("adj_is_exact").is_null()
+        | (pl.col("adj_is_exact") != True)
     ).height:
-        raise ValueError("HFQ adjusted close must be finite and positive")
+        raise ValueError("HFQ adjusted close must be finite, positive and exact")
     if activity.filter(
         pl.col("volume").is_null()
         | pl.col("amount").is_null()
