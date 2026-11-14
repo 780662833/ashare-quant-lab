@@ -69,8 +69,10 @@ normalizes symbol/item_code/item_value/announce_date. Because announce_date
 may contain only a date, the adapter conservatively sets availability to
 23:59:59 Asia/Shanghai on that date; same-day after-close publication can
 therefore never leak into that day's 16:00 signal. The helper pins the PIT
-adapter receipt and revision into bundle provenance. The feature builder then
-selects the latest known report for each instrument/item. A report period is
+adapter receipt and revision into bundle provenance. Admission requires the
+acceptance report's PIT receipt and the actual feature-input adapter receipt to
+pin the same financial_statement_items revision and contract fingerprint. The
+feature builder then selects the latest known report for each instrument/item. A report period is
 never treated as its publication timestamp.
 
 ## Training admission — implemented, model fitting still gated
