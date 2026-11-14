@@ -339,6 +339,18 @@ def admit_training_dataset(
                 except ValueError:
                     reasons.append(f"labels contain invalid {column}")
                     break
+        if "label_entry_date" in labels.columns:
+            for value in labels["label_entry_date"].cast(pl.String).to_list():
+                try:
+                    _iso_date(value, "label label_entry_date")
+                except ValueError:
+                    reasons.append("labels contain invalid label_entry_date")
+                    break
+            if labels.filter(
+                (pl.col("label_entry_date").cast(pl.String) <= pl.col("signal_date").cast(pl.String))
+                | (pl.col("label_entry_date").cast(pl.String) >= pl.col("label_end_date").cast(pl.String))
+            ).height:
+                reasons.append("label entry date must be after signal and before exit maturity")
         if labels.filter(
             (pl.col("signal_date").cast(pl.String) < start)
             | (pl.col("signal_date").cast(pl.String) >= cutoff)
