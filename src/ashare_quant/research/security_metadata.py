@@ -173,7 +173,9 @@ def _normalize_source_identity(
     ):
         raise ValueError(f"source identity for {dataset} read receipt has no receipt_id")
     if str(receipt_id) != str(actual_receipt_id):
-        raise ValueError(f"source identity for {dataset} receipt_id does not match its read receipt")
+        raise ValueError(
+            f"source identity for {dataset} receipt_id does not match its read receipt"
+        )
 
     dependencies = receipt.get("dependencies")
     dependency = dependencies.get(dataset) if isinstance(dependencies, Mapping) else None
@@ -215,14 +217,17 @@ def _normalize_source_identity(
             raise ValueError(f"source capability audit {audit_id} requires method")
         evidence_class = audit.get("evidence_class")
         if evidence_class not in {"strict_pit", "immutable_event"}:
-            raise ValueError(f"source capability audit {audit_id} has an unsupported evidence_class")
+            raise ValueError(
+                f"source capability audit {audit_id} has an unsupported evidence_class"
+            )
         if (
             str(audit.get("receipt_id")) != str(actual_receipt_id)
             or str(audit.get("revision_id")) != str(revision_id)
             or audit.get("contract_fingerprint") != fingerprint
         ):
             raise ValueError(
-                f"source capability audit {audit_id} is not bound to the exact read receipt and revision"
+                f"source capability audit {audit_id} is not bound to the exact read "
+                "receipt and revision"
             )
 
         audited_at = _aware_timestamp(audit.get("audited_at"), "capability_audit.audited_at")
@@ -299,7 +304,11 @@ def build_security_metadata_source_identity(
         "contract_fingerprint": revision_identity.get("contract_fingerprint"),
         "receipt_id": receipt.get("receipt_id") if isinstance(receipt, Mapping) else None,
         "receipt": receipt,
-        "capability_audits": list(capability_audits) if isinstance(capability_audits, Sequence) else capability_audits,
+        "capability_audits": (
+            list(capability_audits)
+            if isinstance(capability_audits, Sequence)
+            else capability_audits
+        ),
     }
     normalized = _normalize_source_identity(dataset, candidate)
     return {
