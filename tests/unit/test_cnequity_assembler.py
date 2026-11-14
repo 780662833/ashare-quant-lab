@@ -113,6 +113,13 @@ def _fixtures():
         "status": pl.DataFrame(status_rows), "limits": pl.DataFrame(limit_rows),
         "membership": membership, "receipts": receipts, "dependencies": dependencies,
         "revisions": revisions, "acceptance": acceptance, "audits": audits,
+        "pit_facts": pl.DataFrame([
+            {"symbol": symbol, "report_period": "2023Q4", "item_code": item,
+             "item_value": value, "announce_date": "2024-01-03",
+             "pit_is_exact": True, "pit_quality": "strict"}
+            for symbol in symbols
+            for item, value in (("roe", 0.12), ("net_profit", 100.0))
+        ]),
     }
 
 class FakeAdapter(CNEquityAdapter):
