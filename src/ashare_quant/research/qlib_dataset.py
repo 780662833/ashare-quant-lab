@@ -41,6 +41,7 @@ class QlibDatasetBundle:
     feature_columns: tuple[str, ...]
     segment_bounds: Mapping[str, tuple[str, str]]
     training_rows: int | None = None
+    label_entry_contract_verified: bool = False
 
     def prepare(self, *args: Any, **kwargs: Any) -> Any:
         """Delegate the Qlib DatasetH prepare interface."""
@@ -73,7 +74,9 @@ def build_qlib_panel_rows(
     if not isinstance(features, pl.DataFrame) or not isinstance(labels, pl.DataFrame):
         raise TypeError("features and labels must be Polars DataFrames")
     required_features = set(_KEYS).union(admission.feature_columns)
-    required_labels = set(_KEYS).union({"label_end_date", "forward_return"})
+    required_labels = set(_KEYS).union(
+        {"label_entry_date", "label_end_date", "forward_return"}
+    )
     if not required_features.issubset(features.columns):
         raise ValueError("features do not match the admitted feature schema")
     if not required_labels.issubset(labels.columns):
@@ -91,6 +94,7 @@ def build_qlib_panel_rows(
     label_frame = labels.select(
         pl.col("signal_date").cast(pl.String),
         pl.col("instrument").cast(pl.String),
+        pl.col("label_entry_date").cast(pl.String),
         pl.col("label_end_date").cast(pl.String),
         pl.col("forward_return").cast(pl.Float64),
     )
@@ -102,6 +106,15 @@ def build_qlib_panel_rows(
         raise ValueError("Qlib training panel must contain every admitted label row")
     if joined.is_empty():
         raise ValueError("Qlib training panel is empty")
+    for column in ("signal_date", "label_entry_date", "label_end_date"):
+        for value in joined[column].to_list():
+            _iso_date(value, f"Qlib label {column}")
+    if joined.filter(
+        pl.col("label_entry_date").is_null()
+        | (pl.col("label_entry_date") <= pl.col("signal_date"))
+        | (pl.col("label_entry_date") >= pl.col("label_end_date"))
+    ).height:
+        raise ValueError("Qlib panel contains an invalid execution entry date")
     if joined.filter(
         pl.col("label_end_date").is_null()
         | (pl.col("label_end_date") <= pl.col("signal_date"))
@@ -285,4 +298,5 @@ def create_qlib_dataset(
         feature_columns=tuple(feature_names),
         segment_bounds=dict(normalized),
         training_rows=len(index),
+        label_entry_contract_verified=True,
     )

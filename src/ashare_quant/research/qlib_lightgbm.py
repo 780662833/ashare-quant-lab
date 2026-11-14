@@ -27,6 +27,10 @@ def _require_bound_dataset(
         raise TypeError("Qlib training requires a QlibDatasetBundle created by this project")
     if not isinstance(admission, TrainingDatasetAdmission) or not admission.admitted:
         raise PermissionError("A successful TrainingDatasetAdmission is required")
+    if dataset.label_entry_contract_verified is not True:
+        raise ValueError(
+            "Qlib dataset lacks verified execution-aligned label entry dates"
+        )
     if dataset.admission != admission:
         raise ValueError("Qlib dataset admission does not match the supplied admission")
     if dataset.feature_columns != tuple(admission.feature_columns):

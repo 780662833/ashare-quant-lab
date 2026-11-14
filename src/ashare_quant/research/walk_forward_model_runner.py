@@ -297,6 +297,13 @@ def run_walk_forward_cross_sectional_model(
             raise ValueError(f"{name} contains signal dates outside the bundle calendar")
         if not values.issubset(weekly_dates):
             raise ValueError(f"{name} contains non-weekly signal dates")
+        if name == "labels":
+            for column in ("label_entry_date", "label_end_date"):
+                observed_dates = set(frame[column].cast(pl.String).to_list())
+                if not observed_dates.issubset(session_set):
+                    raise ValueError(
+                        f"labels contain {column} outside the bundle trading calendar"
+                    )
 
     report_window = acceptance_report["window"]
     start_date = str(report_window["start"])

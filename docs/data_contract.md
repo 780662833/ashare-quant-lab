@@ -144,3 +144,17 @@ availability at or before the signal close; duplicate
 rather than selected according to input row order. Strict PIT values must be
 numeric and finite. The supplied exchange calendar must already be strictly
 chronological; the feature builder does not silently reorder it.
+
+
+## Training adapter entry-date invariant
+
+The required `label_entry_date` is checked again at every model-fit boundary,
+not only by the walk-forward runner and admission layer. The direct LightGBM
+fit adapter and Qlib training-panel bridge require canonical signal, entry and
+maturity dates and enforce
+`signal_date < label_entry_date < label_end_date < training_cutoff`.
+A Qlib dataset wrapper must be marked as having passed this conversion-time
+entry-date check before the Qlib LightGBM fit adapter accepts it. The model
+runner also requires entry and maturity dates to exist in the validated
+bundle's official exchange calendar. This keeps legacy close-to-close labels
+and non-session execution dates from entering a lower-level training API.

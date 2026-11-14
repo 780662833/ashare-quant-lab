@@ -593,3 +593,33 @@ def test_walk_forward_model_runner_rejects_labels_without_execution_entry_date()
                 }
             ),
         )
+
+
+
+@pytest.mark.parametrize("date_column", ["label_entry_date", "label_end_date"])
+def test_walk_forward_model_runner_rejects_label_execution_dates_outside_calendar(date_column):
+    inputs = make_bundle_inputs()
+    bundle = build_research_data_bundle(**inputs)
+    signal_date = bundle.trading_dates[4]
+    labels = pl.DataFrame({
+        "signal_date": [signal_date],
+        "instrument": ["600000.SH"],
+        "label_entry_date": [bundle.trading_dates[5]],
+        "label_end_date": [bundle.trading_dates[10]],
+        "forward_return": [0.03],
+    })
+    labels = labels.with_columns(
+        pl.lit("2099-01-01").alias(date_column)
+    )
+    with pytest.raises(
+        ValueError,
+        match=f"labels contain {date_column} outside the bundle trading calendar",
+    ):
+        run_walk_forward_cross_sectional_model(
+            bundle,
+            acceptance_report=inputs["acceptance_report"],
+            features=pl.DataFrame(
+                schema={"signal_date": pl.String, "instrument": pl.String}
+            ),
+            labels=labels,
+        )

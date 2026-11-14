@@ -141,6 +141,7 @@ def _dataset(admission):
             "train": ("2024-01-01", "2024-01-12"),
             "valid": ("2024-01-19", "2024-01-19"),
         },
+        label_entry_contract_verified=True,
     )
 
 
@@ -243,6 +244,7 @@ def test_qlib_training_rejects_cutoff_or_row_count_mismatch(monkeypatch):
             "train": ("2024-01-01", "2024-01-15"),
             "valid": ("2024-01-19", "2024-01-19"),
         },
+        label_entry_contract_verified=True,
     )
     with pytest.raises(ValueError, match="cutoff"):
         fit_qlib_lightgbm_regressor(
@@ -268,4 +270,19 @@ def test_qlib_prediction_rejects_training_segment(monkeypatch):
             model=model,
             dataset=dataset,
             segment="train",
+        )
+
+
+
+def test_qlib_fit_rejects_dataset_without_verified_execution_label_contract(monkeypatch):
+    _install_qlib(monkeypatch)
+    _install_lightgbm(monkeypatch, {})
+    admission = _admission()
+    verified = _dataset(admission)
+    unverified = replace(verified, label_entry_contract_verified=False)
+    with pytest.raises(ValueError, match="lacks verified execution-aligned label entry dates"):
+        fit_qlib_lightgbm_regressor(
+            dataset=unverified,
+            admission=admission,
+            config=LightGBMConfig(min_training_rows=2),
         )
