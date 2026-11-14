@@ -22,8 +22,10 @@ class FakeDataset:
 class FakeBooster:
     def __init__(self, model_file=None):
         self.model_file = model_file
+        self.last_matrix = None
 
     def predict(self, matrix):
+        self.last_matrix = matrix
         return [0.05 + index * 0.01 for index in range(len(matrix))]
 
     def save_model(self, path):
@@ -168,6 +170,8 @@ def test_model_prediction_allows_missing_pit_but_excludes_invalid_market_feature
         "600000.SH", "000003.SZ", "000005.SZ"
     ]
     assert predictions["predicted_return"].to_list() == pytest.approx([0.05, 0.06, 0.07])
+    assert model.booster.last_matrix.shape == (3, 2)
+    assert model.booster.last_matrix[2, 1] != model.booster.last_matrix[2, 1]
 
 
 def test_fit_keeps_missing_pit_as_native_nan_but_excludes_missing_market_feature(monkeypatch):
