@@ -4,7 +4,10 @@ import polars as pl
 import pytest
 
 from ashare_quant.research.admission import TrainingDatasetAdmission, _frame_fingerprint
-from ashare_quant.research.qlib_dataset import build_qlib_panel_rows
+from ashare_quant.research.qlib_dataset import (
+    _complete_finite_feature_rows,
+    build_qlib_panel_rows,
+)
 
 
 def frames(*, entry_dates=("2024-01-08", "2024-01-08")):
@@ -94,3 +97,32 @@ def test_qlib_panel_rows_rejects_noncanonical_entry_date():
         build_qlib_panel_rows(
             features=features, labels=labels, admission=admission
         )
+
+
+def test_inference_feature_rows_exclude_null_nan_and_infinite_values():
+    frame = pl.DataFrame({
+        "signal_date": ["2024-01-19"] * 5,
+        "instrument": [
+            "600000.SH",
+            "000001.SZ",
+            "600519.SH",
+            "000002.SZ",
+            "000003.SZ",
+        ],
+        "return_5": [0.04, None, float("nan"), float("inf"), 0.02],
+        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10],
+    })
+
+    complete = _complete_finite_feature_rows(
+        frame, ("return_5", "pit_roe")
+    )
+
+    assert complete["instrument"].to_list() == ["600000.SH", "000003.SZ"]
+    assert complete.select(
+        pl.all_horizontal(
+            pl.col("return_5").is_not_null(),
+            pl.col("return_5").is_finite(),
+            pl.col("pit_roe").is_not_null(),
+            pl.col("pit_roe").is_finite(),
+        ).all()
+    ).item()
