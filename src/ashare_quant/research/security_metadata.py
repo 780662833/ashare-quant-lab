@@ -369,9 +369,19 @@ def select_security_metadata_as_of(
             # intervals were rejected above.
             selected.append(max(applicable, key=lambda row: row["effective_from"]))
 
+    output_schema = dict(frame.schema)
+    output_schema["signal_date"] = pl.String
+    output_schema["decision_at"] = pl.String
     if selected:
-        return pl.DataFrame(selected, schema=frame.schema).sort(["instrument", "field"])
-    return frame.head(0)
+        stamped = [
+            {**row, "signal_date": signal, "decision_at": cutoff.isoformat()}
+            for row in selected
+        ]
+        return pl.DataFrame(stamped, schema=output_schema).sort(["instrument", "field"])
+    return frame.head(0).with_columns(
+        pl.lit(signal).alias("signal_date"),
+        pl.lit(cutoff.isoformat()).alias("decision_at"),
+    )
 
 
 def audit_security_metadata_coverage(
@@ -387,8 +397,14 @@ def audit_security_metadata_coverage(
         raise ValueError("instruments must be non-empty and unique")
     if not fields or len(set(fields)) != len(fields):
         raise ValueError("fields must be non-empty and unique")
-    if not {"instrument", "field"}.issubset(selected.columns):
-        raise ValueError("selected metadata must contain instrument and field")
+    required_columns = {"instrument", "field", "signal_date", "decision_at"}
+    if not required_columns.issubset(selected.columns):
+        raise ValueError("selected metadata must contain instrument, field and selection timestamp")
+    if selected.height:
+        signal_dates = selected["signal_date"].unique().to_list()
+        decision_times = selected["decision_at"].unique().to_list()
+        if len(signal_dates) != 1 or len(decision_times) != 1:
+            raise ValueError("coverage audit accepts one signal-date metadata snapshot at a time")
 
     required = {
         (str(instrument), str(field))
@@ -418,6 +434,8 @@ def audit_security_metadata_coverage(
         "unexpected_examples": [list(item) for item in unexpected[:20]],
         "fields": list(fields),
         "instrument_count": len(instruments),
+        "signal_date": selected["signal_date"].item(0) if selected.height else None,
+        "decision_at": selected["decision_at"].item(0) if selected.height else None,
         "selection_policy": (
             "effective interval contains signal_date AND available_at <= "
             "Shanghai decision_at; no forward-fill or proxy imputation"
