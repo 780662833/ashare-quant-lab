@@ -145,6 +145,11 @@ flowchart TD
 - Execution date: next eligible exchange session, never the same close.
 - Fundamentals carry both report period and publication/availability time.
   Report period is not a substitute for when a fact became knowable.
+- Supervised return labels begin at the first executable open after signal close
+  and end at the first executable open after the next weekly signal. Their
+  explicit entry and maturity dates follow the supplied exchange calendar,
+  including holiday-shortened weeks; they do not include the untradable
+  signal-close-to-entry-open return.
 
 The future research bundle must use the official exchange calendar. Do not
 infer calendar sessions from the dates on which one selected stock happened
