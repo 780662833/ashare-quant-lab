@@ -30,6 +30,7 @@ from ashare_quant.research.qlib_lightgbm import (
     fit_qlib_lightgbm_regressor,
     predict_qlib_lightgbm_regressor,
 )
+from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
 from ashare_quant.research.walk_forward import (
     WalkForwardConfig,
     WalkForwardFold,
@@ -50,6 +51,8 @@ class WalkForwardModelFoldRun:
     final_training_rows: int
     model: LightGBMRegressionModel
     validation_predictions: pl.DataFrame
+    validation_diagnostics: pl.DataFrame
+    validation_report: dict[str, Any]
     test_predictions: pl.DataFrame
     targets: pl.DataFrame
     daily: pl.DataFrame
@@ -155,6 +158,18 @@ def _aggregate(
     )
     linked_return = prod(1.0 + value for value in returns) - 1.0
     benchmark_linked_return = prod(1.0 + value for value in benchmark_returns) - 1.0
+
+    def validation_mean(field: str) -> float | None:
+        values = [
+            float(item.validation_report[field])
+            for item in folds
+            if item.validation_report.get(field) is not None
+        ]
+        return mean(values) if values else None
+
+    validation_fold_count = sum(
+        item.validation_report.get("status") == "evaluated" for item in folds
+    )
     return {
         "fold_count": len(folds),
         "out_of_sample_sessions": sessions,
@@ -174,6 +189,23 @@ def _aggregate(
             (1.0 + linked_return) ** (annualization / sessions) - 1.0
             if contiguous and sessions else None
         ),
+        "validation_ranking": {
+            "folds_with_mature_validation_labels": validation_fold_count,
+            "mean_spearman_rank_ic": validation_mean("mean_spearman_rank_ic"),
+            "mean_pearson_ic": validation_mean("mean_pearson_ic"),
+            "mean_top_n_excess_forward_return": validation_mean(
+                "mean_top_n_excess_forward_return"
+            ),
+            "mean_top_minus_bottom_forward_return": validation_mean(
+                "mean_top_minus_bottom_forward_return"
+            ),
+            "mean_label_coverage_rate": validation_mean("label_coverage_rate"),
+            "interpretation": (
+                "Validation predictions are scored against labels matured strictly "
+                "before each fold test cutoff. These diagnostics are not computed "
+                "from test labels and are not used for model tuning."
+            ),
+        },
         "model_training_performed": True,
         "training_dataset_unlocked": False,
         "interpretation": (
@@ -309,6 +341,17 @@ def run_walk_forward_cross_sectional_model(
             model=diagnostic_model,
             dataset=diagnostic_dataset,
             segment="valid",
+        )
+        validation_labels = _filter_dates(
+            labels, start=fold.validation_start, end=fold.validation_end
+        )
+        validation_diagnostics, validation_report = evaluate_validation_ranking(
+            validation_predictions,
+            validation_labels,
+            top_n=top_n,
+            validation_start=fold.validation_start,
+            validation_end=fold.validation_end,
+            labels_mature_before=fold.test_start,
         )
 
         # Final fit: include validation-period examples only after their labels
@@ -462,6 +505,7 @@ def run_walk_forward_cross_sectional_model(
                 "fold": asdict(fold),
                 "baseline_date": baseline_date,
                 "baseline_nav": baseline_nav,
+                "validation_ranking": validation_report,
                 "training_admission": train_admission.to_dict(),
                 "final_admission": final_admission.to_dict(),
                 "diagnostic_model": {
@@ -501,6 +545,8 @@ def run_walk_forward_cross_sectional_model(
                 final_training_rows=final_model.training_rows,
                 model=final_model,
                 validation_predictions=validation_predictions,
+                validation_diagnostics=validation_diagnostics,
+                validation_report=validation_report,
                 test_predictions=test_predictions,
                 targets=targets,
                 daily=test_daily,
@@ -528,6 +574,14 @@ def run_walk_forward_cross_sectional_model(
             "test_end": item.fold.test_end,
             "training_rows": item.final_training_rows,
             "test_prediction_rows": item.test_predictions.height,
+            "validation_label_coverage_rate": item.validation_report["label_coverage_rate"],
+            "validation_mean_spearman_rank_ic": item.validation_report["mean_spearman_rank_ic"],
+            "validation_top_n_excess_forward_return": (
+                item.validation_report["mean_top_n_excess_forward_return"]
+            ),
+            "validation_top_minus_bottom_forward_return": (
+                item.validation_report["mean_top_minus_bottom_forward_return"]
+            ),
             "total_return": item.report["total_return"],
             "benchmark_total_return": item.benchmark_report["total_return"],
             "excess_return": item.report["total_return"] - item.benchmark_report["total_return"],

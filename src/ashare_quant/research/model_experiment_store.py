@@ -138,6 +138,7 @@ def persist_walk_forward_model_run(
             folder.mkdir(parents=True)
             frames = {
                 "validation_predictions.parquet": fold.validation_predictions,
+                "validation_diagnostics.parquet": fold.validation_diagnostics,
                 "test_predictions.parquet": fold.test_predictions,
                 "model_targets.parquet": fold.targets,
                 "daily.parquet": fold.daily,
@@ -177,6 +178,7 @@ def persist_walk_forward_model_run(
                     "model_path": model_path.relative_to(staging).as_posix(),
                     "metadata_path": metadata_path.relative_to(staging).as_posix(),
                 },
+                "validation_report": fold.validation_report,
                 "report": fold.report,
                 "benchmark_report": fold.benchmark_report,
                 "provenance": fold.provenance,
@@ -189,6 +191,10 @@ def persist_walk_forward_model_run(
                 "model_metadata_path": metadata_path.relative_to(staging).as_posix(),
                 "test_start": fold.fold.test_start,
                 "test_end": fold.fold.test_end,
+                "validation_status": fold.validation_report["status"],
+                "validation_mean_spearman_rank_ic": (
+                    fold.validation_report["mean_spearman_rank_ic"]
+                ),
             })
 
         first = run.folds[0]
