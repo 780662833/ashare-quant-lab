@@ -1,15 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 import polars as pl
 import pytest
-
-pytest.importorskip("qlib", reason="real Qlib compatibility test requires pyqlib")
-pytest.importorskip("lightgbm", reason="real Qlib compatibility test requires LightGBM")
-
-import lightgbm as lgb
-from qlib.data.dataset.handler import DataHandlerLP
 
 from ashare_quant.research.admission import (
     TrainingDatasetAdmission,
@@ -27,7 +19,7 @@ class SyntheticBooster:
     """Prediction stub; this smoke test must never fit a real model."""
 
     def predict(self, matrix):
-        return np.linspace(0.01, 0.02, num=len(matrix), dtype=np.float64)
+        return [0.01 + 0.01 * index for index in range(len(matrix))]
 
 
 def _admitted_synthetic_frames():
@@ -84,6 +76,14 @@ def _admitted_synthetic_frames():
 
 def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
     """Exercise actual Qlib 0.9.7 APIs with synthetic rows only; never fit a model."""
+    lgb = pytest.importorskip("lightgbm", reason="install the optional research stack")
+    pd = pytest.importorskip("pandas", reason="Qlib requires pandas")
+    np = pytest.importorskip("numpy", reason="LightGBM requires NumPy")
+    qlib_handler = pytest.importorskip(
+        "qlib.data.dataset.handler",
+        reason="install the optional Qlib 0.9.7 dependency",
+    )
+    DataHandlerLP = qlib_handler.DataHandlerLP
     features, labels, admission, inference_features = _admitted_synthetic_frames()
     dataset_bundle = create_qlib_dataset(
         features=features,
