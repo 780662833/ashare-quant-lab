@@ -366,12 +366,16 @@ def run_walk_forward_cross_sectional_model(
         # only test-window signals. Momentum scores may use historical prices
         # before test_start, but no pre-test momentum positions are carried in.
         prefix_end = positions[fold.test_end]
-        prefix_sessions = sessions[: prefix_end + 1]
+        prefix_sessions_all = sessions[: prefix_end + 1]
+        # A truncated final week is not a rebalance session: only retain the
+        # last completed weekly membership snapshot visible by test_end.
+        last_completed_signal = weekly_rebalance_dates(prefix_sessions_all)[-1]
+        prefix_sessions = sessions[: positions[last_completed_signal] + 1]
         prefix_adjusted = _filter_dates(
-            bundle.adjusted_bars, end=fold.test_end, column="date"
+            bundle.adjusted_bars, end=last_completed_signal, column="date"
         )
         prefix_membership = _filter_dates(
-            bundle.universe_membership, end=fold.test_end, column="date"
+            bundle.universe_membership, end=last_completed_signal, column="date"
         )
         benchmark_scores = momentum_scores(
             prefix_adjusted,
