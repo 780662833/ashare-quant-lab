@@ -3,35 +3,64 @@ import pytest
 
 from ashare_quant.research.security_metadata import (
     audit_security_metadata_coverage,
+    build_security_metadata_source_identity,
     select_security_metadata_as_of,
     validate_security_metadata,
 )
 
+def source_identity(dataset, revision_id, fingerprint, fields, evidence_class):
+    receipt_id = f"{dataset}-receipt"
+    receipt = {
+        "receipt_id": receipt_id,
+        "replayable": True,
+        "dependencies": {
+            dataset: {
+                "revision_id": revision_id,
+                "contract_fingerprint": fingerprint,
+            },
+        },
+    }
+    audit = {
+        "audit_id": f"{dataset}-semantics-audit-v1",
+        "dataset": dataset,
+        "evidence_class": evidence_class,
+        "status": "PASS",
+        "scope": "field_semantics",
+        "method": "synthetic-contract-test",
+        "audited_fields": list(fields),
+        "audited_at": "2026-01-01T00:00:00+08:00",
+        "receipt_id": receipt_id,
+        "revision_id": revision_id,
+        "contract_fingerprint": fingerprint,
+    }
+    return build_security_metadata_source_identity(
+        dataset,
+        receipt=receipt,
+        revision_identity={
+            "revision_id": revision_id,
+            "contract_fingerprint": fingerprint,
+        },
+        capability_audits=[audit],
+    )
+
+
 IDENTITIES = {
-    "instruments": {
-        "revision_id": "instruments-r1",
-        "contract_fingerprint": "instruments-contract",
-        "receipt_id": "instruments-receipt",
-        "validated_evidence_classes": ["immutable_event"],
-    },
-    "industry_members": {
-        "revision_id": "industry-r1",
-        "contract_fingerprint": "industry-contract",
-        "receipt_id": "industry-receipt",
-        "validated_evidence_classes": ["strict_pit"],
-    },
-    "sw_industry_history": {
-        "revision_id": "sw-industry-r1",
-        "contract_fingerprint": "sw-industry-contract",
-        "receipt_id": "sw-industry-receipt",
-        "validated_evidence_classes": ["strict_pit"],
-    },
-    "valuation_metrics": {
-        "revision_id": "valuation-r1",
-        "contract_fingerprint": "valuation-contract",
-        "receipt_id": "valuation-receipt",
-        "validated_evidence_classes": ["strict_pit"],
-    },
+    "instruments": source_identity(
+        "instruments", "instruments-r1", "instruments-contract",
+        ["listing_date"], "immutable_event",
+    ),
+    "industry_members": source_identity(
+        "industry_members", "industry-r1", "industry-contract",
+        ["industry_l1_code", "industry_l2_code", "industry_l3_code"], "strict_pit",
+    ),
+    "sw_industry_history": source_identity(
+        "sw_industry_history", "sw-industry-r1", "sw-industry-contract",
+        ["industry_l1_code", "industry_l2_code", "industry_l3_code"], "strict_pit",
+    ),
+    "valuation_metrics": source_identity(
+        "valuation_metrics", "valuation-r1", "valuation-contract",
+        ["market_cap_total", "market_cap_float"], "strict_pit",
+    ),
 }
 
 
@@ -371,12 +400,69 @@ def test_rejects_non_finite_market_cap_values():
         validate_security_metadata(frame(*rows), source_identities=IDENTITIES)
 
 
-def test_rejects_claimed_quality_without_source_capability_attestation():
+def test_rejects_missing_field_semantic_capability_audit():
     identities = {
         **IDENTITIES,
         "industry_members": {
             **IDENTITIES["industry_members"],
-            "validated_evidence_classes": ["snapshot_only"],
+            "capability_audits": [],
+        },
+    }
+    rows = [observation(
+        "industry_l1_code",
+        effective_from="2024-01-01",
+        effective_to=None,
+        value_string="IND-A",
+    )]
+    with pytest.raises(ValueError, match="no receipt-bound field-semantic capability audits"):
+        validate_security_metadata(frame(*rows), source_identities=identities)
+
+
+def test_capability_audit_must_bind_exact_receipt_revision_and_contract():
+    receipt = {
+        "receipt_id": "industry-receipt",
+        "replayable": True,
+        "dependencies": {
+            "industry_members": {
+                "revision_id": "industry-r1",
+                "contract_fingerprint": "industry-contract",
+            },
+        },
+    }
+    audit = {
+        "audit_id": "audit-mismatch",
+        "dataset": "industry_members",
+        "evidence_class": "strict_pit",
+        "status": "PASS",
+        "scope": "field_semantics",
+        "method": "source-contract-review",
+        "audited_fields": ["industry_l1_code"],
+        "audited_at": "2026-01-01T00:00:00+08:00",
+        "receipt_id": "different-receipt",
+        "revision_id": "industry-r1",
+        "contract_fingerprint": "industry-contract",
+    }
+    with pytest.raises(ValueError, match="not bound to the exact read receipt and revision"):
+        build_security_metadata_source_identity(
+            "industry_members",
+            receipt=receipt,
+            revision_identity={
+                "revision_id": "industry-r1",
+                "contract_fingerprint": "industry-contract",
+            },
+            capability_audits=[audit],
+        )
+
+
+def test_capability_audit_is_field_scoped_and_evidence_class_specific():
+    identity = IDENTITIES["industry_members"]
+    audit = dict(identity["capability_audits"][0])
+    audit["audited_fields"] = ["listing_date"]
+    identities = {
+        **IDENTITIES,
+        "industry_members": {
+            **identity,
+            "capability_audits": [audit],
         },
     }
     rows = [observation(
