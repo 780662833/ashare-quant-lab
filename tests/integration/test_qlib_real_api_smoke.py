@@ -155,7 +155,8 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
         "600000.SH",
     ]
 
-    # The returned model carries a synthetic prediction-only Booster.\n    predictions = predict_qlib_lightgbm_regressor(
+    # The returned model carries a synthetic prediction-only Booster.
+    predictions = predict_qlib_lightgbm_regressor(
         model=model,
         dataset=dataset_bundle,
         segment="valid",
