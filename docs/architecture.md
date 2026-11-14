@@ -132,11 +132,14 @@ flowchart TD
   finite and duplicate availability keys are rejected. PIT values select the
   latest report period known at the signal timestamp and then the latest
   revision within that period. Zero-volume rolling windows produce a null
-  volume-ratio feature, never a NaN 0/0 result. Training and both model
-  inference adapters admit only rows whose complete feature vector is
-  non-null and finite; null, NaN and infinite rows are excluded without
-  imputation. Qlib is a dataset/workflow adapter, not a data source of truth
-  or an admission bypass.
+  volume-ratio feature, never a NaN 0/0 result. All market-derived model
+  features must be non-null and finite; strict `pit_*` fundamentals may
+  remain null when no fact was knowable at the signal close. The adapters
+  transport only these true PIT nulls as NaN to LightGBM's native missing-value
+  handling (`use_missing=true`, `zero_as_missing=false`). Non-null NaN/Inf
+  source values and incomplete market features remain ineligible; no value
+  is zero-filled or forward-filled. Qlib is a dataset/workflow adapter, not a
+  data source of truth or an admission bypass.
 - A-share execution, costs, price limits, order fills and portfolio accounting
   remain project-owned and must not be delegated to generic defaults.
 - Qlib and pandas stay optional/lazy in the Python 3.13 development

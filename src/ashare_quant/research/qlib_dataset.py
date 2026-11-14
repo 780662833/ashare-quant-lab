@@ -12,6 +12,10 @@ from typing import Any
 
 import polars as pl
 
+from ashare_quant.research.feature_eligibility import (
+    feature_eligibility_expression,
+    pit_nulls_as_nan,
+)
 from ashare_quant.research.admission import (
     TrainingDatasetAdmission,
     _frame_fingerprint,
@@ -30,20 +34,6 @@ def _iso_date(value: Any, field: str) -> str:
     if parsed.isoformat() != value:
         raise ValueError(f"{field} must use canonical YYYY-MM-DD")
     return value
-
-
-def _complete_finite_feature_rows(
-    frame: pl.DataFrame,
-    feature_columns: tuple[str, ...] | list[str],
-) -> pl.DataFrame:
-    """Keep only rows with a non-null, finite value in every model feature."""
-    complete = pl.all_horizontal(
-        *[
-            pl.col(name).is_not_null() & pl.col(name).is_finite()
-            for name in feature_columns
-        ]
-    )
-    return frame.filter(complete)
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,20 +125,30 @@ def build_qlib_panel_rows(
         | (pl.col("label_end_date") >= admission.training_cutoff)
     ).height:
         raise ValueError("Qlib panel contains labels that are not mature before the cutoff")
-    # Admission fingerprints and counts describe the complete source frames.
-    # Supervised Qlib training uses only rows with a mature label and a complete
-    # finite feature vector. Do not impute null features or silently mutate the
-    # admitted source frames.
-    complete_row = pl.all_horizontal(
-        pl.col("forward_return").is_not_null() & pl.col("forward_return").is_finite(),
+    # Admission rejects non-null NaN/Inf values. Repeat that defense at
+    # this low-level boundary so a manually constructed admission object cannot
+    # turn corrupted source values into silent row exclusions.
+    invalid_feature_values = pl.any_horizontal(
         *[
-            pl.col(name).is_not_null() & pl.col(name).is_finite()
+            pl.col(name).is_not_null() & (~pl.col(name).is_finite())
             for name in admission.feature_columns
-        ],
+        ]
     )
-    ordered = joined.filter(complete_row).sort(_KEYS)
+    if joined.filter(invalid_feature_values).height:
+        raise ValueError("Qlib training features contain non-finite values")
+
+    # Market-derived inputs must be complete and finite. Strict PIT columns
+    # may remain null when a report was not yet knowable at the signal close;
+    # their nulls are passed to LightGBM as native NaN values, never imputed.
+    valid_label = (
+        pl.col("forward_return").is_not_null()
+        & pl.col("forward_return").is_finite()
+    )
+    ordered = joined.filter(
+        valid_label & feature_eligibility_expression(admission.feature_columns)
+    ).sort(_KEYS)
     if ordered.is_empty():
-        raise ValueError("Qlib panel has no complete finite feature/label rows")
+        raise ValueError("Qlib panel has no eligible finite feature/label rows")
     dates = ordered["signal_date"].to_list()
     instruments = ordered["instrument"].to_list()
     for value in dates:
@@ -247,10 +247,11 @@ def create_qlib_dataset(
             raise ValueError("inference features contain null keys")
         for signal_date in inference_panel["signal_date"].to_list():
             _iso_date(signal_date, "inference_features.signal_date")
-        # Use the same complete-finite feature policy as supervised training:
-        # incomplete or non-finite names are omitted from this inference segment.
-        inference_panel = _complete_finite_feature_rows(
-            inference_panel, feature_names
+        # Apply the training eligibility policy to inference rows: all
+        # market-derived features must be finite, while missing strict PIT
+        # fundamentals remain eligible as native LightGBM missing values.
+        inference_panel = inference_panel.filter(
+            feature_eligibility_expression(feature_names)
         )
         for signal_date in inference_panel["signal_date"].unique().to_list():
             matching = [
@@ -277,10 +278,15 @@ def create_qlib_dataset(
             strict=True,
         )
     )
-    values = [
-        [float(value) for value in row]
-        for row in combined.select(*feature_names, "forward_return").rows()
-    ]
+    materialized = pit_nulls_as_nan(combined, feature_names)
+    value_columns = [*feature_names, "forward_return"]
+    values = []
+    for row in materialized.select(*value_columns).rows():
+        values.append([
+            float("nan") if value is None and name.startswith("pit_")
+            else float(value)
+            for name, value in zip(value_columns, row, strict=True)
+        ])
 
     try:
         import pandas as pd

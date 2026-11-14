@@ -22,8 +22,10 @@ class FakeDataset:
 class FakeBooster:
     def __init__(self, model_file=None):
         self.model_file = model_file
+        self.last_matrix = None
 
     def predict(self, matrix):
+        self.last_matrix = matrix
         return [0.05 + index * 0.01 for index in range(len(matrix))]
 
     def save_model(self, path):
@@ -133,7 +135,7 @@ def test_model_predicts_only_complete_rows_and_returns_model_scores(monkeypatch)
     assert result.height == 3
 
 
-def test_model_prediction_excludes_null_nan_and_infinite_feature_rows(monkeypatch):
+def test_model_prediction_allows_missing_pit_but_excludes_invalid_market_features(monkeypatch):
     fake_lightgbm(monkeypatch)
     model = LightGBMRegressionModel(
         booster=FakeBooster(),
@@ -147,7 +149,7 @@ def test_model_prediction_excludes_null_nan_and_infinite_feature_rows(monkeypatc
         label_fingerprint="c" * 64,
     )
     features = pl.DataFrame({
-        "signal_date": ["2024-01-19"] * 6,
+        "signal_date": ["2024-01-19"] * 8,
         "instrument": [
             "600000.SH",
             "000001.SZ",
@@ -155,15 +157,62 @@ def test_model_prediction_excludes_null_nan_and_infinite_feature_rows(monkeypatc
             "000002.SZ",
             "000003.SZ",
             "000004.SZ",
+            "000005.SZ",
+            "000006.SZ",
         ],
-        "return_5": [0.04, None, float("nan"), float("inf"), 0.03, float("-inf")],
-        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25],
+        "return_5": [0.04, None, float("nan"), float("inf"), 0.03, float("-inf"), 0.02, 0.01],
+        "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10, 0.25, None, float("nan")],
     })
 
     predictions = model.predict(features)
 
-    assert predictions["instrument"].to_list() == ["600000.SH", "000003.SZ"]
-    assert predictions["predicted_return"].to_list() == pytest.approx([0.05, 0.06])
+    assert predictions["instrument"].to_list() == [
+        "600000.SH", "000003.SZ", "000005.SZ"
+    ]
+    assert predictions["predicted_return"].to_list() == pytest.approx([0.05, 0.06, 0.07])
+    assert model.booster.last_matrix.shape == (3, 2)
+    assert model.booster.last_matrix[2, 1] != model.booster.last_matrix[2, 1]
+
+
+def test_fit_keeps_missing_pit_as_native_nan_but_excludes_missing_market_feature(monkeypatch):
+    features, labels = frames()
+    features = features.with_columns(
+        pl.when(pl.col("instrument") == "600000.SH")
+        .then(None)
+        .otherwise(pl.col("pit_roe"))
+        .alias("pit_roe"),
+        pl.when(pl.col("instrument") == "000001.SZ")
+        .then(None)
+        .otherwise(pl.col("return_5"))
+        .alias("return_5"),
+    )
+    decision = admitted(features, labels)
+    captured = {}
+
+    import sys
+    fake = SimpleNamespace(
+        Dataset=FakeDataset,
+        train=lambda params, dataset, num_boost_round: (
+            captured.update({"params": params, "dataset": dataset})
+            or FakeBooster()
+        ),
+        Booster=FakeBooster,
+    )
+    monkeypatch.setitem(sys.modules, "lightgbm", fake)
+
+    model = fit_lightgbm_regressor(
+        features=features,
+        labels=labels,
+        admission=decision,
+        config=LightGBMConfig(min_training_rows=1),
+    )
+
+    assert model.training_rows == 1
+    assert captured["dataset"].data.shape == (1, 2)
+    assert captured["dataset"].data[0, 0] == pytest.approx(0.01)
+    assert captured["dataset"].data[0, 1] != captured["dataset"].data[0, 1]
+    assert captured["params"]["use_missing"] is True
+    assert captured["params"]["zero_as_missing"] is False
 
 
 def test_model_save_load_checks_sidecar_checksum(tmp_path, monkeypatch):

@@ -361,3 +361,24 @@ the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 synthetic
 compatibility workflow passed 2 tests. Merge commit:
 `bec4a49de7427d862eda6c89df99d39e3288ec0a`. No optimizer fit, real-data
 training or empirical market backtest was performed.
+
+
+### Phase 9.20 — preserve missing PIT fundamentals with native missing values
+
+The earlier all-features-complete rule removed an otherwise eligible security
+when a strict ROE/net-profit fact was not yet available at that historical
+signal close. Model feature eligibility is now type-aware: all market-derived
+features must be non-null and finite, while a `pit_*` fundamental may remain
+null if no eligible fact was knowable then. Only true PIT nulls are transported
+as NaN to LightGBM; source NaN/Inf values remain invalid. Both direct and Qlib
+training/inference paths explicitly enable LightGBM native missing handling
+(`use_missing=true`, `zero_as_missing=false`), without zero-fill or
+forward-fill.
+
+Synthetic unit tests cover row eligibility and direct adapter matrices. The
+dedicated Python 3.12 Qlib 0.9.7 / LightGBM 4.7.0 compatibility workflow also
+verifies that Qlib preserves null PIT values through DatasetH learn/infer
+views and that the real LightGBM Dataset constructor accepts those NaNs; the
+optimizer remains stubbed. No real data, optimizer fit or market backtest is
+performed. This refines the all-feature-complete eligibility policy recorded
+under Phase 9.18.

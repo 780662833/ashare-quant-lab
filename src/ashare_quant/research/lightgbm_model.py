@@ -16,6 +16,10 @@ from ashare_quant.research.admission import (
     TrainingDatasetAdmission,
     _frame_fingerprint,
 )
+from ashare_quant.research.feature_eligibility import (
+    feature_eligibility_expression,
+    pit_nulls_as_nan,
+)
 
 _MODEL_SCHEMA_VERSION = 1
 _KEYS = ["signal_date", "instrument"]
@@ -84,7 +88,7 @@ class LightGBMRegressionModel:
     label_fingerprint: str
 
     def predict(self, features: pl.DataFrame) -> pl.DataFrame:
-        """Predict only rows with complete finite feature values."""
+        """Predict rows with finite market features and native-missing PIT values."""
         required = set(_KEYS).union(self.feature_columns)
         missing = required.difference(features.columns)
         if missing:
@@ -100,13 +104,9 @@ class LightGBMRegressionModel:
             pl.any_horizontal(pl.col("signal_date").is_null(), pl.col("instrument").is_null()).any()
         ).item():
             raise ValueError("Prediction features contain null keys")
-        complete_features = pl.all_horizontal(
-            *[
-                pl.col(name).is_not_null() & pl.col(name).is_finite()
-                for name in self.feature_columns
-            ]
+        frame = frame.filter(
+            feature_eligibility_expression(self.feature_columns)
         )
-        frame = frame.filter(complete_features)
         if frame.is_empty():
             return pl.DataFrame(
                 schema={
@@ -115,7 +115,10 @@ class LightGBMRegressionModel:
                     "predicted_return": pl.Float64,
                 }
             )
-        matrix = frame.select(*self.feature_columns).to_numpy()
+        # Only true PIT nulls become NaN. Technical features remain strictly
+        # complete, and non-null NaN/Inf source values are ineligible.
+        matrix_frame = pit_nulls_as_nan(frame, self.feature_columns)
+        matrix = matrix_frame.select(*self.feature_columns).to_numpy()
         values = self.booster.predict(matrix)
         predictions = [float(value) for value in values]
         if len(predictions) != frame.height or any(
@@ -247,23 +250,30 @@ def fit_lightgbm_regressor(
         raise ValueError("Labels do not satisfy the execution-aligned forward-return contract")
     _validate_execution_label_dates(labels)
 
-    joined = labels.join(features, on=_KEYS, how="inner")
+    joined = labels.join(features, on=_KEYS, how="inner").with_columns(
+        *[pl.col(name).cast(pl.Float64) for name in feature_columns],
+        pl.col("forward_return").cast(pl.Float64),
+    )
     joined = joined.filter(
         (pl.col("label_end_date").cast(pl.String) < admission.training_cutoff)
         & (pl.col("signal_date").cast(pl.String) < admission.training_cutoff)
     )
-    joined = joined.drop_nulls(subset=[*feature_columns, "forward_return"])
-    if joined.is_empty():
-        raise ValueError("No complete, mature feature/label rows are available for training")
     if joined.filter(
-        pl.any_horizontal(
-            *[
-                ~pl.col(name).cast(pl.Float64).is_finite()
-                for name in [*feature_columns, "forward_return"]
-            ]
-        )
+        pl.col("forward_return").is_null()
+        | (~pl.col("forward_return").is_finite())
     ).height:
-        raise ValueError("Training matrix contains non-finite feature or label values")
+        raise ValueError("Training labels contain null or non-finite values")
+    invalid_feature_values = pl.any_horizontal(
+        *[
+            pl.col(name).is_not_null() & (~pl.col(name).is_finite())
+            for name in feature_columns
+        ]
+    )
+    if joined.filter(invalid_feature_values).height:
+        raise ValueError("Training features contain non-finite values")
+    joined = joined.filter(feature_eligibility_expression(feature_columns))
+    if joined.is_empty():
+        raise ValueError("No eligible, mature feature/label rows are available for training")
     if joined.height < cfg.min_training_rows:
         raise ValueError(
             "Insufficient complete training rows: "
@@ -271,7 +281,7 @@ def fit_lightgbm_regressor(
         )
     import lightgbm as lgb
 
-    matrix = joined.select(*feature_columns).to_numpy()
+    matrix = pit_nulls_as_nan(joined, feature_columns).select(*feature_columns).to_numpy()
     target = joined["forward_return"].to_numpy()
     dataset = lgb.Dataset(matrix, label=target, feature_name=list(feature_columns))
     params = {
@@ -293,6 +303,8 @@ def fit_lightgbm_regressor(
         "num_threads": cfg.num_threads,
         "deterministic": True,
         "force_col_wise": True,
+        "use_missing": True,
+        "zero_as_missing": False,
         "verbosity": -1,
     }
     booster = lgb.train(params, dataset, num_boost_round=cfg.num_boost_round)

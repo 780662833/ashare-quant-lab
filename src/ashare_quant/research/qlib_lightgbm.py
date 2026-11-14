@@ -125,8 +125,25 @@ def _training_arrays(prepared: Any, feature_columns: tuple[str, ...]):
         raise ValueError("Qlib features, labels and index rows are not aligned")
     if matrix.shape[0] == 0:
         raise ValueError("Qlib train segment is empty")
-    if not np.isfinite(matrix).all() or not np.isfinite(target).all():
-        raise ValueError("Qlib training matrix contains null or non-finite values")
+    non_pit_indices = [
+        index for index, name in enumerate(feature_columns)
+        if not name.startswith("pit_")
+    ]
+    invalid_market_missing = (
+        bool(np.isnan(matrix[:, non_pit_indices]).any())
+        if non_pit_indices else False
+    )
+    if (
+        np.isinf(matrix).any()
+        or invalid_market_missing
+        or not np.isfinite(target).all()
+    ):
+        raise ValueError(
+            "Qlib training matrix contains infinite values or missing "
+            "market features/labels; only PIT NaN values are allowed"
+        )
+    # pandas/Qlib transports a true null PIT fact as np.nan. LightGBM's
+    # native missing-value handling consumes those values without imputation.
     return matrix, target, keys
 
 
@@ -198,6 +215,8 @@ def fit_qlib_lightgbm_regressor(
         "num_threads": cfg.num_threads,
         "deterministic": True,
         "force_col_wise": True,
+        "use_missing": True,
+        "zero_as_missing": False,
         "verbosity": -1,
     }
     booster = lgb.train(params, train_data, num_boost_round=cfg.num_boost_round)
@@ -281,8 +300,19 @@ def predict_qlib_lightgbm_regressor(
         )
     import numpy as np
 
-    if not np.isfinite(matrix).all():
-        raise ValueError("Qlib inference matrix contains null or non-finite values")
+    non_pit_indices = [
+        index for index, name in enumerate(model.feature_columns)
+        if not name.startswith("pit_")
+    ]
+    invalid_market_missing = (
+        bool(np.isnan(matrix[:, non_pit_indices]).any())
+        if non_pit_indices else False
+    )
+    if np.isinf(matrix).any() or invalid_market_missing:
+        raise ValueError(
+            "Qlib inference matrix contains infinite values or missing "
+            "market features; only PIT NaN values are allowed"
+        )
     if any(signal_date < model.training_cutoff for signal_date, _ in keys):
         raise ValueError("Qlib inference segment contains a row before the model cutoff")
 

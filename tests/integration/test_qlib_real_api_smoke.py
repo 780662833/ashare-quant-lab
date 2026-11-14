@@ -18,7 +18,11 @@ from ashare_quant.research.qlib_lightgbm import (
 class SyntheticBooster:
     """Prediction stub; this smoke test must never fit a real model."""
 
+    def __init__(self):
+        self.last_matrix = None
+
     def predict(self, matrix):
+        self.last_matrix = matrix
         return [0.01 + 0.01 * index for index in range(len(matrix))]
 
 
@@ -32,7 +36,7 @@ def _admitted_synthetic_frames():
             ],
             "instrument": ["000001.SZ", "000002.SZ", "000003.SZ"],
             "return_5": [0.02, -0.01, 0.03],
-            "pit_roe": [0.10, 0.12, 0.08],
+            "pit_roe": [0.10, None, 0.08],
         }
     )
     labels = pl.DataFrame(
@@ -69,7 +73,7 @@ def _admitted_synthetic_frames():
             "signal_date": ["2024-01-19", "2024-01-19"],
             "instrument": ["000004.SZ", "600000.SH"],
             "return_5": [0.04, 0.01],
-            "pit_roe": [0.15, 0.09],
+            "pit_roe": [None, 0.09],
         }
     )
     return features, labels, admission, inference_features
@@ -117,7 +121,8 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
 
     train_features = train["feature"].to_numpy(dtype=np.float64)
     train_labels = train["label"]["forward_return"].to_numpy(dtype=np.float64)
-    assert np.isfinite(train_features).all()
+    assert np.isfinite(train_features[:, 0]).all()
+    assert np.isnan(train_features[:, 1]).tolist() == [False, True]
     assert np.isfinite(train_labels).all()
 
     # Keep the real Qlib and LightGBM Dataset APIs, but replace only the final
@@ -142,6 +147,8 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
     assert captured["dataset"].num_feature() == 2
     assert captured["dataset"].get_feature_name() == ["return_5", "pit_roe"]
     assert captured["num_boost_round"] == 3
+    assert captured["params"]["use_missing"] is True
+    assert captured["params"]["zero_as_missing"] is False
 
     valid = dataset_bundle.prepare(
         "valid",
@@ -156,6 +163,7 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
         "000004.SZ",
         "600000.SH",
     ]
+    assert valid["pit_roe"].isna().tolist() == [True, False]
 
     # The returned model carries a synthetic prediction-only Booster.
     predictions = predict_qlib_lightgbm_regressor(
@@ -168,3 +176,4 @@ def test_real_qlib_dataseth_prepare_and_lightgbm_dataset_contract(monkeypatch):
         {"signal_date": "2024-01-19", "instrument": "600000.SH"},
     ]
     assert predictions["predicted_return"].to_list() == [0.01, 0.02]
+    assert np.isnan(model.booster.last_matrix[0, 1])
