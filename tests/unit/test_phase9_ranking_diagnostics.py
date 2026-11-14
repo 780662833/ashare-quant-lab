@@ -117,7 +117,9 @@ def test_validation_ranking_rejects_duplicate_prediction_keys():
 
 def test_validation_ranking_returns_empty_diagnostics_when_no_labels_match():
     predictions, labels = _frames()
-    labels = labels.with_columns(pl.lit("600000.SH").alias("instrument"))
+    labels = labels.with_columns(
+        pl.Series("instrument", ["600000.SH", "600001.SH", "600002.SH"])
+    )
     diagnostics, report = evaluate_validation_ranking(
         predictions,
         labels,
