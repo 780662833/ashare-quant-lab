@@ -59,6 +59,21 @@ random or harmless. They must not be used to tune a model repeatedly against
 the same validation windows. Final strategy quality remains determined by
 untouched test windows and the shared cost/fill-aware backtest.
 
+## Untouched test/OOS coverage
+
+The fold runner also evaluates the test feature frame with
+`evaluate_feature_coverage(...)`. This separate path has no label parameter
+and reports only per-signal-date PIT-universe rows, eligible prediction rows,
+per-item and any-PIT-missing prediction rates, and Top-N missingness. It does
+not calculate forward-return or outcome-group metrics and cannot read test
+labels.
+
+These records are persisted as test_feature_coverage.parquet and summarized in
+the test_feature_coverage section of the aggregate report. The corresponding
+validation_feature_missingness.parquet remains the only artifact with matured
+validation outcome comparisons. Keeping the two artifacts separate makes the
+OOS no-label boundary auditable.
+
 ## Deferred metadata dimensions
 
 The validated ResearchDataBundle currently carries point-in-time membership
