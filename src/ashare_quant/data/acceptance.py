@@ -1,6 +1,8 @@
 """Four-gate, fail-closed acceptance of a local CNEquity research lake."""
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import date, datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -323,6 +325,10 @@ def run_acceptance(
     # Deliberately remains false even on PASS: training integration must
     # consume and verify this report in a separate, explicit change.
     report["training_dataset_unlocked"] = False
+    canonical = json.dumps(
+        report, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str
+    ).encode("utf-8")
+    report["report_id"] = hashlib.sha256(canonical).hexdigest()
     return report
 
 
