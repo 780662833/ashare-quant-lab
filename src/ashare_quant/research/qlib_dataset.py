@@ -18,8 +18,6 @@ from ashare_quant.research.admission import (
 )
 
 _KEYS = ["signal_date", "instrument"]
-_RESERVED = {"signal_date", "instrument", "label_end_date", "forward_return"}
-
 
 def _iso_date(value: Any, field: str) -> str:
     if not isinstance(value, str):
@@ -129,7 +127,7 @@ def create_qlib_dataset(
         if current[0] <= previous[1]:
             raise ValueError("Qlib dataset segments must not overlap")
 
-    index, feature_names, targets = build_qlib_panel_rows(
+    index, feature_names, _targets = build_qlib_panel_rows(
         features=features, labels=labels, admission=admission
     )
     try:
