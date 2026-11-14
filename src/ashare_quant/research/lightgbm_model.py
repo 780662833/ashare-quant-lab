@@ -263,6 +263,14 @@ def fit_lightgbm_regressor(
         | (~pl.col("forward_return").is_finite())
     ).height:
         raise ValueError("Training labels contain null or non-finite values")
+    invalid_feature_values = pl.any_horizontal(
+        *[
+            pl.col(name).is_not_null() & (~pl.col(name).is_finite())
+            for name in feature_columns
+        ]
+    )
+    if joined.filter(invalid_feature_values).height:
+        raise ValueError("Training features contain non-finite values")
     joined = joined.filter(feature_eligibility_expression(feature_columns))
     if joined.is_empty():
         raise ValueError("No eligible, mature feature/label rows are available for training")
