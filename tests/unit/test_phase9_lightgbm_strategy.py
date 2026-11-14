@@ -147,15 +147,16 @@ def test_model_prediction_excludes_null_nan_and_infinite_feature_rows(monkeypatc
         label_fingerprint="c" * 64,
     )
     features = pl.DataFrame({
-        "signal_date": ["2024-01-19"] * 5,
+        "signal_date": ["2024-01-19"] * 6,
         "instrument": [
             "600000.SH",
             "000001.SZ",
             "600519.SH",
             "000002.SZ",
             "000003.SZ",
+            "000004.SZ",
         ],
-        "return_5": [0.04, None, float("nan"), float("inf"), 0.03],
+        "return_5": [0.04, None, float("nan"), float("inf"), 0.03, float("-inf")],
         "pit_roe": [0.15, 0.20, 0.30, 0.40, 0.10],
     })
 
