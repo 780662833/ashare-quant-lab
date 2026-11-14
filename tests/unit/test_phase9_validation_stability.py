@@ -34,6 +34,7 @@ def _inputs():
             "prediction_rows": 8,
             "matched_labeled_rows": 8,
             "label_coverage_rate": 1.0,
+            "evaluated_signal_date_count": 2,
         },
         {
             "status": "evaluated",
@@ -42,6 +43,7 @@ def _inputs():
             "prediction_rows": 12,
             "matched_labeled_rows": 10,
             "label_coverage_rate": 10 / 12,
+            "evaluated_signal_date_count": 2,
         },
     ]
     return diagnostics, reports
@@ -56,6 +58,7 @@ def _policy(**overrides):
         "minimum_mean_spearman_rank_ic": 0.1,
         "minimum_positive_spearman_rank_ic_ratio": 0.7,
         "minimum_positive_top_n_excess_fold_ratio": 0.5,
+        "minimum_positive_rank_ic_fold_ratio": 0.5,
         "minimum_rank_icir": 0.5,
         "minimum_mean_top_n_excess_forward_return": -0.01,
     }
@@ -82,6 +85,7 @@ def test_cross_fold_validation_stability_applies_explicit_policy():
     assert summary["label_coverage_rate"] == pytest.approx(18 / 20)
     assert summary["mean_spearman_rank_ic"] == pytest.approx(0.15)
     assert summary["positive_spearman_rank_ic_ratio"] == pytest.approx(0.75)
+    assert summary["positive_rank_ic_fold_ratio"] == pytest.approx(1.0)
     assert summary["positive_top_n_excess_fold_ratio"] == pytest.approx(0.5)
     assert summary["rank_icir"] is not None
     assert all(item["passed"] for item in summary["criteria"].values())
@@ -98,6 +102,23 @@ def test_cross_fold_validation_policy_rejects_weak_ranking():
     assert summary["decision"] == "REJECTED"
     assert "minimum_mean_spearman_rank_ic" in summary["failed_criteria"]
     assert summary["criteria"]["minimum_mean_spearman_rank_ic"]["status"] == "FAIL"
+
+
+
+def test_cross_fold_validation_policy_checks_positive_ic_fold_consistency():
+    diagnostics, reports = _inputs()
+    diagnostics[1] = diagnostics[1].with_columns(
+        pl.Series("spearman_rank_ic", [-0.3, -0.1])
+    )
+    summary = summarize_validation_stability(
+        diagnostics,
+        reports,
+        policy=_policy(minimum_positive_rank_ic_fold_ratio=0.75),
+    )
+
+    assert summary["positive_rank_ic_fold_ratio"] == pytest.approx(0.5)
+    assert summary["decision"] == "REJECTED"
+    assert "minimum_positive_rank_ic_fold_ratio" in summary["failed_criteria"]
 
 
 def test_cross_fold_validation_policy_fails_closed_on_insufficient_folds():
