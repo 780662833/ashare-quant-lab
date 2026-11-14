@@ -568,3 +568,28 @@ def test_real_qlib_walk_forward_pipeline_on_synthetic_bundle(monkeypatch):
     assert result.aggregate_report["training_dataset_unlocked"] is False
     assert result.aggregate_report["model_training_performed"] is True
     assert result.aggregate_report["validation_ranking"]["folds_with_mature_validation_labels"] == len(result.folds)
+
+
+
+def test_walk_forward_model_runner_rejects_labels_without_execution_entry_date():
+    inputs = make_bundle_inputs()
+    bundle = build_research_data_bundle(**inputs)
+    with pytest.raises(
+        ValueError,
+        match="execution-aligned forward-return label contract",
+    ):
+        run_walk_forward_cross_sectional_model(
+            bundle,
+            acceptance_report=inputs["acceptance_report"],
+            features=pl.DataFrame(
+                schema={"signal_date": pl.String, "instrument": pl.String}
+            ),
+            labels=pl.DataFrame(
+                schema={
+                    "signal_date": pl.String,
+                    "instrument": pl.String,
+                    "label_end_date": pl.String,
+                    "forward_return": pl.Float64,
+                }
+            ),
+        )
