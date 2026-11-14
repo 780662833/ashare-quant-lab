@@ -41,6 +41,7 @@ class QlibDatasetBundle:
     feature_columns: tuple[str, ...]
     segment_bounds: Mapping[str, tuple[str, str]]
     training_rows: int | None = None
+    label_entry_contract_verified: bool = False
 
     def prepare(self, *args: Any, **kwargs: Any) -> Any:
         """Delegate the Qlib DatasetH prepare interface."""
@@ -297,4 +298,5 @@ def create_qlib_dataset(
         feature_columns=tuple(feature_names),
         segment_bounds=dict(normalized),
         training_rows=len(index),
+        label_entry_contract_verified=True,
     )
