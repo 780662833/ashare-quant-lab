@@ -68,7 +68,9 @@ def valid_report():
         "receipts": {
             "historical_universe": {"replayable": True},
             "hfq": {"replayable": True},
-            "pit": {"replayable": True},
+            "pit": {"replayable": True, "receipt_id": "pit-acceptance", "dependencies": {
+                "financial_statement_items": {"revision_id": "rev-pit", "contract_fingerprint": "sha-pit"}
+            }},
         },
         "gates": [
             {"name": "historical_universe", "status": "PASS",
