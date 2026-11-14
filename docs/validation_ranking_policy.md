@@ -27,7 +27,8 @@ default thresholds. A caller must explicitly construct
   weekly Rank IC observations above zero.
 - `minimum_positive_top_n_excess_fold_ratio`: minimum fraction of folds with
   positive mean Top-N excess against that fold's labeled validation universe.
-- Optional `minimum_rank_icir` and
+- Optional `minimum_positive_rank_ic_fold_ratio`,
+  `minimum_rank_icir` and
   `minimum_mean_top_n_excess_forward_return` thresholds.
 
 The supplied policy is serialized into the aggregate report and each fold's
