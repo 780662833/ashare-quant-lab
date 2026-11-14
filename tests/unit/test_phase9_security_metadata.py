@@ -573,3 +573,22 @@ def test_empty_coverage_audit_requires_explicit_signal_and_decision_time():
     )
     assert report["status"] == "FAIL"
     assert report["signal_date"] == "2024-01-05"
+
+
+def test_coverage_audit_rejects_unregistered_metadata_fields():
+    selected = select(
+        [observation(
+            "listing_date",
+            effective_from="2020-03-10",
+            effective_to=None,
+            available_at="2020-03-10T23:59:59+08:00",
+            value_date="2020-03-10",
+        )],
+        fields=("listing_date",),
+    )
+    with pytest.raises(ValueError, match="unsupported security metadata fields"):
+        audit_security_metadata_coverage(
+            selected,
+            instruments=("600000.SH",),
+            fields=("listing_date", "unknown_metadata"),
+        )
