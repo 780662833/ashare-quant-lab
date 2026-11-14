@@ -98,6 +98,7 @@ def frames():
     labels = pl.DataFrame({
         "signal_date": ["2024-01-05", "2024-01-05"],
         "instrument": ["600000.SH", "000001.SZ"],
+        "label_entry_date": ["2024-01-08", "2024-01-08"],
         "label_end_date": ["2024-01-12", "2024-01-12"],
         "forward_return": [0.03, -0.01],
     })
@@ -268,3 +269,15 @@ def test_admission_accepts_valid_execution_label_entry_date():
     )
     result = admit(labels=labels)
     assert result.admitted is True
+
+
+
+def test_admission_requires_explicit_execution_entry_date():
+    features, labels = frames()
+    legacy_labels = labels.drop("label_entry_date")
+    result = admit(labels=legacy_labels)
+    assert result.admitted is False
+    assert any(
+        "label_entry_date" in reason
+        for reason in result.rejection_reasons
+    )
