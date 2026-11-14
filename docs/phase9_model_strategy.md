@@ -105,6 +105,13 @@ model on the admitted training window, predicts validation rows, then rechecks
 label maturity and refits on train+validation before producing test-only
 predictions. Test targets run through the same backtest engine. CI uses only a
 fake LightGBM module and synthetic bundles; no empirical result is claimed.
-Remaining Phase 9 work is durable model/prediction artifact persistence and a
-matched model-versus-momentum comparison on identical folds, costs and
-execution rules.
+Model and momentum are evaluated from the same pre-test baseline NAV, with
+only test-window signals executed and identical BacktestConfig applied to
+both. The model runner records per-fold excess returns and benchmark-linked
+returns; these remain descriptive until a real, accepted data run is performed.
+
+`persist_walk_forward_model_run(...)` writes the final Booster for each fold,
+model/benchmark predictions and ledgers, admissions, configs and provenance.
+`verify_walk_forward_model_run(...)` checks the artifact inventory and SHA-256
+checksums without loading or fitting a model. These persistence APIs have only
+been exercised with synthetic fake-Booster artifacts.
