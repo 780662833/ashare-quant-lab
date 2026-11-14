@@ -89,7 +89,10 @@ def _fixtures():
         "receipts": {
             "historical_universe": {"replayable": True, "receipt_id": "universe-acceptance"},
             "hfq": {"replayable": True, "receipt_id": "hfq-acceptance"},
-            "pit": {"replayable": True, "receipt_id": "pit-acceptance"},
+            "pit": {"replayable": True, "receipt_id": "pit-acceptance",
+                    "dependencies": {"financial_statement_items": {
+                        "revision_id": "pit-r1", "contract_fingerprint": "pit-contract"
+                    }}},
         },
     }
     counts = {
