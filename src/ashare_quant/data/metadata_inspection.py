@@ -96,7 +96,7 @@ def _symbol_diagnostics(frame: pl.DataFrame) -> dict[str, Any]:
         "invalid_format_rows": invalid.height,
         "invalid_format_sample": invalid.get_column("symbol").cast(pl.String).head(20).to_list(),
         "exchange_suffix_counts": (
-            pl.DataFrame({"suffix": suffix})
+            pl.DataFrame({"suffix": suffix.to_list()})
             .group_by("suffix")
             .agg(pl.len().alias("rows"))
             .sort("suffix")
