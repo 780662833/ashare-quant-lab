@@ -356,7 +356,7 @@ def test_pit_features_reject_noncanonical_or_future_report_period(bad_period):
             (pl.col("instrument") == "600000.SH")
             & (pl.col("item") == "roe")
             & (pl.col("report_period") == "2023-12-31")
-        ).then(bad_period).otherwise(pl.col("report_period")).alias("report_period")
+        ).then(pl.lit(bad_period)).otherwise(pl.col("report_period")).alias("report_period")
     )
     with pytest.raises(ValueError, match="report_period"):
         build_cross_sectional_features(
