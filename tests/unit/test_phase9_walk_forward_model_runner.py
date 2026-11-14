@@ -32,6 +32,10 @@ class FakeBooster:
     def predict(self, matrix):
         return [0.02 + index * 0.001 for index in range(len(matrix))]
 
+    def save_model(self, path):
+        from pathlib import Path
+        Path(path).write_text("synthetic-fake-booster", encoding="utf-8")
+
 
 def fake_lightgbm(monkeypatch):
     import sys
@@ -176,7 +180,7 @@ def make_bundle_inputs(count=70):
     }
 
 
-def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkeypatch):
+def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkeypatch, tmp_path):
     fake_lightgbm(monkeypatch)
     inputs = make_bundle_inputs()
     report = inputs["acceptance_report"]
@@ -213,28 +217,25 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
         horizon_sessions=5,
     )
 
+    walk_config = WalkForwardConfig(
+        min_train_sessions=20, validation_sessions=5, test_sessions=10,
+        step_sessions=10, label_horizon_sessions=5, embargo_sessions=1,
+    )
+    learner_config = LightGBMConfig(
+        num_boost_round=2, min_training_rows=2, num_leaves=3, min_data_in_leaf=1,
+    )
+    execution_config = BacktestConfig(initial_cash=100_000, top_n=2)
+    momentum_config = MomentumConfig(top_n=2, lookback_sessions=8, skip_recent_sessions=2)
     result = run_walk_forward_cross_sectional_model(
         bundle,
         acceptance_report=report,
         features=features,
         labels=labels,
-        walk_forward_config=WalkForwardConfig(
-            min_train_sessions=20,
-            validation_sessions=5,
-            test_sessions=10,
-            step_sessions=10,
-            label_horizon_sessions=5,
-            embargo_sessions=1,
-        ),
-        model_config=LightGBMConfig(
-            num_boost_round=2,
-            min_training_rows=2,
-            num_leaves=3,
-            min_data_in_leaf=1,
-        ),
-        backtest_config=BacktestConfig(initial_cash=100_000, top_n=2),
+        walk_forward_config=walk_config,
+        model_config=learner_config,
+        backtest_config=execution_config,
         top_n=2,
-        benchmark_config=MomentumConfig(top_n=2, lookback_sessions=8, skip_recent_sessions=2),
+        benchmark_config=momentum_config,
     )
 
     assert len(result.folds) >= 2
@@ -256,6 +257,26 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert result.oos_daily.height == sum(item.fold.test_sessions for item in result.folds)
     assert result.benchmark_oos_daily.height == result.oos_daily.height
     assert "mean_fold_excess_return" in result.aggregate_report
+
+    saved = persist_walk_forward_model_run(
+        result,
+        root=tmp_path / "phase9-model-run",
+        experiment_id="phase9-synthetic-run",
+        repository_commit="a" * 40,
+        walk_forward_config=walk_config,
+        model_config=learner_config,
+        backtest_config=execution_config,
+        benchmark_config=momentum_config,
+        top_n=2,
+    )
+    verified = verify_walk_forward_model_run(saved)
+    assert verified["verified"] is True
+    assert verified["fold_count"] == len(result.folds)
+    manifest = verified["manifest"]
+    artifact = saved / manifest["artifacts"][0]["path"]
+    artifact.write_bytes(artifact.read_bytes() + b"tamper")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        verify_walk_forward_model_run(saved)
 
 
 def test_walk_forward_model_runner_rejects_bundle_acceptance_identity_mismatch(monkeypatch):
