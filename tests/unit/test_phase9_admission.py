@@ -31,10 +31,7 @@ def valid_provenance(report):
         "source_revisions": identities,
         "source_receipts": receipts,
         "receipt_provenance": {"dependency_identities": observed},
-        "acceptance_source_receipts": {
-            "historical_universe": {"replayable": True},
-            "hfq": {"replayable": True},
-        },
+        "acceptance_source_receipts": dict(report["receipts"]),
         "limit_evidence": {
             "source_revision_identity": identities["price_limit_rules"],
             "revision": "rev-limits",
@@ -51,6 +48,11 @@ def valid_report():
         "window": {"start": "2024-01-01", "end": "2024-04-30"},
         "profile": "cn_a_sh_sz_research_v1",
         "pit_items": ["roe", "net_profit"],
+        "receipts": {
+            "historical_universe": {"replayable": True},
+            "hfq": {"replayable": True},
+            "pit": {"replayable": True},
+        },
         "gates": [
             {"name": "historical_universe", "status": "PASS",
              "supported_window": {"start": "2018-01-01", "end": "2026-12-31"}},
@@ -193,3 +195,27 @@ def test_invalid_date_and_invalid_horizon_are_rejected():
             training_cutoff="2024-01-15", universe_profile=report["profile"],
             label_horizon_sessions=0,
         )
+
+
+def test_missing_or_mismatched_pit_receipt_blocks_training_admission():
+    report = valid_report()
+    report["receipts"].pop("pit")
+    result = admit(report=report)
+    assert result.admitted is False
+    assert any("pit receipt" in reason for reason in result.rejection_reasons)
+
+    report = valid_report()
+    provenance = valid_provenance(report)
+    provenance["acceptance_source_receipts"]["pit"] = {"replayable": False}
+    result = admit_training_dataset(
+        acceptance_report=report,
+        source_provenance=provenance,
+        features=frames()[0],
+        labels=frames()[1],
+        start_date="2024-01-01",
+        end_date="2024-04-30",
+        training_cutoff="2024-01-15",
+        universe_profile=report["profile"],
+    )
+    assert result.admitted is False
+    assert any("acceptance receipts do not match" in reason for reason in result.rejection_reasons)

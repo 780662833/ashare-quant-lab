@@ -160,6 +160,15 @@ def _validate_acceptance(
     if not isinstance(report.get("report_id"), str) or not report["report_id"].strip():
         reasons.append("acceptance report requires a stable non-empty report_id")
 
+    receipts = report.get("receipts")
+    if not isinstance(receipts, Mapping):
+        reasons.append("acceptance report requires structured source receipts")
+        receipts = {}
+    for receipt_name in ("historical_universe", "hfq", "pit"):
+        receipt = receipts.get(receipt_name)
+        if not isinstance(receipt, Mapping) or receipt.get("replayable") is not True:
+            reasons.append(f"acceptance report {receipt_name} receipt is missing or not replayable")
+
     try:
         validate_experiment_provenance(source_provenance)
     except (TypeError, ValueError) as exc:
@@ -171,6 +180,8 @@ def _validate_acceptance(
             reasons.append("source provenance acceptance window does not match report")
         if source_provenance.get("universe_profile") != universe_profile:
             reasons.append("source provenance universe profile does not match")
+        if source_provenance.get("acceptance_source_receipts") != dict(receipts):
+            reasons.append("source provenance acceptance receipts do not match the report")
     return reasons
 
 
