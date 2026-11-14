@@ -31,10 +31,7 @@ def valid_provenance(report):
         "source_revisions": identities,
         "source_receipts": receipts,
         "receipt_provenance": {"dependency_identities": observed},
-        "acceptance_source_receipts": {
-            "historical_universe": {"replayable": True},
-            "hfq": {"replayable": True},
-        },
+        "acceptance_source_receipts": dict(report["receipts"]),
         "limit_evidence": {
             "source_revision_identity": identities["price_limit_rules"],
             "revision": "rev-limits",
@@ -51,6 +48,11 @@ def valid_report():
         "window": {"start": "2024-01-01", "end": "2024-04-30"},
         "profile": "cn_a_sh_sz_research_v1",
         "pit_items": ["roe", "net_profit"],
+        "receipts": {
+            "historical_universe": {"replayable": True},
+            "hfq": {"replayable": True},
+            "pit": {"replayable": True},
+        },
         "gates": [
             {"name": "historical_universe", "status": "PASS",
              "supported_window": {"start": "2018-01-01", "end": "2026-12-31"}},
