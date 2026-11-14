@@ -4,6 +4,10 @@ from ashare_quant.research.benchmark import MomentumBenchmarkRun, run_momentum_b
 from ashare_quant.research.features import CrossSectionalFeatureConfig, build_cross_sectional_features
 from ashare_quant.research.labels import build_forward_return_labels
 from ashare_quant.research.ranking_diagnostics import evaluate_validation_ranking
+from ashare_quant.research.validation_stability import (
+    ValidationRankingAcceptancePolicy,
+    summarize_validation_stability,
+)
 from ashare_quant.research.admission import TrainingDatasetAdmission, admit_training_dataset
 from ashare_quant.research.lightgbm_model import LightGBMConfig, LightGBMRegressionModel, fit_lightgbm_regressor
 from ashare_quant.research.model_experiment_store import (
@@ -69,6 +73,9 @@ __all__ = [
     "CrossSectionalFeatureConfig",
     "build_cross_sectional_features",
     "build_forward_return_labels",
+    "evaluate_validation_ranking",
+    "ValidationRankingAcceptancePolicy",
+    "summarize_validation_stability",
     "evaluate_validation_ranking",
     "TrainingDatasetAdmission",
     "admit_training_dataset",
