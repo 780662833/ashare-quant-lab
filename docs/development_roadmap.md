@@ -39,10 +39,12 @@ branch is not part of `main` until GitHub reports it merged.
 | 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
 | 8 | Walk-forward runner, artifact persistence, verification and comparison | Merged in PR #13, #15, #16, #29, #30, #31 and #32 | Cutoff-isolated momentum folds; price-limit audit bound to assembled evidence rows and rule revision; experiment persistence/verification bound to structured adapter receipts; builder-only bundle admission at benchmark and walk-forward entry points; no model fitting |
 | 9.1 | Cross-sectional feature and forward-label contracts | Merged in PR #58 | Weekly as-of features: 5/20/60/120-session HFQ returns, rolling volatility, raw amount/volume activity and strict PIT ROE/net-profit; exact 5-session forward-return labels carry label_end_date. Synthetic tests cover future-publication isolation, missing-session nulls and signal-date membership. |
-| 9.2 | Training dataset admission and PIT source binding | Implemented in PR #59 and extended in PR under review | Fail-closed exact-window/profile acceptance, replayable universe/HFQ/PIT receipts, pinned financial_statement_items adapter revision, conservative announcement-date availability, numeric features and label maturity before cutoff. The acceptance report remains training_dataset_unlocked=false. |
+| 9.2 | Training dataset admission and PIT source binding | Merged in PR #59 and #63 | Fail-closed exact-window/profile acceptance, replayable universe/HFQ/PIT receipts, pinned financial_statement_items adapter revision, conservative announcement-date availability, numeric features and label maturity before cutoff. The acceptance report remains training_dataset_unlocked=false. |
 | 9.3 | LightGBM adapter and weekly model target strategy | Merged in PR #60 | Deterministic LightGBM fit/predict/save/load requires a matching admission decision and exact feature/label fingerprints. Weekly predictions become Top-20 equal-weight target weights through the shared engine. No real model fit has been run. |
 | 9.4 | Walk-forward model runner and matched momentum comparison | Merged in PR #61 | Per fold: train-only admission/fit, validation prediction, label-maturity re-admission/refit on train+validation, test-only predictions. Model and momentum reset to the same baseline NAV and use identical costs/execution settings. CI uses fake LightGBM and synthetic bundles; no real training or empirical run. |
 | 9.5 | Model experiment persistence and verification | Merged in PR #62 | Persist per-fold Booster, feature/label predictions, targets, benchmark and model ledgers, admissions, provenance and config; verify SHA-256 inventory and model metadata. No real model artifacts generated. |
+| 9.6 | Optional Qlib DatasetH bridge | Merged in PR #64–#66 | Lazy Qlib bridge for admission-checked Polars features/labels, `(datetime, instrument)` index, feature/label groups and chronological segments. Synthetic-only conversion tests. |
+| 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Implemented in PR under review | Walk-forward runner now builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. Synthetic adapter/runner tests only; real Qlib 3.12 verification, real training and backtest remain blocked. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -132,8 +134,9 @@ windows. No data assembly, scheduler or model-training unlock is added. See
 - No random time-series splitting.
 - No train or validation row may use a fact published after its simulated
   decision timestamp.
-- Qlib may be reused for dataset/model workflow where its API fits; LightGBM
-  provides the first model.
+- Qlib `DatasetH` is the primary research dataset interface and segment
+  selector; LightGBM is the single cross-sectional five-session return
+  regressor. No second model family is introduced.
 - The model uses the same target-weight interface, engine, cost settings and
   report as momentum.
 - Phase 9 admission verifies the exact acceptance window/profile, all five
@@ -142,7 +145,13 @@ windows. No data assembly, scheduler or model-training unlock is added. See
   schema/keys and label maturity before the fold cutoff.
 - The acceptance report and bundle provenance retain
   `training_dataset_unlocked=false`; the model runner consumes a successful
-  per-fold admission object before each explicit LightGBM fit.
+  per-fold admission object before constructing a Qlib dataset or fitting.
+- The project's fold planner owns label-horizon purge and embargo. Qlib
+  receives those approved boundaries as `DatasetH` segments; it does not
+  weaken or replace admission.
+- Python 3.13 remains the main development environment. Qlib/pandas remain
+  optional and lazy; real Qlib API compatibility must be checked in a separate
+  Python 3.12 environment without changing the project's base interpreter.
 
 ### Phase 9.6 — optional Qlib DatasetH bridge (merged in PR #64; CI test correction in PR #65)
 
