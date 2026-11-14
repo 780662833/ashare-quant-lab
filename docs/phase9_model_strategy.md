@@ -68,21 +68,21 @@ The builder compares it with the signal-date close cutoff (16:00
 Asia/Shanghai), then selects the latest known report for each instrument/item.
 A report period is never treated as its publication timestamp.
 
-## Training admission — not yet implemented
+## Training admission — implemented, model fitting still gated
 
-The feature and label builders do not authorize training. A separate
-training-dataset admission component must require all four gates to PASS for
-the exact same requested window, universe profile and source revisions:
+`admit_training_dataset(...)` is a pure, fail-closed decision function. It
+requires an exact acceptance window and universe profile, a stable acceptance
+report ID, matching replayable source revisions/receipts, and PASS status for
+the five report evidence entries: historical universe, replayable universe
+receipt, HFQ, strict PIT fundamentals and trading status. It also validates
+numeric feature columns, unique signal/instrument keys, feature/label key
+alignment and strict label maturity before the training cutoff.
 
-1. Historical universe and survivorship.
-2. HFQ adjustment and revision-bound diagnostics.
-3. Strict PIT fundamentals and symbol/item coverage.
-4. Trading status and execution-state evidence.
-
-The builder must bind the acceptance report ID, source receipts/revisions,
-coverage audits, feature schema/version, label definition and fold identity to
-the resulting dataset. training_dataset_unlocked remains false until that
-component is implemented and tested. No LightGBM fit is permitted before it.
+The admission object is auditable evidence, not a model object and not a
+training command. The acceptance report and provenance continue to carry
+`training_dataset_unlocked=false`. A dedicated model runner must consume the
+admission decision and enforce it before any LightGBM fit. No training has been
+started.
 
 ## Delivery sequence
 
