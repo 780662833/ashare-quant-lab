@@ -390,3 +390,35 @@ DatasetH learn/inference views and LightGBM Dataset construction, while
 stubbing `lightgbm.train`; no optimizer fit, real-data training, local
 data-lake access or empirical market backtest was performed. Merge commit:
 `3b60cd624bc1e3dfcafddb8a2e46b80ea7091a14`.
+
+### Phase 9.21 — diagnose PIT missingness and Top-20 coverage
+
+The walk-forward runner now emits post-prediction validation diagnostics by
+PIT item and for the combined any-PIT-missing group. Reports separate the
+full signal-date PIT-universe denominator from the market-feature-eligible
+prediction denominator, then measure Top-20 missingness and compare prediction
+scores plus matured validation returns for missing versus observed PIT groups.
+Validation labels are accepted only after maturity strictly before the fold's
+test start; these diagnostics are descriptive and never tune the model.
+
+Untouched test/OOS folds use a separate label-free coverage path. It accepts
+only the full feature frame and keyed predictions, and reports per-date
+universe/prediction coverage plus Top-20 PIT missingness. It has no label
+argument and emits no return/outcome metrics. Validation outcome diagnostics
+and test/OOS coverage are persisted as separate Parquet artifacts and are
+summarized separately in fold and aggregate reports.
+
+Market-cap, listing-age and industry slices are explicitly deferred because
+the canonical validated bundle does not yet carry receipt-backed,
+point-in-time metadata with historical effective dates. No instrument-code or
+price/turnover proxy is inferred.
+
+PR #81 is merged. Final-head GitHub Actions: 351 unit tests passed, 2 skipped;
+the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 real-API
+compatibility workflow passed 2 synthetic tests. The compatibility workflow
+exercised the Qlib DatasetH and LightGBM bridge with the final validation/OOS
+diagnostic integration; it did not run LightGBM optimization or fit a model.
+No local data-lake access, CNEquity queries/backfills, real-data training or
+empirical market backtest was performed. Merge commit:
+`c5667a06c5209a118c6ef67a7f58791cba479253`.
+
