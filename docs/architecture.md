@@ -115,6 +115,9 @@ flowchart TD
 - LightGBM is the single cross-sectional regression model. It reads Qlib's
   learn view for fitting and infer view for keyed predictions; project-owned
   Top-20 equal-weight target generation remains downstream.
+- All fit boundaries recheck the execution-aligned label contract:
+  the direct LightGBM adapter and Qlib panel conversion require canonical
+  signal, entry and maturity dates in strict order before any optimizer call.
 - Walk-forward purge calculations distinguish the one-session next-open
   entry lag from the open-to-open holding horizon; maturity dates include both
   before adding the configured embargo. Validation predictions are evaluated
