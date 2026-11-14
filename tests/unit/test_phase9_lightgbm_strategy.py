@@ -51,6 +51,7 @@ def frames():
     labels = pl.DataFrame({
         "signal_date": ["2024-01-05", "2024-01-05"],
         "instrument": ["600000.SH", "000001.SZ"],
+        "label_entry_date": ["2024-01-08", "2024-01-08"],
         "label_end_date": ["2024-01-12", "2024-01-12"],
         "forward_return": [0.03, -0.01],
     })
@@ -176,3 +177,30 @@ def test_weekly_model_strategy_selects_top_n_equal_weight_with_stable_ties():
 def test_weekly_model_strategy_rejects_missing_prediction_contract():
     with pytest.raises(ValueError, match="missing columns"):
         weekly_cross_sectional_model_targets(pl.DataFrame({"score": [0.1]}))
+
+
+
+def test_fit_rejects_legacy_labels_without_execution_entry_date(monkeypatch):
+    features, labels = frames()
+    legacy = labels.drop("label_entry_date")
+    fake_lightgbm(monkeypatch)
+    decision = admitted(features, legacy)
+    with pytest.raises(ValueError, match="execution-aligned forward-return contract"):
+        fit_lightgbm_regressor(
+            features=features, labels=legacy, admission=decision,
+            config=LightGBMConfig(min_training_rows=2),
+        )
+
+
+def test_fit_rejects_invalid_execution_entry_date_even_with_matching_admission(monkeypatch):
+    features, labels = frames()
+    invalid = labels.with_columns(
+        pl.lit("2024-01-05").alias("label_entry_date")
+    )
+    fake_lightgbm(monkeypatch)
+    decision = admitted(features, invalid)
+    with pytest.raises(ValueError, match="not after signal and before maturity"):
+        fit_lightgbm_regressor(
+            features=features, labels=invalid, admission=decision,
+            config=LightGBMConfig(min_training_rows=2),
+        )
