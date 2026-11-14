@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from dataclasses import asdict, dataclass
 from datetime import date
 from typing import Any, Mapping
@@ -126,6 +125,9 @@ def _validate_acceptance(
     if isinstance(pit, Mapping):
         if pit.get("mode") != "strict":
             reasons.append("PIT fundamentals were not checked in strict mode")
+        expected_items = report.get("pit_items")
+        if not isinstance(expected_items, list) or sorted(pit.get("items", [])) != sorted(expected_items):
+            reasons.append("PIT fundamental item coverage does not match the acceptance report")
         if pit.get("missing_symbol_item_pairs") != 0:
             reasons.append("PIT fundamentals have missing symbol/item coverage")
 
@@ -217,6 +219,14 @@ def admit_training_dataset(
         )
         if not feature_columns:
             reasons.append("features contain no model feature columns")
+        for column in feature_columns:
+            if not features.schema[column].is_numeric():
+                reasons.append(f"feature column {column} is not numeric")
+                continue
+            if features.filter(
+                pl.col(column).is_not_null() & (~pl.col(column).cast(pl.Float64).is_finite())
+            ).height:
+                reasons.append(f"feature column {column} contains non-finite values")
         if features.select(pl.struct(["signal_date", "instrument"]).is_duplicated().any()).item():
             reasons.append("features contain duplicate signal_date/instrument keys")
         for value in features["signal_date"].cast(pl.String).to_list():
@@ -227,6 +237,7 @@ def admit_training_dataset(
                 break
         if features.filter(
             (pl.col("signal_date").cast(pl.String) < start)
+            | (pl.col("signal_date").cast(pl.String) >= cutoff)
             | (pl.col("signal_date").cast(pl.String) > end)
         ).height:
             reasons.append("feature signal dates escape the requested window")
@@ -253,6 +264,7 @@ def admit_training_dataset(
         if labels.filter(
             (pl.col("signal_date").cast(pl.String) < start)
             | (pl.col("signal_date").cast(pl.String) >= cutoff)
+            | (pl.col("label_end_date").cast(pl.String) <= pl.col("signal_date").cast(pl.String))
             | (pl.col("label_end_date").cast(pl.String) >= cutoff)
             | (pl.col("label_end_date").cast(pl.String) > end)
         ).height:
@@ -265,6 +277,9 @@ def admit_training_dataset(
             )
             if unmatched.height:
                 reasons.append("labels contain signal_date/instrument keys without matching features")
+
+    if source_provenance.get("training_dataset_unlocked") is not False:
+        reasons.append("source provenance must retain training_dataset_unlocked=false")
 
     provenance_bytes = json.dumps(
         source_provenance, sort_keys=True, separators=(",", ":"),
