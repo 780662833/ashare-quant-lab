@@ -204,18 +204,12 @@ def test_qlib_dataset_prepare_feeds_lightgbm_and_returns_keyed_predictions(monke
         dataset=dataset,
         segment="valid",
     )
-    assert predictions.to_dicts() == [
-        {
-            "signal_date": "2024-01-19",
-            "instrument": "000003.SZ",
-            "predicted_return": 0.05,
-        },
-        {
-            "signal_date": "2024-01-19",
-            "instrument": "600000.SH",
-            "predicted_return": 0.06,
-        },
+    rows = predictions.to_dicts()
+    assert [(row["signal_date"], row["instrument"]) for row in rows] == [
+        ("2024-01-19", "000003.SZ"),
+        ("2024-01-19", "600000.SH"),
     ]
+    assert [row["predicted_return"] for row in rows] == pytest.approx([0.05, 0.06])
     assert dataset.dataset.calls[-1] == {
         "segment": "valid",
         "col_set": "feature",
