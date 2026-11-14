@@ -20,6 +20,10 @@ label maturity and the A-share execution engine remain authoritative.
 - `predict_qlib_lightgbm_regressor(...)` reads only the feature group from
   Qlib's inference view (`DataHandlerLP.DK_I`) and returns keyed Polars
   predictions.
+- Validation predictions are scored separately against only validation labels
+  that have matured strictly before the fold test start. Rank IC, Pearson IC,
+  Top-N excess vs the labeled cross-section and Top-Bottom spread are saved as
+  validation diagnostics; test-period labels are not passed to this evaluator.
 - `weekly_cross_sectional_model_targets(...)` ranks predictions by signal
   date and emits Top-20 equal-weight targets. The project backtest engine
   retains ownership of T+1, fees, price limits, orders, fills, unfilled orders
