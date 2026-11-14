@@ -181,9 +181,19 @@ def _normalize_source_identity(
     dependency = dependencies.get(dataset) if isinstance(dependencies, Mapping) else None
     if not isinstance(dependency, Mapping):
         raise ValueError(f"source receipt for {dataset} does not pin its own dataset revision")
+    dependency_revision_id = dependency.get("revision_id")
+    dependency_fingerprint = dependency.get("contract_fingerprint")
     if (
-        str(dependency.get("revision_id")) != str(revision_id)
-        or dependency.get("contract_fingerprint") != fingerprint
+        not isinstance(dependency_revision_id, (str, int))
+        or isinstance(dependency_revision_id, bool)
+        or not str(dependency_revision_id).strip()
+        or not isinstance(dependency_fingerprint, str)
+        or not dependency_fingerprint.strip()
+    ):
+        raise ValueError(f"source receipt for {dataset} has an incomplete dependency identity")
+    if (
+        str(dependency_revision_id) != str(revision_id)
+        or dependency_fingerprint != fingerprint
     ):
         raise ValueError(f"source receipt for {dataset} does not match its revision identity")
 
@@ -220,10 +230,24 @@ def _normalize_source_identity(
             raise ValueError(
                 f"source capability audit {audit_id} has an unsupported evidence_class"
             )
+        audit_receipt_id = audit.get("receipt_id")
+        audit_revision_id = audit.get("revision_id")
+        audit_fingerprint = audit.get("contract_fingerprint")
         if (
-            str(audit.get("receipt_id")) != str(actual_receipt_id)
-            or str(audit.get("revision_id")) != str(revision_id)
-            or audit.get("contract_fingerprint") != fingerprint
+            not isinstance(audit_receipt_id, (str, int))
+            or isinstance(audit_receipt_id, bool)
+            or not str(audit_receipt_id).strip()
+            or not isinstance(audit_revision_id, (str, int))
+            or isinstance(audit_revision_id, bool)
+            or not str(audit_revision_id).strip()
+            or not isinstance(audit_fingerprint, str)
+            or not audit_fingerprint.strip()
+        ):
+            raise ValueError(f"source capability audit {audit_id} has an incomplete identity")
+        if (
+            str(audit_receipt_id) != str(actual_receipt_id)
+            or str(audit_revision_id) != str(revision_id)
+            or audit_fingerprint != fingerprint
         ):
             raise ValueError(
                 f"source capability audit {audit_id} is not bound to the exact read "
