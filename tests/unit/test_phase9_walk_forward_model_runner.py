@@ -343,7 +343,9 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     assert verified["fold_count"] == len(result.folds)
     manifest = verified["manifest"]
     assert any(item["path"].endswith("validation_diagnostics.parquet") for item in manifest["artifacts"])
-    assert (saved / "folds" / result.folds[0].fold.fold_id / "validation_report.json").is_file() is False
+    fold_manifest = saved / "folds" / result.folds[0].fold.fold_id / "fold.json"
+    assert fold_manifest.is_file()
+    assert '"validation_report"' in fold_manifest.read_text(encoding="utf-8")
     artifact = saved / manifest["artifacts"][0]["path"]
     artifact.write_bytes(artifact.read_bytes() + b"tamper")
     with pytest.raises(ValueError, match="checksum mismatch"):
