@@ -99,8 +99,12 @@ section by predicted forward return and delegates Top-N equal-weight target
 construction to the shared engine. It emits weights only; all execution and
 accounting remain in the backtest engine.
 
-The adapter has not been invoked to fit a model. Remaining Phase 9 work is a
-walk-forward model runner that trains only within each fold's admitted training
-window, predicts validation/test rows without refitting on them, persists model
-and prediction provenance, and compares the model with momentum on identical
-folds, costs and execution rules.
+The adapter has not been invoked against real data. The walk-forward model
+runner is implemented as an explicit callable workflow: it fits a diagnostic
+model on the admitted training window, predicts validation rows, then rechecks
+label maturity and refits on train+validation before producing test-only
+predictions. Test targets run through the same backtest engine. CI uses only a
+fake LightGBM module and synthetic bundles; no empirical result is claimed.
+Remaining Phase 9 work is durable model/prediction artifact persistence and a
+matched model-versus-momentum comparison on identical folds, costs and
+execution rules.
