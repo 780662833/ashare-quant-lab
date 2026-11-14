@@ -154,4 +154,4 @@ def test_test_window_coverage_is_label_free_and_reports_top_n_pit_missingness():
     assert report["status"] == "evaluated"
     assert report["period"] == {"start": "2024-01-05", "end": "2024-01-05"}
     assert "labels_mature_before" not in report
-    assert "label" not in report["interpretation"].lower()
+    assert "forward_return" not in coverage.columns
