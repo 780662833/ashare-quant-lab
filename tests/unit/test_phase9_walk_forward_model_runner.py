@@ -300,6 +300,28 @@ def test_walk_forward_model_runner_keeps_each_fold_admitted_and_test_only(monkey
     )
     execution_config = BacktestConfig(initial_cash=100_000, top_n=2)
     momentum_config = MomentumConfig(top_n=2, lookback_sessions=8, skip_recent_sessions=2)
+
+    # A caller-supplied feature frame must not smuggle in a security that was
+    # absent from the bundle's signal-date PIT membership snapshot. This is a
+    # runner-boundary failure, before fold admission or any model fit.
+    outside_member = features.head(1).with_columns(
+        pl.lit("999999.SZ").alias("instrument")
+    )
+    invalid_features = pl.concat([features, outside_member], how="vertical")
+    with pytest.raises(ValueError, match="features contain rows outside the point-in-time universe"):
+        run_walk_forward_cross_sectional_model(
+            bundle,
+            acceptance_report=report,
+            features=invalid_features,
+            labels=labels,
+            walk_forward_config=walk_config,
+            model_config=learner_config,
+            backtest_config=execution_config,
+            top_n=2,
+            benchmark_config=momentum_config,
+            validation_policy=_synthetic_validation_policy(),
+        )
+
     result = run_walk_forward_cross_sectional_model(
         bundle,
         acceptance_report=report,
