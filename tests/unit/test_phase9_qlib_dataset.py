@@ -90,7 +90,7 @@ def test_qlib_panel_rows_rejects_entry_dates_outside_signal_to_maturity_window(e
 def test_qlib_panel_rows_rejects_noncanonical_entry_date():
     features, labels = frames(entry_dates=("2024-1-8", "2024-01-08"))
     admission = admission_for(features, labels)
-    with pytest.raises(ValueError, match="canonical YYYY-MM-DD"):
+    with pytest.raises(ValueError, match="ISO YYYY-MM-DD"):
         build_qlib_panel_rows(
             features=features, labels=labels, admission=admission
         )
