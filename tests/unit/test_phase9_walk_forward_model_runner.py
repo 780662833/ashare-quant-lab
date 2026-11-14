@@ -2,6 +2,7 @@ from datetime import date, timedelta
 from types import SimpleNamespace
 
 import polars as pl
+import pytest
 
 from ashare_quant.backtest import BacktestConfig
 from ashare_quant.research.bundle import build_research_data_bundle
