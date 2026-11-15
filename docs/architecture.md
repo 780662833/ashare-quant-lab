@@ -20,9 +20,13 @@ answer three questions:
 3. Is the result stable across different chronological market regimes?
 
 The goal is not to maximize downloaded data volume or deliver automated
-trading. CNEquity is the background market-data engineering dependency; the
-research platform and its verifiable experiment loop are the primary
-development work.
+trading. CNEquity is the authoritative local data foundation; the research
+platform and its verifiable experiment loop are the primary development work.
+
+For this workspace, the existing CNEquity lake is `F:\\cnequity`, outside the
+project repository. Application reads must use `CNEquityAdapter(data_root=...)`
+or CNEquity's configured data root; do not silently substitute a new
+project-relative `data/cnequity` directory or construct Parquet paths directly.
 
 ## 2. Frozen v1 scope
 
@@ -342,11 +346,11 @@ As of 2026-11-14:
 
 | Capability | State |
 |---|---|
-| CNEquity 0.21 adapter and four-gate acceptance | Implemented; real-lake gates require local evidence |
+| CNEquity adapter and four-gate acceptance | Implemented for receipt-backed market/PIT reads, reference instrument metadata, and acceptance; the local 0.23.0 runtime still needs end-to-end verification against the configured lake |
 | Deterministic first-slice backtest engine | Implemented; exchange-simulation gaps remain |
 | Performance/execution report | Merged; PR #12 adds itemized commission, transfer fee, stamp duty and separately attributed slippage |
 | Weekly momentum score/targets | Merged in PR #9; canonical bundle orchestration merged in PR #10; direct CNEquity-to-limit-evidence input remains pending |
-| Unified research data bundle | Merged in PR #10; core builder, momentum orchestration and native CNEquity status normalization have synthetic coverage; direct source assembly, audited historical price-limit evidence and local-lake validation remain pending |
+| Unified research data bundle | Core builder, receipt-backed CNEquity source assembler, momentum orchestration and native trading-status normalization are implemented with synthetic coverage; audited historical price-limit evidence and actual-lake validation remain pending |
 | Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
 | Walk-forward momentum runner | Merged in PR #13; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
 | Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
