@@ -8,8 +8,6 @@ from pathlib import Path
 
 from ashare_quant.data.metadata_inspection import inspect_cnequity_metadata
 
-ROOT = Path(__file__).resolve().parents[1]
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -17,8 +15,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--data-root",
-        default=r"F:\\cnequity",
-        help=r"CNEquity lake directory (default: F:\\cnequity)",
+        default=r"F:\cnequity",
+        help=r"CNEquity lake directory (default: F:\cnequity)",
     )
     parser.add_argument(
         "--output-dir",
