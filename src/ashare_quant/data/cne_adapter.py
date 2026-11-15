@@ -137,8 +137,7 @@ class CNEquityAdapter:
         self._source_receipts.append({"dataset": dataset, "receipt": deepcopy(dict(receipt))})
         return frame
 
-    @staticmethod
-    def read_diagnostic_dataset(self, dataset: str):
+    def read_diagnostic_dataset(self, dataset: str) -> Any:
         """Read one metadata dataset for inspection without admitting it to a research session.
 
         This deliberately uses CNEquity's receipt API with require_replayable=False
