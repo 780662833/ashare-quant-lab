@@ -156,7 +156,15 @@ def test_default_inspection_uses_project_adapter_and_supplied_data_root(monkeypa
         def __init__(self, *, data_root: str | Path) -> None:
             self.data_root = str(data_root)
 
-        def read_diagnostic_dataset(self, dataset: str) -> SimpleNamespace:
+        def read_diagnostic_dataset(
+            self,
+            dataset: str,
+            *,
+            data_root: str | Path | None = None,
+            require_replayable: bool = False,
+        ) -> SimpleNamespace:
+            assert str(data_root) == self.data_root
+            assert require_replayable is False
             calls.append((dataset, self.data_root))
             return SimpleNamespace(
                 frame=frames[dataset],
