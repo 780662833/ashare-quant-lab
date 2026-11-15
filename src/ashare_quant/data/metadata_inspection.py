@@ -287,6 +287,7 @@ def inspect_cnequity_metadata(
     *,
     loader: Callable[..., Any] | None = None,
     schema_reader: Callable[[str], Mapping[str, Any]] | None = None,
+    adapter: Any | None = None,
     as_of: date | None = None,
 ) -> dict[str, Any]:
     """Inspect local instruments and delisting metadata through CNEquity's API.
@@ -294,16 +295,16 @@ def inspect_cnequity_metadata(
     require_replayable=False is intentional for diagnosis: legacy/unpinned
     local rows remain visible, while their receipts are explicitly labeled.
     """
-    if loader is None:
-        from cnequity.query import load_with_receipt
-
-        loader = load_with_receipt
-    if schema_reader is None:
-        from cnequity.query import dataset_schema
-
-        schema_reader = dataset_schema
-
     root = Path(data_root).expanduser().resolve()
+    if loader is None or schema_reader is None:
+        if adapter is None:
+            from ashare_quant.data.cne_adapter import CNEquityAdapter
+
+            adapter = CNEquityAdapter(data_root=root)
+        if loader is None:
+            loader = adapter.read_diagnostic_dataset
+        if schema_reader is None:
+            schema_reader = adapter.dataset_schema
     inspection_date = as_of or datetime.now(timezone.utc).date()
     try:
         installed_version = importlib.metadata.version("cnequity")
