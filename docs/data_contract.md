@@ -122,7 +122,7 @@ training.
 
 ### Local CNEquity data access on Windows
 
-The authoritative local CNEquity data root is `F:\\cnequity`. It is
+The authoritative local CNEquity data root is `F:\cnequity`. It is
 outside the project repository; do not redirect these scripts to
 `data/cnequity` inside the project. The project uses CNEquity through
 `CNEquityAdapter`: normal research reads require replayable receipts and pin
@@ -139,7 +139,7 @@ python -m pip install -e ".[dev]"
 python scripts/inspect_cnequity_metadata.py
 ```
 
-The metadata inspection explicitly reads from `F:\\cnequity` through the
+The metadata inspection explicitly reads from `F:\cnequity` through the
 project adapter. It examines `instruments` and `delisting_events` and
 reports actual schema/field nulls, date ranges, symbol anomalies,
 source/version distributions, receipt revision identities and cross-dataset
@@ -154,7 +154,7 @@ python scripts/plan_cnequity_instruments_backfill.py
 ```
 
 This invokes CNEquity's `backfill instruments --plan` command, checks that
-the resolved CNEquity configuration points to the expected `F:\\cnequity`
+the resolved CNEquity configuration points to the expected `F:\cnequity`
 root, and stops on a path mismatch. It makes no network request, creates no
 ingestion run and writes no lake data. Inspect the plan before authorizing a
 real backfill. Do not run `cne init` as a shortcut: it can execute multiple
@@ -168,7 +168,7 @@ Run the four-gate acceptance separately for the research window:
 python scripts/validate_cnequity_lake.py --start-date 2018-01-01 --end-date 2025-12-31
 ```
 
-The acceptance script also defaults to `F:\\cnequity`; pass `--data-root`
+The acceptance script also defaults to `F:\cnequity`; pass `--data-root`
 only when deliberately testing a different lake. Reports are written to
 `reports/data_acceptance/` as JSON and Markdown. Exit code 0 means all gates
 passed; exit code 2 means one or more gates failed. Even a PASS report does
