@@ -6,7 +6,7 @@ The research runner consumes an already validated `ResearchDataBundle`; the
 receipt-backed `assemble_cnequity_research_bundle(...)` source assembler is the
 project boundary that builds that bundle from CNEquity reads plus independently
 audited price-limit evidence. The workspace's existing local lake is
-`F:\\cnequity`; diagnostics and four-gate acceptance must read this root rather
+`F:\cnequity`; diagnostics and four-gate acceptance must read this root rather
 than a project-relative duplicate. The current adapter and acceptance code were
 written against the repository's pinned CNEquity version. A local installation
 reported as CNEquity 0.23.0 is not, by itself, proof that the 0.21.0 adapter
