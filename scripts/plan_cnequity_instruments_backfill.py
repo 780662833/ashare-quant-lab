@@ -14,8 +14,6 @@ from pathlib import Path
 from click.testing import CliRunner
 from cnequity.cli.main import cli
 
-ROOT = Path(__file__).resolve().parents[1]
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(
@@ -28,8 +26,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--expected-data-root",
-        default=r"F:\\cnequity",
-        help=r"Expected lake root (default: F:\\cnequity); plan exits non-zero on mismatch.",
+        default=r"F:\cnequity",
+        help=r"Expected lake root (default: F:\cnequity); plan exits non-zero on mismatch.",
     )
     args = parser.parse_args()
 
