@@ -2,11 +2,15 @@
 
 ## Current boundary
 
-The research runner consumes an already validated `ResearchDataBundle`; it does not
-assemble that bundle from a CNEquity lake. The current adapter and acceptance code
-were written against the repository's pinned CNEquity version. A local installation
-reported as CNEquity 0.23.0 is not evidence that the 0.21.0 adapter contract remains
-compatible.
+The research runner consumes an already validated `ResearchDataBundle`; the
+receipt-backed `assemble_cnequity_research_bundle(...)` source assembler is the
+project boundary that builds that bundle from CNEquity reads plus independently
+audited price-limit evidence. The workspace's existing local lake is
+`F:\\cnequity`; diagnostics and four-gate acceptance must read this root rather
+than a project-relative duplicate. The current adapter and acceptance code were
+written against the repository's pinned CNEquity version. A local installation
+reported as CNEquity 0.23.0 is not, by itself, proof that the 0.21.0 adapter
+contract remains compatible.
 
 The execution-evidence layer also requires independently sourced historical price-limit
 facts. It intentionally does not infer limit prices or locked-limit states from close
@@ -73,11 +77,19 @@ exercised against the actual local lake with replayable receipts and coverage ch
 
 ## Receipt-aware adapter reads (2026-11-13)
 
-The CNEquity adapter now uses `load_with_receipt()` for every dataset read and
-sets `require_replayable=True`. It rejects a result unless it contains a Polars
+The normal research adapter path uses `load_with_receipt()` with
+`require_replayable=True`. It rejects a result unless it contains a Polars
 DataFrame and a receipt explicitly marked `replayable: true`. Receipts are retained
 on the adapter instance as ordered `source_receipts` entries, including the dataset
 name, so repeated reads of the same dataset are not silently overwritten.
+
+The adapter also exposes `instrument_master()` and
+`delisting_event_records()` as normal receipt-pinned reference-data reads. The
+instrument master is explicitly a current reference snapshot, not historical
+point-in-time membership. A separate `read_diagnostic_dataset()` is restricted
+to `instruments` and `delisting_events`; it permits `require_replayable=False`
+only so legacy local rows can be inspected. Diagnostic receipts are not pinned
+to the research session and can never be used to build a ResearchDataBundle.
 
 The adapter exposes an explicit `trading_calendar(start_date, end_date)` read
 that filters the receipt-backed `trading_calendar` dataset to rows marked
