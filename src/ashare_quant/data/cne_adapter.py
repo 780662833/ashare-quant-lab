@@ -207,6 +207,7 @@ class CNEquityAdapter:
             raise CNEquityDataError("CNEquity delisting_events contains duplicate symbol keys")
         return frame.sort("symbol")
 
+    @staticmethod
     def _canonical_bars(frame: pl.DataFrame) -> pl.DataFrame:
         required = {"symbol", "trade_date", "open", "high", "low", "close", "volume", "amount"}
         missing = required.difference(frame.columns)
