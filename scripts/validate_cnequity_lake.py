@@ -16,8 +16,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--data-root",
-        default=str(ROOT / "data" / "cnequity"),
-        help="CNEquity lake directory (default: project data/cnequity)",
+        default=r"F:\\cnequity",
+        help=r"CNEquity lake directory (default: F:\\cnequity)",
     )
     parser.add_argument("--start-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="Inclusive YYYY-MM-DD")
