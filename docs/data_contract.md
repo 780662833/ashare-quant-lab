@@ -120,43 +120,47 @@ still requires valid historical membership, adjusted-price evidence, official
 calendar, and execution-state evidence. This exception does not authorize model
 training.
 
-### Run locally on Windows
+### Local CNEquity data access on Windows
 
-The default data root for both scripts is the project-local
-`data/cnequity` directory. From the repository root, install the project
-dependencies and inspect the actual local instrument metadata first:
+The authoritative local CNEquity data root is `F:\cnequity`. It is
+outside the project repository; do not redirect these scripts to
+`data/cnequity` inside the project. The project uses CNEquity through
+`CNEquityAdapter`: normal research reads require replayable receipts and pin
+the dataset revision/fingerprint across the adapter session. The canonical
+`assemble_cnequity_research_bundle()` then normalizes those reads into the
+research bundle. The metadata inspection path is deliberately diagnostic-only:
+it can display legacy/unpinned rows, but it does not add them to the research
+session or admit them to a bundle.
+
+From the repository root and the project's `venv313` environment:
 
 ```powershell
 python -m pip install -e ".[dev]"
 python scripts/inspect_cnequity_metadata.py
 ```
 
-The metadata inspection reads `instruments` and `delisting_events` through
-CNEquity's receipt API. It records actual fields, null coverage, date ranges,
-symbol anomalies, source/version distributions, receipt revisions and a
-cross-check between delisting-event symbols and the instrument master. It
-does not load daily-bar history, write to the lake, backfill, train or run a
-backtest. It intentionally permits a non-replayable receipt for diagnosis,
-but marks that identity as unpinned. Listing-date PIT admission remains
+The metadata inspection explicitly reads from `F:\cnequity` through the
+project adapter. It examines `instruments` and `delisting_events` and
+reports actual schema/field nulls, date ranges, symbol anomalies,
+source/version distributions, receipt revision identities and cross-dataset
+symbol coverage. It does not load daily-bar history, write to the CNEquity
+lake, backfill, train or run a backtest. Listing-date PIT admission remains
+`NOT_ADMITTED`; a current instrument master is not historical PIT evidence.
 
-If the instrument master is absent, the inspection reports `MISSING` rather
-than conflating that condition with an API failure. The next safe step is to
-print the source/scope plan only:
+If `instruments` is reported `MISSING`, first print the source/scope plan:
 
 ```powershell
 python scripts/plan_cnequity_instruments_backfill.py
 ```
 
-This wrapper invokes CNEquity's `backfill instruments --plan` command through
-its Python CLI. It makes no network request, creates no ingestion run and
-writes no lake data. Review the reported data root and source policy before
-deciding whether to authorize the actual backfill. Do not run `cne init` as a
-shortcut: it initializes the configured lake and can execute the config's
-full init phases. Do not use `cne backfill delisting_events`: that dataset is
-a derived supplementary output; its one-off rebuild and coverage workflow is
-owned by CNEquity's `scripts/delisted_ops.py`.
-
-`NOT_ADMITTED`; the inspection is not a historical-universe acceptance.
+This invokes CNEquity's `backfill instruments --plan` command, checks that
+the resolved CNEquity configuration points to the expected `F:\cnequity`
+root, and stops on a path mismatch. It makes no network request, creates no
+ingestion run and writes no lake data. Inspect the plan before authorizing a
+real backfill. Do not run `cne init` as a shortcut: it can execute multiple
+configured init phases. Do not run `cne backfill delisting_events`: that is a
+derived supplementary dataset whose one-off rebuild/coverage process belongs
+to CNEquity's `scripts/delisted_ops.py` workflow.
 
 Run the four-gate acceptance separately for the research window:
 
@@ -164,13 +168,17 @@ Run the four-gate acceptance separately for the research window:
 python scripts/validate_cnequity_lake.py --start-date 2018-01-01 --end-date 2025-12-31
 ```
 
-Pass `--data-root` explicitly only when the lake is outside the project
-default. The CNEquity user configuration is resolved by its local config
-resolver; avoid hard-coding an account-specific configuration path. Default
-PIT item codes are CNEquity-documented `roe` and `net_profit`. Acceptance
-reports are written to `reports/data_acceptance/` as JSON and Markdown.
-Exit code 0 means all gates passed; exit code 2 means one or more gates failed.
-A successful report still does not create or unlock a training dataset.
+The acceptance script also defaults to `F:\cnequity`; pass `--data-root`
+only when deliberately testing a different lake. Reports are written to
+`reports/data_acceptance/` as JSON and Markdown. Exit code 0 means all gates
+passed; exit code 2 means one or more gates failed. Even a PASS report does
+not itself create or unlock a training dataset.
+
+**Runtime compatibility note:** the repository dependency remains pinned to
+`cnequity==0.21.0`. A local runtime reporting `0.23.0` is not silently
+declared compatible by this documentation or by the metadata inspection. The
+local scripts expose the observed runtime version so it can be checked during
+the user's test without changing the lock file.
 
 ## CNEquity v0.21.0 status and price-limit semantics
 

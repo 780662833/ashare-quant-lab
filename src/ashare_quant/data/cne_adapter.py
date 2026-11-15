@@ -137,6 +137,100 @@ class CNEquityAdapter:
         self._source_receipts.append({"dataset": dataset, "receipt": deepcopy(dict(receipt))})
         return frame
 
+    def read_diagnostic_dataset(
+        self,
+        dataset: str,
+        *,
+        data_root: str | Path | None = None,
+        require_replayable: bool = False,
+    ) -> Any:
+        """Read metadata for diagnosis, without admitting it to a research session.
+
+        Only this inspection path permits require_replayable=False so legacy
+        local rows remain visible. The returned receipt is not added to this
+        adapter's pinned research receipts/revision map and cannot be used to
+        build a ResearchDataBundle. An explicitly requested data_root must match
+        the adapter's configured location.
+        """
+        allowed = {"instruments", "delisting_events"}
+        if dataset not in allowed:
+            raise ValueError(
+                f"Diagnostic reads are restricted to {sorted(allowed)}; got {dataset!r}"
+            )
+        if require_replayable is not False:
+            raise ValueError("Diagnostic reads do not support research-session admission")
+        requested_root = (
+            Path(data_root).expanduser().resolve() if data_root is not None else None
+        )
+        from cnequity.query import load_with_receipt
+
+        kwargs: dict[str, Any] = {"require_replayable": False}
+        if self._config is not None:
+            configured_root = Path(self._config.data_root).expanduser().resolve()
+            if requested_root is not None and requested_root != configured_root:
+                raise ValueError(
+                    f"Requested data_root {requested_root} does not match adapter config "
+                    f"{configured_root}"
+                )
+            kwargs["config"] = self._config
+        else:
+            configured_root = Path(self.data_root).expanduser().resolve()
+            if requested_root is not None and requested_root != configured_root:
+                raise ValueError(
+                    f"Requested data_root {requested_root} does not match adapter data_root "
+                    f"{configured_root}"
+                )
+            kwargs["data_root"] = str(configured_root)
+        return load_with_receipt(dataset, **kwargs)
+
+    @staticmethod
+    def dataset_schema(dataset: str) -> Mapping[str, Any]:
+        """Return CNEquity's registered schema for an explicitly named dataset."""
+        if dataset not in {"instruments", "delisting_events"}:
+            raise ValueError(
+                "Schema inspection is restricted to instruments and delisting_events"
+            )
+        from cnequity.query import dataset_schema
+
+        return dataset_schema(dataset)
+
+    def instrument_master(self) -> pl.DataFrame:
+        """Read the receipt-pinned current instrument master.
+
+        This is a reference snapshot, not historical point-in-time membership.
+        """
+        frame = self._load("instruments")
+        required = {"symbol", "list_date", "delist_date"}
+        missing = required.difference(frame.columns)
+        if missing:
+            raise CNEquityDataError(
+                f"CNEquity instruments missing columns: {sorted(missing)}"
+            )
+        if frame.is_empty():
+            raise CNEquityDataError("CNEquity instruments returned no reference records")
+        if frame["symbol"].null_count():
+            raise CNEquityDataError("CNEquity instruments contains null security symbols")
+        if frame.select(pl.col("symbol").is_duplicated().any()).item():
+            raise CNEquityDataError("CNEquity instruments contains duplicate symbol keys")
+        return frame.sort("symbol")
+
+    def delisting_event_records(self) -> pl.DataFrame:
+        """Read receipt-pinned derived delisting summaries when that table exists."""
+        frame = self._load("delisting_events")
+        required = {"symbol", "first_trade_date", "last_trade_date"}
+        missing = required.difference(frame.columns)
+        if missing:
+            raise CNEquityDataError(
+                f"CNEquity delisting_events missing columns: {sorted(missing)}"
+            )
+        if frame.is_empty():
+            raise CNEquityDataError("CNEquity delisting_events returned no records")
+        if frame["symbol"].null_count():
+            raise CNEquityDataError("CNEquity delisting_events contains null symbols")
+        if frame.select(pl.col("symbol").is_duplicated().any()).item():
+            raise CNEquityDataError("CNEquity delisting_events contains duplicate symbol keys")
+        return frame.sort("symbol")
+
     @staticmethod
     def _canonical_bars(frame: pl.DataFrame) -> pl.DataFrame:
         required = {"symbol", "trade_date", "open", "high", "low", "close", "volume", "amount"}
