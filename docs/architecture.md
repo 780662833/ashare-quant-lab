@@ -23,7 +23,7 @@ The goal is not to maximize downloaded data volume or deliver automated
 trading. CNEquity is the authoritative local data foundation; the research
 platform and its verifiable experiment loop are the primary development work.
 
-For this workspace, the existing CNEquity lake is `F:\\cnequity`, outside the
+For this workspace, the existing CNEquity lake is `F:\cnequity`, outside the
 project repository. Application reads must use `CNEquityAdapter(data_root=...)`
 or CNEquity's configured data root; do not silently substitute a new
 project-relative `data/cnequity` directory or construct Parquet paths directly.
