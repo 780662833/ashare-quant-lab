@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
 import polars as pl
@@ -299,7 +300,7 @@ def test_diagnostic_metadata_read_uses_adapter_location_without_pinning_receipt(
     assert result.frame.height == 1
     assert result.receipt["replayable"] is False
     assert calls[0][0] == "instruments"
-    assert calls[0][1]["data_root"] == r"F:\cnequity"
+    assert calls[0][1]["data_root"] == str(Path(r"F:\cnequity").resolve())
     assert calls[0][1]["require_replayable"] is False
     assert adapter.source_receipts == []
     assert adapter.source_revision_map == {}
