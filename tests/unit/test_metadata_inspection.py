@@ -135,3 +135,62 @@ def test_missing_datasets_are_not_misreported_as_reader_errors() -> None:
     )
     assert "Do not run" in report["datasets"]["delisting_events"]["next_step"]
     assert report["overall_read_status"] == "MISSING"
+
+
+def test_default_inspection_uses_project_adapter_and_supplied_data_root(monkeypatch) -> None:
+    from ashare_quant.data import cne_adapter
+
+    frames = {
+        "instruments": _instrument_frame(),
+        "delisting_events": pl.DataFrame(
+            {
+                "symbol": ["000002.SZ"],
+                "first_trade_date": [date(1991, 1, 29)],
+                "last_trade_date": [date(2024, 1, 2)],
+            }
+        ),
+    }
+    calls: list[tuple[str, str]] = []
+
+    class FakeAdapter:
+        def __init__(self, *, data_root: str | Path) -> None:
+            self.data_root = str(data_root)
+
+        def read_diagnostic_dataset(self, dataset: str) -> SimpleNamespace:
+            calls.append((dataset, self.data_root))
+            return SimpleNamespace(
+                frame=frames[dataset],
+                receipt={
+                    "dataset": dataset,
+                    "receipt_id": f"diagnostic-{dataset}",
+                    "replayable": False,
+                    "coverage": {"completeness": "not_assessed"},
+                },
+            )
+
+        @staticmethod
+        def dataset_schema(dataset: str) -> dict[str, pl.DataType]:
+            return {
+                "instruments": {
+                    "symbol": pl.String,
+                    "list_date": pl.Date,
+                    "delist_date": pl.Date,
+                },
+                "delisting_events": {
+                    "symbol": pl.String,
+                    "first_trade_date": pl.Date,
+                    "last_trade_date": pl.Date,
+                },
+            }[dataset]
+
+    monkeypatch.setattr(cne_adapter, "CNEquityAdapter", FakeAdapter)
+    report = inspect_cnequity_metadata(r"F:\\cnequity", as_of=date(2026, 11, 14))
+
+    assert report["datasets"]["instruments"]["status"] == "READ"
+    assert report["datasets"]["delisting_events"]["status"] == "READ"
+    assert calls == [
+        ("instruments", str(Path(r"F:\\cnequity").resolve())),
+        ("delisting_events", str(Path(r"F:\\cnequity").resolve())),
+    ]
+    assert report["datasets"]["instruments"]["receipt"]["replayable"] is False
+    assert report["historical_universe_admitted"] is False
