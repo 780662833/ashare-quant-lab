@@ -184,13 +184,13 @@ def test_default_inspection_uses_project_adapter_and_supplied_data_root(monkeypa
             }[dataset]
 
     monkeypatch.setattr(cne_adapter, "CNEquityAdapter", FakeAdapter)
-    report = inspect_cnequity_metadata(r"F:\\cnequity", as_of=date(2026, 11, 14))
+    report = inspect_cnequity_metadata(r"F:\cnequity", as_of=date(2026, 11, 14))
 
     assert report["datasets"]["instruments"]["status"] == "READ"
     assert report["datasets"]["delisting_events"]["status"] == "READ"
     assert calls == [
-        ("instruments", str(Path(r"F:\\cnequity").resolve())),
-        ("delisting_events", str(Path(r"F:\\cnequity").resolve())),
+        ("instruments", str(Path(r"F:\cnequity").resolve())),
+        ("delisting_events", str(Path(r"F:\cnequity").resolve())),
     ]
     assert report["datasets"]["instruments"]["receipt"]["replayable"] is False
     assert report["historical_universe_admitted"] is False
