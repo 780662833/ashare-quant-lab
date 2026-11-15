@@ -1,7 +1,7 @@
 # Research architecture and engineering contract
 
 **Status:** v1 architecture baseline  
-**Last updated:** 2026-11-04  
+**Last updated:** 2026-11-14  
 **Repository:** `780662833/ashare-quant-lab`
 
 This document is the system-level reference for implementation decisions. A
@@ -20,9 +20,13 @@ answer three questions:
 3. Is the result stable across different chronological market regimes?
 
 The goal is not to maximize downloaded data volume or deliver automated
-trading. CNEquity is the background market-data engineering dependency; the
-research platform and its verifiable experiment loop are the primary
-development work.
+trading. CNEquity is the authoritative local data foundation; the research
+platform and its verifiable experiment loop are the primary development work.
+
+For this workspace, the existing CNEquity lake is `F:\cnequity`, outside the
+project repository. Application reads must use `CNEquityAdapter(data_root=...)`
+or CNEquity's configured data root; do not silently substitute a new
+project-relative `data/cnequity` directory or construct Parquet paths directly.
 
 ## 2. Frozen v1 scope
 
@@ -106,14 +110,50 @@ flowchart TD
 
 ### Qlib and LightGBM
 
-- Optional research dependencies, not prerequisites for current synthetic
-  backtest and momentum development.
-- Qlib may be reused for feature workflow, dataset handling, model training,
-  and prediction where its contracts fit.
-- A-share universe, PIT availability, exchange execution, costs, and order
-  fills remain project-owned and must not be delegated to generic defaults.
-- No model fit or training dataset build is permitted before the four-gate
-  acceptance contract is passed and enforced by a future builder.
+- Qlib and pandas are optional research dependencies; base synthetic backtest
+  and momentum workflows do not require Qlib.
+- Phase 9 uses Qlib `DataHandlerLP.from_df` / `DatasetH` as the primary
+  research dataset interface. It accepts only admission-bound Polars
+  train/label frames, exposes chronological segments and keeps validation/test
+  rows feature-only for inference.
+- LightGBM is the single cross-sectional regression model. It reads Qlib's
+  learn view for fitting and infer view for keyed predictions; project-owned
+  Top-20 equal-weight target generation remains downstream.
+- All fit boundaries recheck the execution-aligned label contract:
+  the direct LightGBM adapter and Qlib panel conversion require canonical
+  signal, entry and maturity dates in strict order before any optimizer call.
+- Walk-forward purge calculations distinguish the one-session next-open
+  entry lag from the open-to-open holding horizon; maturity dates include both
+  before adding the configured embargo. Validation predictions are evaluated
+  against validation labels only after label maturity strictly before test
+  start. Cross-fold stability summaries
+  are descriptive by default; any acceptance policy must be explicit,
+  versioned and fingerprinted. No test labels feed policy decisions.
+- Project-owned Polars features/labels, CNEquity receipts, PIT availability,
+  historical universe, trading status, walk-forward splits and admission
+  remain authoritative. Weekly feature construction requires exact HFQ
+  adjustment evidence for every adjusted-close row; strict PIT facts must be
+  finite and duplicate availability keys are rejected. PIT values select the
+  latest report period known at the signal timestamp and then the latest
+  revision within that period. Zero-volume rolling windows produce a null
+  volume-ratio feature, never a NaN 0/0 result. All market-derived model
+  features must be non-null and finite; strict `pit_*` fundamentals may
+  remain null when no fact was knowable at the signal close. The adapters
+  transport only these true PIT nulls as NaN to LightGBM's native missing-value
+  handling (`use_missing=true`, `zero_as_missing=false`). Non-null NaN/Inf
+  source values and incomplete market features remain ineligible; no value
+  is zero-filled or forward-filled. Qlib is a dataset/workflow adapter, not a
+  data source of truth or an admission bypass.
+- A-share execution, costs, price limits, order fills and portfolio accounting
+  remain project-owned and must not be delegated to generic defaults.
+- Qlib and pandas stay optional/lazy in the Python 3.13 development
+  environment. A separate Python 3.12 Qlib 0.9.7 workflow exercises the real
+  Qlib data APIs and LightGBM Dataset constructor with synthetic frames; the
+  LightGBM optimizer remains stubbed. No dependency or CNEquity version lock
+  is changed.
+- Base synthetic CI still stubs optional Qlib and LightGBM APIs. Real API
+  smoke coverage does not constitute real-data training, a backtest or an
+  empirical performance claim.
 
 ## 4. Canonical data and time contract
 
@@ -126,6 +166,11 @@ flowchart TD
 - Execution date: next eligible exchange session, never the same close.
 - Fundamentals carry both report period and publication/availability time.
   Report period is not a substitute for when a fact became knowable.
+- Supervised return labels begin at the first executable open after signal close
+  and end at the first executable open after the next weekly signal. Their
+  explicit entry and maturity dates follow the supplied exchange calendar,
+  including holiday-shortened weeks; they do not include the untradable
+  signal-close-to-entry-open return.
 
 The future research bundle must use the official exchange calendar. Do not
 infer calendar sessions from the dates on which one selected stock happened
@@ -147,11 +192,19 @@ third-party accuracy certification.
 ### Universe and availability
 
 - Universe membership is point-in-time on every signal date.
+- The walk-forward model runner revalidates caller-supplied feature and label
+  keys against the bundle's same-date membership snapshot; data prepared
+  outside the canonical feature builder cannot introduce non-members.
 - Historical listing/delisting, ST/risk-warning, exchange, and board history
   must not be reconstructed from today's listed names.
 - Delisted securities remain in historical research where they were eligible.
 - Fundamental facts use strict as-of availability. Revisions must not rewrite
   what was knowable at an earlier decision timestamp.
+- For each instrument/item, select the latest report period known at the
+  signal timestamp, then the latest available revision within that report
+  period. A later restatement of an older period cannot displace a newer
+  period already published. Report periods must be canonical dates and cannot
+  be later than their publication date.
 - Empty strict PIT output is a coverage failure, not permission to use
   best-effort mode.
 
@@ -289,17 +342,21 @@ fold-level and regime-level results, not only pooled headline metrics.
 
 ## 10. Current maturity snapshot
 
-As of 2026-11-13:
+As of 2026-11-14:
 
 | Capability | State |
 |---|---|
-| CNEquity 0.21 adapter and four-gate acceptance | Implemented; real-lake gates require local evidence |
+| CNEquity adapter and four-gate acceptance | Implemented for receipt-backed market/PIT reads, reference instrument metadata, and acceptance; the local 0.23.0 runtime still needs end-to-end verification against the configured lake |
 | Deterministic first-slice backtest engine | Implemented; exchange-simulation gaps remain |
 | Performance/execution report | Merged; PR #12 adds itemized commission, transfer fee, stamp duty and separately attributed slippage |
 | Weekly momentum score/targets | Merged in PR #9; canonical bundle orchestration merged in PR #10; direct CNEquity-to-limit-evidence input remains pending |
-| Unified research data bundle | Merged in PR #10; core builder, momentum orchestration and native CNEquity status normalization have synthetic coverage; direct source assembly, audited historical price-limit evidence and local-lake validation remain pending |
+| Unified research data bundle | Core builder, receipt-backed CNEquity source assembler, momentum orchestration and native trading-status normalization are implemented with synthetic coverage; audited historical price-limit evidence and actual-lake validation remain pending |
 | Walk-forward fold planner | Merged in PR #11; expanding/rolling temporal partitions, label-maturity purge, embargo and non-overlapping test windows; no fitting |
 | Walk-forward momentum runner | Merged in PR #13; cutoff-isolated deterministic momentum replay and test-only fold ledgers; no model training |
 | Experiment artifact store and comparison | Merged in PR #15 and #16; immutable manifest, source/config provenance, SHA-256 Parquet ledgers, artifact verification and fair momentum-parameter comparison; 97 synthetic unit tests pass |
-| Feature/label builder and LightGBM/Qlib training | Not implemented; gated by four-gate acceptance |
+| Cross-sectional feature/label + strict admission | Implemented; empirical use remains gated by local data acceptance |
+| Qlib DatasetH → LightGBM → Top-20 walk-forward pipeline | Merged in PR #67; 286 synthetic CI tests passed |
+| Validation-only ranking diagnostics | Merged in PR #70; per-week Rank IC, Pearson IC, Top-N excess and Top-Bottom spread, maturity checked before test start; no test labels or automated tuning |
+| Cross-fold validation stability policy | Merged in PR #71; descriptive weekly IC distribution/ICIR, positive-week and positive-fold ratios, coverage and Top-N excess stability; minimum fold/date/valid-IC/cross-section/coverage/ranking thresholds are explicit, versioned and fingerprinted. Base CI 305 passed/2 skipped; real Qlib integration 2 passed |
+| Real Qlib 0.9.7 / Python 3.12 compatibility | Verified in PR #68 and #69: Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3, LightGBM 4.7.0; DatasetH API and full multi-fold runner both passed synthetic integration tests; optimizer stubbed, no model fit |
 | Live trading | Out of scope |

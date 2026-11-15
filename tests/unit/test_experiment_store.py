@@ -35,6 +35,7 @@ def make_run() -> WalkForwardMomentumRun:
         validation_sessions=2,
         test_sessions=2,
         label_horizon_sessions=0,
+        label_entry_lag_sessions=0,
         embargo_sessions=0,
         expanding_train=True,
     )

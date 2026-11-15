@@ -27,11 +27,39 @@ acceptance runner; strategy/model modules must not query CNEquity internals.
 - Decision timestamp: Asia/Shanghai timestamp when all inputs are known.
 - Availability timestamp: earliest time a source fact was knowable.
 - Every panel row is uniquely keyed by (instrument, trading_date).
+- Every model feature and label key at a weekly signal must also exist in
+  that signal date's point-in-time universe snapshot. The walk-forward runner
+  rechecks this against the validated bundle, even when frames are supplied
+  by an external caller rather than the canonical feature builder.
 
 ## Required market fields
 
 Open, high, low, close, volume, amount, adjustment/corporate-action basis,
-suspension status, price-limit status/price, and source provenance.
+suspension status, price-limit status/price, and source provenance. The raw
+open/close and same-session HFQ adjusted close are retained together so the
+research layer can reconstruct an adjusted open without mixing price bases.
+Rolling activity features retain raw zero-volume observations. When the rolling
+mean volume is zero, volume_ratio is represented as missing/null rather than
+NaN or an invented zero ratio. All market-derived model features must remain
+complete and finite. A strict PIT fundamental feature may be null when no
+eligible fact was knowable at the signal close; only that true PIT null is
+transported as NaN to LightGBM's native missing-value handling. Non-null NaN
+or infinite source values are invalid, and no missing fact is imputed,
+zero-filled, or forward-filled.
+
+## Signal-to-execution return labels
+
+A signal is formed after the close. Its supervised return starts at the
+adjusted open of the next exchange session, when the backtest can first execute
+the target. It ends at the adjusted open of the first session after the next
+weekly signal, when the backtest can first execute the replacement target.
+The per-session adjusted open is derived by multiplying raw open by that
+session's HFQ multiplier (adjusted close divided by raw close). No price or
+adjustment factor is forward-filled. Labels carry label_entry_date and
+label_end_date; the latter is the true maturity date for walk-forward purge
+checks. A label with either missing endpoint is omitted. Holiday-shortened
+weeks follow the official exchange calendar rather than a fixed five-session
+offset.
 
 ## Universe and PIT fundamentals
 
@@ -39,6 +67,20 @@ Historical listing/delisting state, ST status history, exchange/board, and
 tradability state must be point-in-time. Store report period separately from
 publication/availability timestamp. A report-period date is not publication
 time; revisions must not overwrite historically knowable values.
+
+For each instrument/fundamental item at a signal timestamp, first select the
+latest report period whose fact was already available by that timestamp. If
+that same report period has multiple point-in-time revisions, select the
+latest available revision. A later restatement of an older period must not
+override a newer reporting period that was already published. Report periods
+must be canonical YYYY-MM-DD dates and cannot be later than their
+publication date. Publication timestamp, not report period, controls
+historical eligibility.
+When no strict fact was knowable by a particular signal close, the corresponding
+`pit_*` feature remains null. That is an as-of missing observation, not a
+zero value and not permission to carry a later report backward in time. The
+model adapters preserve it for native LightGBM missing handling while still
+requiring complete finite market-derived features.
 
 ## Four-gate data admission
 
@@ -78,24 +120,65 @@ still requires valid historical membership, adjusted-price evidence, official
 calendar, and execution-state evidence. This exception does not authorize model
 training.
 
-### Run locally on Windows
+### Local CNEquity data access on Windows
 
-Use the project's current local lake path:
+The authoritative local CNEquity data root is `F:\cnequity`. It is
+outside the project repository; do not redirect these scripts to
+`data/cnequity` inside the project. The project uses CNEquity through
+`CNEquityAdapter`: normal research reads require replayable receipts and pin
+the dataset revision/fingerprint across the adapter session. The canonical
+`assemble_cnequity_research_bundle()` then normalizes those reads into the
+research bundle. The metadata inspection path is deliberately diagnostic-only:
+it can display legacy/unpinned rows, but it does not add them to the research
+session or admit them to a bundle.
+
+From the repository root and the project's `venv313` environment:
 
 ```powershell
 python -m pip install -e ".[dev]"
-python scripts/validate_cnequity_lake.py `
-  --data-root "F:\cnEquity" `
-  --start-date 2018-01-01 `
-  --end-date 2025-12-31
+python scripts/inspect_cnequity_metadata.py
 ```
 
-The CNEquity user configuration is resolved by its local config resolver;
-avoid hard-coding an account-specific configuration path. Default PIT item
-codes are CNEquity-documented `roe` and `net_profit`. Reports are written to
+The metadata inspection explicitly reads from `F:\cnequity` through the
+project adapter. It examines `instruments` and `delisting_events` and
+reports actual schema/field nulls, date ranges, symbol anomalies,
+source/version distributions, receipt revision identities and cross-dataset
+symbol coverage. It does not load daily-bar history, write to the CNEquity
+lake, backfill, train or run a backtest. Listing-date PIT admission remains
+`NOT_ADMITTED`; a current instrument master is not historical PIT evidence.
+
+If `instruments` is reported `MISSING`, first print the source/scope plan:
+
+```powershell
+python scripts/plan_cnequity_instruments_backfill.py
+```
+
+This invokes CNEquity's `backfill instruments --plan` command, checks that
+the resolved CNEquity configuration points to the expected `F:\cnequity`
+root, and stops on a path mismatch. It makes no network request, creates no
+ingestion run and writes no lake data. Inspect the plan before authorizing a
+real backfill. Do not run `cne init` as a shortcut: it can execute multiple
+configured init phases. Do not run `cne backfill delisting_events`: that is a
+derived supplementary dataset whose one-off rebuild/coverage process belongs
+to CNEquity's `scripts/delisted_ops.py` workflow.
+
+Run the four-gate acceptance separately for the research window:
+
+```powershell
+python scripts/validate_cnequity_lake.py --start-date 2018-01-01 --end-date 2025-12-31
+```
+
+The acceptance script also defaults to `F:\cnequity`; pass `--data-root`
+only when deliberately testing a different lake. Reports are written to
 `reports/data_acceptance/` as JSON and Markdown. Exit code 0 means all gates
-passed; exit code 2 means one or more gates failed. A successful report still
-does not create a training dataset.
+passed; exit code 2 means one or more gates failed. Even a PASS report does
+not itself create or unlock a training dataset.
+
+**Runtime compatibility note:** the repository dependency remains pinned to
+`cnequity==0.21.0`. A local runtime reporting `0.23.0` is not silently
+declared compatible by this documentation or by the metadata inspection. The
+local scripts expose the observed runtime version so it can be checked during
+the user's test without changing the lock file.
 
 ## CNEquity v0.21.0 status and price-limit semantics
 
@@ -115,3 +198,49 @@ The concrete adapter is pinned to CNEquity 0.21.0. Its query arguments,
 profile semantics, PIT quality values and diagnostic APIs are taken from that
 release's public API contract; a version upgrade requires a fresh contract
 review and adapter tests.
+
+
+## Feature-source exactness and PIT determinism
+
+Every HFQ adjusted-close row used by weekly features must carry
+`adj_is_exact=true`, and its adjusted price must be finite and positive.
+This is checked independently by the feature builder, not inferred only from
+the acceptance report. Strict PIT facts are selected by publication
+availability at or before the signal close; duplicate
+(instrument, item, report period, availability timestamp) facts are rejected
+rather than selected according to input row order. Strict PIT values must be
+numeric and finite. The supplied exchange calendar must already be strictly
+chronological; the feature builder does not silently reorder it.
+
+
+## Training adapter entry-date invariant
+
+The required `label_entry_date` is checked again at every model-fit boundary,
+not only by the walk-forward runner and admission layer. The direct LightGBM
+fit adapter and Qlib training-panel bridge require canonical signal, entry and
+maturity dates and enforce
+`signal_date < label_entry_date < label_end_date < training_cutoff`.
+A Qlib dataset wrapper must be marked as having passed this conversion-time
+entry-date check before the Qlib LightGBM fit adapter accepts it. The model
+runner also requires entry and maturity dates to exist in the validated
+bundle's official exchange calendar. This keeps legacy close-to-close labels
+and non-session execution dates from entering a lower-level training API.
+
+
+## Historical security metadata (Phase 9.22)
+
+Listing age, industry and market capitalization are not accepted merely
+because CNEquity returns list_date, as_of_date, trade_date or announce_date.
+A metadata record needs both an effective interval and a separate
+timezone-aware available_at timestamp, plus a replayable receipt, revision ID,
+contract fingerprint and source-certified evidence class. The generic,
+fail-closed selector and exact-universe coverage audit are implemented in
+`research/security_metadata.py`; see
+[security_metadata_contract.md](security_metadata_contract.md).
+
+The locked CNEquity 0.21.0 contract and the inspected 0.23.0 contract mark
+industry_members and valuation_metrics as non-PIT snapshots. share_structure
+is partial/reconstructed PIT. Those facts do not pass the strict historical
+feature contract. instruments.list_date is only an immutable-event candidate
+after a source-specific audit and complete historical-universe coverage. No
+industry or market-cap feature is enabled by this phase.

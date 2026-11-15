@@ -1,6 +1,6 @@
 # Development roadmap
 
-**Baseline:** 2026-11-13  
+**Baseline:** 2026-11-14  
 **Project:** A-share quantitative research MVP v1
 
 This roadmap tracks the research platform, not the volume of downloaded CNEquity
@@ -38,7 +38,17 @@ branch is not part of `main` until GitHub reports it merged.
 | 6 | Chronological walk-forward fold planner | Merged in PR #11 | Expanding/rolling folds, label-maturity purge, embargo and non-overlapping test windows; no model fitting |
 | 7 | Itemized execution-cost attribution | Merged in PR #12 | Separate commission, transfer fee, sell stamp duty and slippage; slippage is not double-deducted |
 | 8 | Walk-forward runner, artifact persistence, verification and comparison | Merged in PR #13, #15, #16, #29, #30, #31 and #32 | Cutoff-isolated momentum folds; price-limit audit bound to assembled evidence rows and rule revision; experiment persistence/verification bound to structured adapter receipts; builder-only bundle admission at benchmark and walk-forward entry points; no model fitting |
-| 9 | Point-in-time feature/label and model adapter | Planned; four-gate blocked | Only after acceptance proof for identical dates/profile/data revisions |
+| 9.1 | Cross-sectional feature and forward-label contracts | Merged in PR #58 | Weekly as-of features: 5/20/60/120-session HFQ returns, rolling volatility, raw amount/volume activity and strict PIT ROE/net-profit; exact 5-session forward-return labels carry label_end_date. Synthetic tests cover future-publication isolation, missing-session nulls and signal-date membership. |
+| 9.2 | Training dataset admission and PIT source binding | Merged in PR #59 and #63 | Fail-closed exact-window/profile acceptance, replayable universe/HFQ/PIT receipts, pinned financial_statement_items adapter revision, conservative announcement-date availability, numeric features and label maturity before cutoff. The acceptance report remains training_dataset_unlocked=false. |
+| 9.3 | LightGBM adapter and weekly model target strategy | Merged in PR #60 | Deterministic LightGBM fit/predict/save/load requires a matching admission decision and exact feature/label fingerprints. Weekly predictions become Top-20 equal-weight target weights through the shared engine. No real model fit has been run. |
+| 9.4 | Walk-forward model runner and matched momentum comparison | Merged in PR #61 | Per fold: train-only admission/fit, validation prediction, label-maturity re-admission/refit on train+validation, test-only predictions. Model and momentum reset to the same baseline NAV and use identical costs/execution settings. CI uses fake LightGBM and synthetic bundles; no real training or empirical run. |
+| 9.5 | Model experiment persistence and verification | Merged in PR #62 | Persist per-fold Booster, feature/label predictions, targets, benchmark and model ledgers, admissions, provenance and config; verify SHA-256 inventory and model metadata. No real model artifacts generated. |
+| 9.6 | Optional Qlib DatasetH bridge | Merged in PR #64–#66 | Lazy Qlib bridge for admission-checked Polars features/labels, `(datetime, instrument)` index, feature/label groups and chronological segments. Synthetic-only conversion tests. |
+| 9.7 | Qlib DatasetH → LightGBM → weekly Top-20 pipeline | Merged in PR #67 | Walk-forward runner builds admission-bound Qlib datasets, fits the single LightGBM regressor from Qlib learn segments, predicts feature-only validation/test segments, and returns keyed scores to existing Top-20 equal-weight targets. PR #67 main CI passed 286 synthetic tests. |
+| 9.8 | Real Qlib 0.9.7 API compatibility | Merged in PR #68 | Python 3.12.16, Qlib 0.9.7, Pandas 2.3.3 and LightGBM 4.7.0; actual `DataHandlerLP.from_df`, `DatasetH.prepare`, learn/infer views, datetime MultiIndex and LightGBM Dataset construction passed one synthetic smoke test. `lightgbm.train` was stubbed; no model fit or real-data backtest. |
+| 9.9 | Full synthetic walk-forward integration with real Qlib | Merged in PR #69 | Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0. Real multi-fold runner exercised admission, DatasetH learn/infer, LightGBM Dataset construction, validation/test predictions, Top-20 targets, and shared model+momentum backtest paths; 2 real-API tests passed. `lightgbm.train` was replaced by a prediction-only Booster; no optimizer fit, local data lake or empirical result. |
+| 9.10 | Matured validation ranking diagnostics | Merged in PR #70 | Per-week validation Rank IC / Pearson IC / Top-N excess vs labeled universe / equal-sized Top-Bottom spread; labels must mature strictly before test start. Test labels are rejected, metrics are archived per fold and do not tune model parameters. Base CI: 294 passed, 2 skipped; real Qlib API integration: 2 passed. |
+| 9.11 | Cross-fold validation stability and explicit acceptance policy | Merged in PR #71 | Summarizes weekly Rank IC distribution/ICIR, positive-week and positive-fold ratios, Top-N excess stability and pooled label coverage. Explicit policy requires minimum folds, dates, valid IC weeks, cross-section width, coverage and ranking thresholds; values are versioned/fingerprinted. No policy means NOT_ASSESSED; insufficient sample means INSUFFICIENT_EVIDENCE. Base CI: 305 passed, 2 skipped; real Qlib integration: 2 passed. |
 | 10.1 | Research QA architecture and acceptance criteria | Merged in PR #17 | Architecture, four-gate policy, regime/cost/fill matrices, parameter/OOS discipline and report contract documented |
 | 10.2 | Admission guard and report skeleton | Merged in PR #18 and #34 | Preserve all four independent gate statuses; QA admission consumes structured source identities and actual adapter receipts through the shared fail-closed provenance validator; CI passed on PR #34 |
 | 10.3 | Historical-period and market-regime diagnostics | Merged in PR #19 and #33 | Verified OOS fold/year summaries; trailing-only 63-session cross-sectional HFQ regime labels; builder-validated bundle admission and exact match of receipts, audits, rule identity, scope and gates to the experiment manifest |
@@ -128,14 +138,95 @@ windows. No data assembly, scheduler or model-training unlock is added. See
 - No random time-series splitting.
 - No train or validation row may use a fact published after its simulated
   decision timestamp.
-- Qlib may be reused for dataset/model workflow where its API fits; LightGBM
-  provides the first model.
+- Qlib `DatasetH` is the primary research dataset interface and segment
+  selector; LightGBM is the single cross-sectional weekly rebalance-cycle
+  return regressor. Labels align to next-open entry and next-cycle next-open
+  exit; the session count can shorten around exchange holidays. No second
+  model family is introduced.
 - The model uses the same target-weight interface, engine, cost settings and
   report as momentum.
-- A builder must verify all four acceptance gates for the exact same window,
-  profile and source revisions and retain the report/receipts with the dataset.
-- `training_dataset_unlocked` remains false until that independent builder is
-  implemented, tested and explicitly approves the exact dataset.
+- Phase 9 admission verifies the exact acceptance window/profile, all five
+  report evidence entries (historical universe, replayable universe receipt,
+  HFQ, strict PIT and trading status), replayable source revisions, feature
+  schema/keys and label maturity before the fold cutoff.
+- The acceptance report and bundle provenance retain
+  `training_dataset_unlocked=false`; the model runner consumes a successful
+  per-fold admission object before constructing a Qlib dataset or fitting.
+- The project's fold planner owns label-entry lag, open-to-open label-horizon
+  purge, and embargo. The reported maturity date includes the one-session
+  close-to-next-open entry delay. Qlib receives those approved boundaries as
+  `DatasetH` segments; it does not weaken or replace admission.
+- Python 3.13 remains the main development environment. Qlib/pandas remain
+  optional and lazy; a dedicated Python 3.12 Qlib 0.9.7 smoke workflow checks
+  real DatasetH/LightGBM data-interface compatibility without changing the
+  project's base interpreter.
+
+### Phase 9.6 — optional Qlib DatasetH bridge (merged in PR #64; CI test correction in PR #65)
+
+The bridge converts only an admitted Polars training panel into Qlib's
+`DataHandlerLP.from_df` and `DatasetH` contracts. It rechecks feature/label
+fingerprints, exact key alignment, finite values, label maturity and
+non-overlapping segments. Qlib/pandas imports are lazy; base CI stubs the
+optional API. PIT/source receipts, admission, walk-forward boundaries and
+A-share execution remain project-owned. Synthetic CI validates conversion
+only; no real Qlib training or empirical strategy result is implied.
+
+### Phase 9.7 — integrated Qlib DatasetH → LightGBM pipeline (merged in PR #67)
+
+The diagnostic and final walk-forward fits now read Qlib's learn view; the
+validation and test paths read feature-only inference views. Admission,
+mature-label checks, purge/embargo, Top-20 target generation and A-share
+execution remain project-owned. The merged PR passed 286 synthetic tests;
+the PR CI did not install real Qlib.
+
+### Phase 9.8 — real Qlib 0.9.7 API compatibility (merged in PR #68)
+
+The dedicated Python 3.12.16 workflow installed Qlib 0.9.7, Pandas 2.3.3 and
+LightGBM 4.7.0. The synthetic-only smoke test passed against the real
+`DataHandlerLP.from_df`, `DatasetH.prepare`, learn/infer views, pandas datetime
+MultiIndex and LightGBM Dataset constructor. `lightgbm.train` was stubbed; no
+model was fitted. The job did not access the local data lake, call CNEquity,
+run a real-data backtest or alter base dependencies/version locks.
+
+### Phase 9.9 — full synthetic walk-forward integration (merged in PR #69)
+
+Run the existing model runner with the real Qlib 0.9.7 DatasetH and LightGBM
+Dataset interfaces, real per-fold project admission, validation and test
+prediction, Top-20 equal-weight targets and the shared project backtest engine.
+The Qlib-specific workflow replaces only `lightgbm.train` with a deterministic
+prediction-only Booster. No model optimization, real data, CNEquity call or
+empirical backtest is performed.
+
+### Phase 9.10 — matured validation ranking diagnostics (merged in PR #70)
+
+The diagnostic model's feature-only validation predictions are joined to
+validation forward-return labels only after those labels mature strictly before
+the fold test start. Per signal week, the runner records Spearman rank IC,
+Pearson IC, Top-N mean return and excess versus the labeled cross-section, and
+an equal-sized Top-Bottom spread. Fold and aggregate summaries are persisted.
+Test labels are rejected, and no automatic hyperparameter tuning or model
+selection is performed from these metrics. The valid-IC count includes negative
+and zero observations; positive IC ratio uses all defined IC observations.
+
+### Phase 9.11 — cross-fold validation stability and explicit acceptance policy (merged in PR #71)
+
+The runner summarizes weekly validation Rank IC across folds, including
+mean/median/sample standard deviation, descriptive ICIR, positive-week ratio,
+positive-mean-IC fold ratio, Top-N excess stability and pooled label coverage.
+An optional `ValidationRankingAcceptancePolicy` applies predeclared thresholds.
+There are no implicit financial cutoffs: the caller must supply a policy ID and
+minimum fold/date/valid-IC/cross-section/coverage/ranking thresholds. The exact
+policy values and SHA-256 fingerprint are persisted in the aggregate report
+and fold provenance. Without a policy, the decision remains `NOT_ASSESSED`;
+insufficient sample or coverage yields `INSUFFICIENT_EVIDENCE`.
+
+Latest Phase 9.11 validation: base CI 305 passed, 2 skipped; the dedicated
+Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 integration job
+passed 2 tests. The optimizer was stubbed; no real model fit, local data-lake
+access, CNEquity call, or empirical market backtest was performed. Validation
+policy acceptance is not a claim of test-period profitability.
+
+See [validation_ranking_policy.md](validation_ranking_policy.md).
 
 ## CNEquity data acquisition policy
 
@@ -154,3 +245,301 @@ A phase is complete only when code, tests and documentation are committed,
 CI passes on the current PR head, the PR is merged before it is described as
 part of `main`, and all limitations are stated honestly. Synthetic CI does
 not certify real-lake coverage or empirical performance.
+
+### Phase 9.12 — next-open execution-aligned labels (merged PR #72)
+
+The prior label formula used signal-day adjusted close to the close five
+sessions later, while the engine can only buy at the next session open. The
+new label builder derives HFQ adjusted opens from each session's raw open and
+same-session adjusted-close/raw-close multiplier and requires exact HFQ
+evidence. It measures the return from the first executable open after a
+signal to the first executable open after the next weekly signal, stores both
+entry and maturity dates, and follows holiday-shortened weeks. Admission
+requires the explicit entry date and validates it strictly between signal
+and exit maturity. Walk-forward purge adds the one-session entry lag to the
+open-to-open holding horizon before the configured embargo. Folded momentum
+replays retain weekly signal dates from the original full calendar rather
+than inventing a rebalance at a midweek cutoff. No real training or market
+run is performed.
+
+
+### Phase 9.13 — fail-fast execution-label contract (merged PR #73)
+
+The model runner now requires `label_entry_date` in its public label schema
+before fold planning, admission, Qlib dataset construction, or model fitting.
+Legacy label frames lacking the executable entry date fail at the runner
+boundary with a specific contract error. PR #73 CI: 314 unit tests passed,
+2 skipped; real Qlib/LightGBM synthetic API smoke tests passed (2). No
+optimizer fit or empirical market run was performed.
+
+
+### Phase 9.14 — exact HFQ and deterministic PIT feature inputs (merged PR #74)
+
+The cross-sectional feature builder now requires the adjusted-close exactness
+flag and rejects any null, non-finite, non-positive or non-exact HFQ rows.
+Strict PIT facts must have a non-empty report period and finite numeric value;
+duplicate (instrument, item, report period, availability timestamp) facts
+fail closed instead of relying on provider row order. Feature calendars must
+already be chronologically ordered. PR #74 CI: 321 unit tests passed,
+2 skipped. No Qlib/LightGBM API, real training or market backtest was changed
+or run.
+
+
+### Phase 9.15 — enforce execution entry dates at low-level fit boundaries (merged PR #75)
+
+The direct LightGBM fit adapter now requires canonical signal, entry and
+maturity dates and enforces
+`signal_date < label_entry_date < label_end_date < training_cutoff`.
+The Qlib panel bridge independently requires and validates the entry date
+before converting rows; Qlib dataset wrappers carry a verified-entry-contract
+marker, and the Qlib LightGBM adapter rejects wrappers that have not passed
+the project conversion path. The walk-forward runner also verifies entry and
+maturity dates against the bundle's official session calendar. Synthetic
+tests cover legacy labels, invalid entry ordering, non-canonical dates,
+unverified Qlib wrappers and non-session execution dates. PR #75 CI:
+331 unit tests passed, 2 skipped; the Python 3.12.16 / Qlib 0.9.7 /
+Pandas 2.3.3 / LightGBM 4.7.0 real-API synthetic workflow passed 2 tests.
+The LightGBM optimizer remained stubbed; no real model fit or market
+backtest was performed. Merge commit: `728016f`.
+
+
+
+### Phase 9.16 — latest-known PIT report-period precedence (merged PR #76)
+
+PIT feature selection now first chooses the newest report period already
+available at each signal timestamp, then chooses the latest revision within
+that report period. A later restatement of an older period cannot override a
+newer period already published. Report periods must be canonical YYYY-MM-DD
+dates and cannot be later than their publication date. Synthetic regression
+tests cover older-period restatements, same-period revisions, malformed dates
+and future report periods. PR #76 CI: 336 unit tests passed, 2 skipped.
+No real model fit or market backtest was performed. Merge commit:
+`1d235523a6a61f286769ec89b037860fd0d153fd`.
+
+
+### Phase 9.17 — finite-safe zero-volume activity features (merged PR #77)
+
+The rolling volume-ratio feature now returns null when the rolling mean
+volume is zero or unavailable. Zero-volume observations remain in the raw
+panel; the feature builder no longer creates NaN from a 0/0 ratio. Training
+and inference therefore both exclude incomplete rows instead of allowing a
+single NaN to invalidate an entire inference cross-section. Synthetic CI:
+337 unit tests passed, 2 skipped. No real model fit or market backtest was
+performed. Merge commit: `c8e94f10154710be78044bf4c55425798504ed6e`.
+
+
+### Phase 9.18 — consistent finite-feature inference eligibility
+
+Qlib inference-panel construction and the direct model prediction adapter now
+use the same row eligibility rule as supervised training: every configured
+feature must be present and finite. Null, NaN, positive-infinity and
+negative-infinity feature rows are excluded before prediction rather than
+allowing one incomplete security to invalidate the entire weekly cross-section.
+The model's keyed predictions retain only eligible instruments, and the shared
+Top-20 selector ranks that available set without imputation. Synthetic tests
+cover all four invalid-value cases in both inference adapters. No model fitting,
+real market backtest, local data-lake access or CNEquity operation is performed.
+PR #78 is merged. Final-head CI: 339 unit tests passed, 2 skipped;
+the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 synthetic
+compatibility workflow passed 2 tests. Merge commit:
+`e68c0d27a4d488dcba3f57df39e39dc539aa326e`. No optimizer fit, real-data
+training or empirical market backtest was performed.
+
+
+### Phase 9.19 — enforce PIT universe at the walk-forward boundary
+
+The model runner now validates every caller-supplied feature and label key
+against the validated bundle's same-date point-in-time membership snapshot.
+A frame cannot introduce a security outside the historical eligible universe
+even if it bypasses the canonical feature builder. The failure occurs before
+fold planning, admission, or model fitting. A synthetic regression test adds
+an out-of-universe instrument and confirms the runner rejects the frame at
+its public boundary. No empirical data, model fit, or market backtest is used.
+
+PR #79 is merged. Final-head CI: 339 unit tests passed, 2 skipped;
+the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 synthetic
+compatibility workflow passed 2 tests. Merge commit:
+`bec4a49de7427d862eda6c89df99d39e3288ec0a`. No optimizer fit, real-data
+training or empirical market backtest was performed.
+
+
+### Phase 9.20 — preserve missing PIT fundamentals with native missing values
+
+The earlier all-features-complete rule removed an otherwise eligible security
+when a strict ROE/net-profit fact was not yet available at that historical
+signal close. Model feature eligibility is now type-aware: all market-derived
+features must be non-null and finite, while a `pit_*` fundamental may remain
+null if no eligible fact was knowable then. Only true PIT nulls are transported
+as NaN to LightGBM; source NaN/Inf values remain invalid. Both direct and Qlib
+training/inference paths explicitly enable LightGBM native missing handling
+(`use_missing=true`, `zero_as_missing=false`), without zero-fill or
+forward-fill.
+
+Synthetic unit tests cover row eligibility and direct adapter matrices. The
+dedicated Python 3.12 Qlib 0.9.7 / LightGBM 4.7.0 compatibility workflow also
+verifies that Qlib preserves null PIT values through DatasetH learn/infer
+views and that the real LightGBM Dataset constructor accepts those NaNs; the
+optimizer remains stubbed. No real data, optimizer fit or market backtest is
+performed. This refines the all-feature-complete eligibility policy recorded
+under Phase 9.18.
+
+PR #80 is merged. Final-head CI: 344 unit tests passed, 2 skipped; the
+Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 compatibility
+workflow passed 2 synthetic API tests. The compatibility job verified
+DatasetH learn/inference views and LightGBM Dataset construction, while
+stubbing `lightgbm.train`; no optimizer fit, real-data training, local
+data-lake access or empirical market backtest was performed. Merge commit:
+`3b60cd624bc1e3dfcafddb8a2e46b80ea7091a14`.
+
+### Phase 9.21 — diagnose PIT missingness and Top-20 coverage
+
+The walk-forward runner now emits post-prediction validation diagnostics by
+PIT item and for the combined any-PIT-missing group. Reports separate the
+full signal-date PIT-universe denominator from the market-feature-eligible
+prediction denominator, then measure Top-20 missingness and compare prediction
+scores plus matured validation returns for missing versus observed PIT groups.
+Validation labels are accepted only after maturity strictly before the fold's
+test start; these diagnostics are descriptive and never tune the model.
+
+Untouched test/OOS folds use a separate label-free coverage path. It accepts
+only the full feature frame and keyed predictions, and reports per-date
+universe/prediction coverage plus Top-20 PIT missingness. It has no label
+argument and emits no return/outcome metrics. Validation outcome diagnostics
+and test/OOS coverage are persisted as separate Parquet artifacts and are
+summarized separately in fold and aggregate reports.
+
+Market-cap, listing-age and industry slices are explicitly deferred because
+the canonical validated bundle does not yet carry receipt-backed,
+point-in-time metadata with historical effective dates. No instrument-code or
+price/turnover proxy is inferred.
+
+PR #81 is merged. Final-head GitHub Actions: 351 unit tests passed, 2 skipped;
+the Python 3.12.16 / Qlib 0.9.7 / Pandas 2.3.3 / LightGBM 4.7.0 real-API
+compatibility workflow passed 2 synthetic tests. The compatibility workflow
+exercised the Qlib DatasetH and LightGBM bridge with the final validation/OOS
+diagnostic integration; it did not run LightGBM optimization or fit a model.
+No local data-lake access, CNEquity queries/backfills, real-data training or
+empirical market backtest was performed. Merge commit:
+`c5667a06c5209a118c6ef67a7f58791cba479253`.
+
+### Phase 9.22 — define receipt-bound PIT security metadata contract
+
+A provider-agnostic, fail-closed metadata contract now defines typed
+observations for immutable listing-date events, effective-dated industry
+classifications, and same-session market capitalization. Every observation
+requires an effective interval, a timezone-aware availability timestamp,
+source revision, contract fingerprint, receipt ID and source-certified
+evidence capability. Selection resolves revisions only as knowable at the
+Shanghai signal cutoff, forbids market-cap carry-forward, and stamps the
+selected snapshot with its signal date and decision timestamp. Coverage
+auditing requires every requested signal-universe instrument/field pair and
+fails on missing or unexpected rows.
+
+Industry classification systems are explicit and isolated: EastMoney and
+Shenwan codes cannot be merged into one taxonomy. Field units are fixed by
+the schema (date, classification code or CNY), and coverage audits reject
+unknown fields and mixed taxonomies.
+
+The locked CNEquity 0.21.0 contract and the reviewed 0.23.0 contract retain
+material source limitations: industry_members and valuation_metrics are
+non-PIT snapshots; share_structure is partial/reconstructed PIT; instruments
+listing dates remain only conditional immutable-event candidates pending
+source verification and complete historical-universe coverage. The selector
+is not wired into the feature builder, admission or model runner. No
+market-cap, listing-age or industry feature is enabled by this phase.
+
+PR #82 is merged. Final-head GitHub Actions: 374 unit tests passed, 2 skipped.
+These are synthetic contract/temporal-boundary tests only. No local data-lake
+access, CNEquity reads/queries/backfills, real-data training, optimizer fit
+or empirical market backtest was performed. No dependency or version-lock
+change was made. Merge commit:
+`a93291fb464b89c417de97868da2d42ca200ce17`.
+
+
+
+### Phase 9.23 — bind PIT metadata capabilities to field-semantic audits
+
+The Phase 9.22 metadata source identity previously accepted a flat
+`validated_evidence_classes` list alongside a receipt ID. The list was not
+itself tied to the actual receipt dependencies or scoped to individual fields.
+This phase replaces that shortcut with
+`build_security_metadata_source_identity(...)`: it requires a replayable
+receipt that pins the dataset's exact revision and contract fingerprint,
+plus PASS field-semantic audit records bound to the same receipt and revision.
+Each audit records a unique audit ID, dataset, evidence class, field scope,
+method and timezone-aware audit timestamp. Validation checks that every
+audited field is permitted for that dataset and evidence class, and each
+observation must have a matching field-scoped capability.
+
+This is still a structural contract, not an authenticated external audit:
+the helper does not establish auditor identity or prove a provider's actual
+historical coverage. Production audit IDs must refer to independently retained
+source-qualification evidence. No metadata source has been promoted, and the
+metadata selector remains outside the feature builder, bundle admission and
+walk-forward runner.
+
+Synthetic CI covers missing/legacy capability declarations, receipt/revision
+drift, field-scope mismatch and normal as-of behavior. No local data-lake
+access, CNEquity query/backfill, model fit or empirical backtest is performed.
+
+
+### Phase 9.24 — qualify listing-date evidence sources before feature use
+
+Reviewed official SSE, SZSE and BSE public listing-event and archive material,
+plus the public contract for a third-party A-share basic-information API.
+The SSE monthly archive/report provides code, name and listing-date entries,
+but the displayed archive and period table do not establish complete
+1990-to-present, delisted-symbol coverage or first publication time. The SZSE
+announcement archive provides event-level listing and termination notices;
+its sample exposes a difference between the page publication date and the
+document signature date, so `available_at` cannot be inferred from the
+document footer. BSE old/new code mapping helps with identifier reconciliation,
+but migrated Select-Layer companies have a special legal listing-time
+continuity rule that must be resolved before a migrated code's date can be
+admitted. CnOpenData publicly claims tri-exchange coverage back to 1990-12 and
+delisted-security records, but its public API description does not expose
+row-level original document provenance, first-publication timestamps or
+replayable historical row revisions.
+
+The immutable listing-date contract now allows the future
+`sse_listing_events`, `szse_listing_events` and `bse_listing_events`
+dataset namespaces. This is only a schema capability path: no source adapter
+is registered and no source is qualified. Added a source evidence envelope,
+availability-time rule, full-universe reconciliation gates, BSE migration
+edge-case policy and public source references in
+`docs/listing_date_source_qualification.md`.
+
+Synthetic tests verify that the three exchange-specific namespaces can
+validate a receipt-bound immutable listing-date observation. They do not test
+real exchange endpoints or establish provider completeness. No API was
+invoked, no data rows were downloaded, no local data-lake access or CNEquity
+query/backfill occurred, and no real training, optimizer fit or empirical
+backtest was run. No dependency or CNEquity version-lock change was made.
+
+
+### Phase 9.25 — executable listing-event evidence envelope
+
+Added the pure `validate_listing_event_evidence(...)` validator for exchange
+listing-event document records. It requires an exchange-qualified symbol,
+initial-listing event type, exchange-specific dataset namespace, official
+HTTPS host, document ID/kind, retained-document SHA-256, page/table/row
+locator, publication date and precision, a separate document/signature date,
+published/available/captured timestamps, explicit BSE transfer classification,
+and receipt/revision/contract provenance.
+
+Date-only publication is conservatively cut off at 23:59:59 Asia/Shanghai;
+`available_at` must equal the actual documented publication time. Document
+signature date is never substituted for public release time. Precise
+publication timestamps must include timezone. BSE Select-Layer transfer
+records fail closed until the legal listing-age start is proven separately
+from the code migration date. Evidence rows are then checked by the Phase 9.23
+receipt-bound, field-scoped immutable-event metadata contract.
+
+Synthetic tests cover all three exchange namespaces, official domain and code
+matching, date/timestamp publication semantics, digest/locator validation,
+receipt drift, duplicate evidence and BSE transfer rejection. This validator
+does not fetch URLs, hash external documents, authenticate auditors, or prove
+full PIT-universe coverage. It is not wired into bundle assembly, features,
+training admission or walk-forward. No source API or data rows were accessed;
+no local lake read, CNEquity query/backfill, real training, optimizer fit or
+empirical backtest was run. No dependency or version-lock changes were made.

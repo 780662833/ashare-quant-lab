@@ -14,10 +14,10 @@ from typing import Any
 class WalkForwardConfig:
     """Expanding (default) or rolling chronological fold parameters.
 
-    The gap between train and validation, and between validation and test,
-    equals label_horizon_sessions + embargo_sessions. This ensures that all
-    labels anchored on the previous partition's final session have matured
-    before the next partition begins, with the requested extra embargo.
+    The purge gap includes the first executable-entry lag, the open-to-open
+    holding horizon, and the requested embargo. For the weekly strategy the
+    entry lag is one exchange session: signals are formed after close and
+    cannot execute until the following session's open.
     """
 
     min_train_sessions: int = 504
@@ -25,6 +25,7 @@ class WalkForwardConfig:
     test_sessions: int = 63
     step_sessions: int | None = None
     label_horizon_sessions: int = 5
+    label_entry_lag_sessions: int = 1
     embargo_sessions: int = 1
     expanding_train: bool = True
 
@@ -33,8 +34,12 @@ class WalkForwardConfig:
             raise ValueError("min_train_sessions must be at least 2")
         if self.validation_sessions < 1 or self.test_sessions < 1:
             raise ValueError("validation_sessions and test_sessions must be positive")
-        if self.label_horizon_sessions < 0 or self.embargo_sessions < 0:
-            raise ValueError("label horizon and embargo must be non-negative")
+        if (
+            self.label_horizon_sessions < 0
+            or self.label_entry_lag_sessions < 0
+            or self.embargo_sessions < 0
+        ):
+            raise ValueError("label horizon, entry lag and embargo must be non-negative")
         if self.step_sessions is not None:
             if self.step_sessions < self.test_sessions:
                 raise ValueError("step_sessions must be >= test_sessions to avoid test overlap")
@@ -57,6 +62,7 @@ class WalkForwardFold:
     validation_sessions: int
     test_sessions: int
     label_horizon_sessions: int
+    label_entry_lag_sessions: int
     embargo_sessions: int
     expanding_train: bool
 
@@ -91,8 +97,13 @@ def build_walk_forward_folds(
     """Build expanding/rolling chronological folds from an official calendar.
 
     Fold layout (session indices are inclusive):
-      train -> label horizon + embargo gap -> validation
-      -> label horizon + embargo gap -> test
+      train -> entry lag + label horizon + embargo -> validation
+      -> entry lag + label horizon + embargo -> test
+
+    The reported maturity date includes both the close-to-next-open execution
+    lag and the open-to-open holding horizon. The fixed horizon is a
+    conservative maximum; holiday-shortened weeks can mature earlier, while
+    the runner also checks each actual label_end_date against the next cutoff.
 
     Test windows are non-overlapping. By default the next fold advances by
     exactly test_sessions, so OOS test windows are contiguous where possible.
@@ -105,7 +116,8 @@ def build_walk_forward_folds(
     """
     cfg = config or WalkForwardConfig()
     sessions = _normalize_calendar(trading_dates)
-    gap = cfg.label_horizon_sessions + cfg.embargo_sessions
+    maturity_lag = cfg.label_entry_lag_sessions + cfg.label_horizon_sessions
+    gap = maturity_lag + cfg.embargo_sessions
     step = cfg.step_sessions or cfg.test_sessions
 
     folds: list[WalkForwardFold] = []
@@ -122,8 +134,8 @@ def build_walk_forward_folds(
             0 if cfg.expanding_train
             else train_end_index - cfg.min_train_sessions + 1
         )
-        train_label_maturity_index = train_end_index + cfg.label_horizon_sessions
-        validation_label_maturity_index = validation_end_index + cfg.label_horizon_sessions
+        train_label_maturity_index = train_end_index + maturity_lag
+        validation_label_maturity_index = validation_end_index + maturity_lag
 
         if train_label_maturity_index >= validation_start_index:
             raise AssertionError("Train labels do not mature before validation")
@@ -145,6 +157,7 @@ def build_walk_forward_folds(
                 validation_sessions=cfg.validation_sessions,
                 test_sessions=cfg.test_sessions,
                 label_horizon_sessions=cfg.label_horizon_sessions,
+                label_entry_lag_sessions=cfg.label_entry_lag_sessions,
                 embargo_sessions=cfg.embargo_sessions,
                 expanding_train=cfg.expanding_train,
             )

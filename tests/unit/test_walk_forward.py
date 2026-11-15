@@ -33,12 +33,13 @@ def test_walk_forward_purges_label_horizon_and_embargo_between_partitions():
     first = folds[0]
     assert first.train_start == sessions[0]
     assert first.train_end == sessions[11]
-    assert first.train_label_maturity == sessions[13]
-    assert first.validation_start == sessions[15]
-    assert first.validation_end == sessions[17]
-    assert first.validation_label_maturity == sessions[19]
-    assert first.test_start == sessions[21]
-    assert first.test_end == sessions[23]
+    assert first.train_label_maturity == sessions[14]
+    assert first.validation_start == sessions[16]
+    assert first.validation_end == sessions[18]
+    assert first.validation_label_maturity == sessions[21]
+    assert first.test_start == sessions[23]
+    assert first.test_end == sessions[25]
+    assert first.label_entry_lag_sessions == 1
 
 
 def test_walk_forward_test_windows_do_not_overlap():
@@ -146,6 +147,8 @@ def test_walk_forward_config_rejects_negative_horizon_or_embargo():
         WalkForwardConfig(label_horizon_sessions=-1)
     with pytest.raises(ValueError, match="non-negative"):
         WalkForwardConfig(embargo_sessions=-1)
+    with pytest.raises(ValueError, match="non-negative"):
+        WalkForwardConfig(label_entry_lag_sessions=-1)
 
 
 def test_folds_are_serializable_and_do_not_unlock_training():
@@ -160,3 +163,24 @@ def test_folds_are_serializable_and_do_not_unlock_training():
     assert folds[0].to_dict()["fold_id"] == "fold_001"
     # Fold planning is not a dataset builder or a training admission token.
     assert not hasattr(folds[0], "training_dataset_unlocked")
+
+
+
+def test_default_weekly_label_maturity_includes_next_open_entry_lag():
+    sessions = make_sessions(100)
+    folds = build_walk_forward_folds(
+        sessions,
+        WalkForwardConfig(
+            min_train_sessions=12,
+            validation_sessions=3,
+            test_sessions=3,
+            # Defaults mirror weekly open-to-open labels and one-session embargo.
+        ),
+    )
+    first = folds[0]
+    assert first.label_horizon_sessions == 5
+    assert first.label_entry_lag_sessions == 1
+    assert first.train_label_maturity == sessions[17]
+    # Maturity is +6 sessions after train_end; the next partition starts
+    # after one additional embargo session.
+    assert sessions.index(first.validation_start) == sessions.index(first.train_end) + 8

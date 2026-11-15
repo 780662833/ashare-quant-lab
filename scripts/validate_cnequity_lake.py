@@ -12,7 +12,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run fail-closed four-gate acceptance against a local CNEquity lake."
     )
-    parser.add_argument("--data-root", default=r"F:\cnEquity")
+    parser.add_argument(
+        "--data-root",
+        default=r"F:\cnequity",
+        help=r"CNEquity lake directory (default: F:\cnequity)",
+    )
     parser.add_argument("--start-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument("--end-date", required=True, help="Inclusive YYYY-MM-DD")
     parser.add_argument(

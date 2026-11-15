@@ -28,6 +28,7 @@ def run_momentum_benchmark(
     *,
     strategy_config: MomentumConfig | None = None,
     backtest_config: BacktestConfig | None = None,
+    signal_dates: list[str] | None = None,
 ) -> MomentumBenchmarkRun:
     """Run weekly momentum from canonical data through the shared engine.
 
@@ -46,6 +47,7 @@ def run_momentum_benchmark(
         bundle.universe_membership,
         bundle.trading_dates,
         strategy,
+        signal_dates=signal_dates,
     )
     targets = equal_weight_targets(
         scores.select("signal_date", "instrument", "score"),
@@ -64,5 +66,11 @@ def run_momentum_benchmark(
         targets=targets,
         result=result,
         report=report,
-        provenance=dict(bundle.provenance),
+        provenance={
+            **dict(bundle.provenance),
+            "momentum_signal_dates": (
+                scores["signal_date"].unique().sort().to_list()
+                if not scores.is_empty() else []
+            ),
+        },
     )
