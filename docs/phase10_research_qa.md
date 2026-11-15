@@ -394,7 +394,9 @@ admission decisions, artifact/config/provenance integrity evidence, a valid
 report SHA-256, and an intact training lock. Without that report, execution
 scenarios remain `UNSUPPORTED`; a verified report replaces the capability-only
 assessment with its verified F0-F4 results. A blocked baseline cannot accept a
-verified stress report.
+verified stress report. P10.7 also reconciles requested/capped/filled share
+counts, cap and achieved ratios, per-scenario order counts, and no-fill reason
+counts; an achieved ratio above the board-lot-rounded cap is rejected.
 
 `write_research_qa_report(report, output_root=...)` writes `report.json` and
 `report.md` under a new QA-ID directory using exclusive creation. Existing QA

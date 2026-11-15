@@ -150,12 +150,22 @@ def fill_suite_report():
         "experiment_ids": ["experiment-001", "experiment-001-F1", "experiment-001-F2", "experiment-001-F3", "experiment-001-F4"],
         "scenario_ratios": [1.0, 0.95, 0.90, 0.80, 0.70],
         "scenarios": [
-            {"scenario_id": f"F{i}", "experiment_id": experiment_id,
-             "target_fill_ratio": ratio, "status": "VERIFIED",
-             "achieved_fill_ratio": ratio, "target_fill_cap_ratio": ratio}
-            for i, (ratio, experiment_id) in enumerate(zip(
+            {
+                "scenario_id": f"F{i}", "experiment_id": experiment_id,
+                "target_fill_ratio": ratio, "status": "VERIFIED",
+                "target_requested_shares": 1000,
+                "target_fill_cap_shares": cap_shares,
+                "filled_shares": cap_shares,
+                "target_fill_cap_ratio": cap_shares / 1000,
+                "achieved_fill_ratio": cap_shares / 1000,
+                "order_count": 10, "filled_order_count": 10,
+                "partially_filled_order_count": 0, "no_fill_order_count": 0,
+                "no_fill_reasons": {},
+            }
+            for i, (ratio, experiment_id, cap_shares) in enumerate(zip(
                 (1.0, 0.95, 0.90, 0.80, 0.70),
                 ("experiment-001", "experiment-001-F1", "experiment-001-F2", "experiment-001-F3", "experiment-001-F4"),
+                (1000, 900, 900, 800, 700),
             ))
         ],
         "integrity": {
@@ -184,7 +194,7 @@ def test_integrated_report_accepts_verified_fill_stress_suite(monkeypatch):
 
 def test_integrated_report_rejects_tampered_fill_stress_hash(monkeypatch):
     suite = fill_suite_report()
-    suite["scenarios"][1]["achieved_fill_ratio"] = 0.99
+    suite["scenarios"][1]["net_return"] = 0.99
     with pytest.raises(ValueError, match="content does not match its SHA-256"):
         build(monkeypatch, fill=suite)
 
@@ -209,3 +219,31 @@ def test_integrated_report_does_not_accept_fill_suite_for_blocked_baseline(monke
     with pytest.raises(ValueError, match="blocked baseline"):
         build(monkeypatch, fill=fill_suite_report(), admission="BLOCKED")
 
+
+
+def test_integrated_report_rejects_fill_metrics_above_board_lot_cap(monkeypatch):
+    suite = fill_suite_report()
+    suite["scenarios"][1]["achieved_fill_ratio"] = 0.95
+    with pytest.raises(ValueError, match="exceed its cap"):
+        build(monkeypatch, fill=suite)
+
+
+def test_integrated_report_rejects_fill_share_totals_above_cap(monkeypatch):
+    suite = fill_suite_report()
+    suite["scenarios"][2]["filled_shares"] = 1000
+    with pytest.raises(ValueError, match="exceeds its target/cap shares"):
+        build(monkeypatch, fill=suite)
+
+
+def test_integrated_report_rejects_fill_order_count_mismatch(monkeypatch):
+    suite = fill_suite_report()
+    suite["scenarios"][3]["no_fill_order_count"] = 1
+    with pytest.raises(ValueError, match="order counts do not reconcile"):
+        build(monkeypatch, fill=suite)
+
+
+def test_integrated_report_rejects_fill_ratio_not_matching_share_counts(monkeypatch):
+    suite = fill_suite_report()
+    suite["scenarios"][4]["achieved_fill_ratio"] = 0.69
+    with pytest.raises(ValueError, match="does not match share counts"):
+        build(monkeypatch, fill=suite)
