@@ -28,8 +28,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--expected-data-root",
-        default=str(ROOT / "data" / "cnequity"),
-        help="Expected lake root; plan exits non-zero when CNEquity config points elsewhere.",
+        default=r"F:\\cnequity",
+        help=r"Expected lake root (default: F:\\cnequity); plan exits non-zero on mismatch.",
     )
     args = parser.parse_args()
 
