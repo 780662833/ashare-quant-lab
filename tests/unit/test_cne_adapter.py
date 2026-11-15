@@ -280,3 +280,80 @@ def test_adapter_rejects_receipt_without_dependency_identity(monkeypatch):
     adapter = CNEquityAdapter(data_root="/tmp/cne")
     with pytest.raises(CNEquityDataError, match="dependency identities"):
         adapter.daily_bars(None, "2024-01-01", "2024-01-31")
+
+
+def test_diagnostic_metadata_read_uses_adapter_location_without_pinning_receipt(monkeypatch):
+    calls = []
+
+    def fake_load(dataset, **kwargs):
+        calls.append((dataset, kwargs))
+        return (
+            pl.DataFrame({"symbol": ["600000.SH"], "list_date": ["1999-11-10"]}),
+            {"replayable": False, "dependencies": {}, "coverage": {"completeness": "not_assessed"}},
+        )
+
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    result = adapter.read_diagnostic_dataset("instruments")
+
+    assert result.frame.height == 1
+    assert result.receipt["replayable"] is False
+    assert calls[0][0] == "instruments"
+    assert calls[0][1]["data_root"] == r"F:\\cnequity"
+    assert calls[0][1]["require_replayable"] is False
+    assert adapter.source_receipts == []
+    assert adapter.source_revision_map == {}
+
+
+def test_diagnostic_metadata_read_is_restricted_to_registered_metadata_tables(monkeypatch):
+    install_fake_cne(monkeypatch, lambda dataset, **kwargs: pl.DataFrame())
+    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    with pytest.raises(ValueError, match="restricted"):
+        adapter.read_diagnostic_dataset("daily_bars")
+
+
+def test_instrument_master_uses_replayable_receipt_and_validates_primary_key(monkeypatch):
+    frame = pl.DataFrame({
+        "symbol": ["600000.SH", "000001.SZ"],
+        "list_date": ["1999-11-10", "1991-04-03"],
+        "delist_date": [None, None],
+    })
+    calls = []
+    def fake_load(dataset, **kwargs):
+        calls.append((dataset, kwargs))
+        return frame
+
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    result = adapter.instrument_master()
+
+    assert result["symbol"].to_list() == ["000001.SZ", "600000.SH"]
+    assert calls[0][0] == "instruments"
+    assert calls[0][1]["require_replayable"] is True
+    assert adapter.source_receipts[0]["dataset"] == "instruments"
+
+    duplicate = pl.concat([frame, frame.head(1)])
+    install_fake_cne(monkeypatch, lambda dataset, **kwargs: duplicate)
+    with pytest.raises(CNEquityDataError, match="duplicate symbol"):
+        CNEquityAdapter(data_root=r"F:\\cnequity").instrument_master()
+
+
+def test_delisting_event_records_uses_receipt_backed_adapter_path(monkeypatch):
+    frame = pl.DataFrame({
+        "symbol": ["000002.SZ"],
+        "first_trade_date": ["1991-01-29"],
+        "last_trade_date": ["2024-08-16"],
+    })
+    calls = []
+    def fake_load(dataset, **kwargs):
+        calls.append((dataset, kwargs))
+        return frame
+
+    install_fake_cne(monkeypatch, fake_load)
+    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    result = adapter.delisting_event_records()
+
+    assert result["symbol"].to_list() == ["000002.SZ"]
+    assert calls[0][0] == "delisting_events"
+    assert calls[0][1]["require_replayable"] is True
+    assert adapter.source_receipts[0]["dataset"] == "delisting_events"
