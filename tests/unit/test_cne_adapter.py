@@ -293,13 +293,13 @@ def test_diagnostic_metadata_read_uses_adapter_location_without_pinning_receipt(
         )
 
     install_fake_cne(monkeypatch, fake_load)
-    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    adapter = CNEquityAdapter(data_root=r"F:\cnequity")
     result = adapter.read_diagnostic_dataset("instruments")
 
     assert result.frame.height == 1
     assert result.receipt["replayable"] is False
     assert calls[0][0] == "instruments"
-    assert calls[0][1]["data_root"] == r"F:\\cnequity"
+    assert calls[0][1]["data_root"] == r"F:\cnequity"
     assert calls[0][1]["require_replayable"] is False
     assert adapter.source_receipts == []
     assert adapter.source_revision_map == {}
@@ -307,7 +307,7 @@ def test_diagnostic_metadata_read_uses_adapter_location_without_pinning_receipt(
 
 def test_diagnostic_metadata_read_is_restricted_to_registered_metadata_tables(monkeypatch):
     install_fake_cne(monkeypatch, lambda dataset, **kwargs: pl.DataFrame())
-    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    adapter = CNEquityAdapter(data_root=r"F:\cnequity")
     with pytest.raises(ValueError, match="restricted"):
         adapter.read_diagnostic_dataset("daily_bars")
 
@@ -324,7 +324,7 @@ def test_instrument_master_uses_replayable_receipt_and_validates_primary_key(mon
         return frame
 
     install_fake_cne(monkeypatch, fake_load)
-    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    adapter = CNEquityAdapter(data_root=r"F:\cnequity")
     result = adapter.instrument_master()
 
     assert result["symbol"].to_list() == ["000001.SZ", "600000.SH"]
@@ -335,7 +335,7 @@ def test_instrument_master_uses_replayable_receipt_and_validates_primary_key(mon
     duplicate = pl.concat([frame, frame.head(1)])
     install_fake_cne(monkeypatch, lambda dataset, **kwargs: duplicate)
     with pytest.raises(CNEquityDataError, match="duplicate symbol"):
-        CNEquityAdapter(data_root=r"F:\\cnequity").instrument_master()
+        CNEquityAdapter(data_root=r"F:\cnequity").instrument_master()
 
 
 def test_delisting_event_records_uses_receipt_backed_adapter_path(monkeypatch):
@@ -350,7 +350,7 @@ def test_delisting_event_records_uses_receipt_backed_adapter_path(monkeypatch):
         return frame
 
     install_fake_cne(monkeypatch, fake_load)
-    adapter = CNEquityAdapter(data_root=r"F:\\cnequity")
+    adapter = CNEquityAdapter(data_root=r"F:\cnequity")
     result = adapter.delisting_event_records()
 
     assert result["symbol"].to_list() == ["000002.SZ"]
