@@ -8,6 +8,8 @@ from pathlib import Path
 
 from ashare_quant.data.metadata_inspection import inspect_cnequity_metadata
 
+ROOT = Path(__file__).resolve().parents[1]
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(
