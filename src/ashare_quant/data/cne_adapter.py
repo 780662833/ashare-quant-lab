@@ -137,26 +137,50 @@ class CNEquityAdapter:
         self._source_receipts.append({"dataset": dataset, "receipt": deepcopy(dict(receipt))})
         return frame
 
-    def read_diagnostic_dataset(self, dataset: str) -> Any:
-        """Read one metadata dataset for inspection without admitting it to a research session.
+    def read_diagnostic_dataset(
+        self,
+        dataset: str,
+        *,
+        data_root: str | Path | None = None,
+        require_replayable: bool = False,
+    ) -> Any:
+        """Read metadata for diagnosis, without admitting it to a research session.
 
-        This deliberately uses CNEquity's receipt API with require_replayable=False
-        so legacy local rows remain inspectable. The returned receipt is not added
-        to this adapter's pinned research receipts/revision map and must never be
-        used to build a ResearchDataBundle.
+        Only this inspection path permits require_replayable=False so legacy
+        local rows remain visible. The returned receipt is not added to this
+        adapter's pinned research receipts/revision map and cannot be used to
+        build a ResearchDataBundle. An explicitly requested data_root must match
+        the adapter's configured location.
         """
         allowed = {"instruments", "delisting_events"}
         if dataset not in allowed:
             raise ValueError(
                 f"Diagnostic reads are restricted to {sorted(allowed)}; got {dataset!r}"
             )
+        if require_replayable is not False:
+            raise ValueError("Diagnostic reads do not support research-session admission")
+        requested_root = (
+            Path(data_root).expanduser().resolve() if data_root is not None else None
+        )
         from cnequity.query import load_with_receipt
 
         kwargs: dict[str, Any] = {"require_replayable": False}
         if self._config is not None:
+            configured_root = Path(self._config.data_root).expanduser().resolve()
+            if requested_root is not None and requested_root != configured_root:
+                raise ValueError(
+                    f"Requested data_root {requested_root} does not match adapter config "
+                    f"{configured_root}"
+                )
             kwargs["config"] = self._config
         else:
-            kwargs["data_root"] = str(Path(self.data_root).expanduser())
+            configured_root = Path(self.data_root).expanduser().resolve()
+            if requested_root is not None and requested_root != configured_root:
+                raise ValueError(
+                    f"Requested data_root {requested_root} does not match adapter data_root "
+                    f"{configured_root}"
+                )
+            kwargs["data_root"] = str(configured_root)
         return load_with_receipt(dataset, **kwargs)
 
     @staticmethod
