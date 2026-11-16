@@ -72,6 +72,7 @@ def main() -> int:
             page_size=args.page_size,
             max_pages=args.max_pages,
             min_interval_seconds=args.minimum_interval_seconds,
+            timeout_seconds=args.timeout_seconds,
         )
     except ValueError as exc:
         parser.error(str(exc))
