@@ -560,14 +560,24 @@ validation only; no exchange API call or real data test was run.
 
 ### Phase 9.27 — official announcement source and API evaluation
 
-The 2026-11-16 recheck identified an authenticated SSE InfoNet Announcement
-File Service whose published summary states coverage for SSE main board, SSE
-STAR Market, and SZSE stock announcements, with date-queryable metadata,
-unique index/download URL identifiers, and an application/trial/contract
-flow. The public summary does not establish 2018-to-present historical
-retention, delisted-symbol completeness, original-publication timestamp
-semantics, or trial cost/limits. Therefore no adapter is registered and no
-provider is admitted.
+The 2026-11-16 recheck identified an SSE InfoNet Announcement File Service.
+Its older 2022 product description lists SSE main board, SSE STAR Market, and
+SZSE stock announcements, with date-queryable metadata and unique
+index/download URL identifiers. The provider's current product overview,
+however, describes Shanghai-market stock/bond/fund announcements, regulatory
+inquiries, and issuance/listing announcements without expressly confirming
+current SZSE coverage. This scope discrepancy must be confirmed before the
+service can be treated as an SH/SZ source.
+
+The provider's current public price list states CNY 60,000 per year for
+Announcement File Service. Its current application guide says application,
+approval, and signing of a data-service agreement; the older product
+description mentioned a trial before contracting, so current trial
+availability is unconfirmed. The public material still does not establish
+2018-to-present historical retention, delisted-symbol completeness,
+original-publication timestamp semantics, or complete revision replay.
+Therefore no adapter is registered, no provider is admitted, and no purchase
+is recommended before a bounded historical proof.
 
 The public SZSE company-notice archive has numbered pages reaching at least
 `index_7` (observed dates June-August 2024); individual 2020 delisting
