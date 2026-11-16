@@ -543,3 +543,45 @@ full PIT-universe coverage. It is not wired into bundle assembly, features,
 training admission or walk-forward. No source API or data rows were accessed;
 no local lake read, CNEquity query/backfill, real training, optimizer fit or
 empirical backtest was run. No dependency or version-lock changes were made.
+
+### Phase 9.26 — signal-date listing-event availability audit
+
+Added `audit_listing_event_signal_coverage(...)` on top of the existing
+receipt-bound listing-event evidence validator. For one supplied historical
+membership snapshot and one decision cutoff, it reports missing event evidence,
+evidence published after the decision cutoff, and listing dates after the
+signal date, with exchange-level breakdowns. Date-only publication is
+conservatively available at 23:59:59 Asia/Shanghai. The audit explicitly does
+not prove that the supplied universe is complete, validate delisting history,
+or unlock training/backtesting.
+
+The synthetic test suite passed in CI (426 passed, 2 skipped). This is code
+validation only; no exchange API call or real data test was run.
+
+### Phase 9.27 — official announcement source and API evaluation
+
+The 2026-11-16 recheck identified an authenticated SSE InfoNet Announcement
+File Service whose published summary states coverage for SSE main board, SSE
+STAR Market, and SZSE stock announcements, with date-queryable metadata,
+unique index/download URL identifiers, and an application/trial/contract
+flow. The public summary does not establish 2018-to-present historical
+retention, delisted-symbol completeness, original-publication timestamp
+semantics, or trial cost/limits. Therefore no adapter is registered and no
+provider is admitted.
+
+The public SZSE company-notice archive has numbered pages reaching at least
+`index_7` (observed dates June-August 2024); individual 2020 delisting
+notices remain accessible. The SSE listing/delisting entry is visible but
+includes bond listing notices in the reviewed listing, so stock-only event
+filters remain to be proven. These are interface observations, not proof of
+historical archive completeness.
+
+The next gate is a bounded historical proof using either an authorized InfoNet
+trial/specification or exhaustive public-page capture. The proof must reconcile
+all events and symbols in the target interval, distinguish original publication
+from later update time, retain original bytes/digests, and create replayable
+receipts. Third-party reverse-engineered endpoints remain experimental leads
+only. No API was invoked, no credentials or paid service were acquired, no data
+was downloaded, and no local lake read, CNEquity query/backfill, training or
+real backtest was performed.
+
