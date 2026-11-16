@@ -151,3 +151,31 @@ Synthetic tests exercise allowed exchange domains and identifiers, publication
 timestamp precision, signature-date separation, digest and record-locator
 requirements, receipt mismatch, duplicate events and BSE transfer rejection.
 No external endpoint, source record or real market data was accessed.
+
+## Signal-date availability audit (Phase 9.26)
+
+The evidence module now also provides
+`audit_listing_event_signal_coverage(...)`. It accepts an exact expected
+instrument snapshot, a timezone-aware decision cutoff on one signal date, the
+captured event rows, and their receipt-derived source identities. The function
+first runs the existing official-document and capability validator, then
+checks each expected instrument for:
+
+- a validated initial-listing event;
+- an effective listing date no later than the signal date; and
+- a documented public-availability timestamp no later than the decision cutoff.
+
+A date-only publication timestamp remains conservatively fixed at
+23:59:59 Asia/Shanghai. It cannot qualify for an earlier same-day signal
+decision. Missing evidence, a not-yet-public event, or a listing date after the
+signal date produces FAIL. Valid evidence for other instruments is reported
+separately and does not count as missing membership.
+
+The expected symbol list must come from the exact historical PIT universe
+snapshot being audited, not the current instruments table. The function does
+not retrieve that universe, prove its completeness, validate delisting history,
+or unlock feature construction, training, or backtesting. A PASS is limited to
+the supplied membership snapshot and one signal-date decision cutoff. The
+weekly research window still requires a separate audit for every rebalance
+signal date, plus the historical-universe and delisting gates.
+
