@@ -340,8 +340,8 @@ def probe_cninfo_announcement_api(
                 },
                 method="POST",
             )
-            raw_bytes, status, final_url = _read_response(client, request, timeout_seconds)
             request_started_at = datetime.now(timezone.utc).isoformat()
+            raw_bytes, status, final_url = _read_response(client, request, timeout_seconds)
             previous_request_at = time.monotonic()
             if not _official_host(final_url):
                 raise ValueError("query request redirected outside the official CNINFO host")
