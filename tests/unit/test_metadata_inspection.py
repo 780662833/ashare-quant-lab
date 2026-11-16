@@ -202,3 +202,126 @@ def test_default_inspection_uses_project_adapter_and_supplied_data_root(monkeypa
     ]
     assert report["datasets"]["instruments"]["receipt"]["replayable"] is False
     assert report["historical_universe_admitted"] is False
+
+
+def test_listing_date_missingness_is_attributed_by_asset_exchange_and_source() -> None:
+    instruments = pl.DataFrame(
+        {
+            "symbol": [
+                "600000.SH", "000001.SZ", "430001.BJ",
+                "BAD", "510300.SH", "123456.SZ",
+            ],
+            "name": ["A", "B", "C", "D", "ETF", "CDR"],
+            "exchange": ["SH", "SZ", "BJ", "SH", "SH", "SZ"],
+            "asset_type": ["stock", "stock", "stock", "stock", "etf", "cdr"],
+            "list_date": [
+                date(1999, 11, 10), None, None, None, None, date(2020, 1, 2),
+            ],
+            "delist_date": [None, None, None, None, None, None],
+            "source": ["tdx", "baostock", "bse", "sina", "tdx", "sina"],
+        }
+    )
+    frames = {
+        "instruments": instruments,
+        "delisting_events": pl.DataFrame(schema={"symbol": pl.String}),
+    }
+
+    def loader(dataset: str, **kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            frame=frames[dataset],
+            receipt={
+                "dataset": dataset,
+                "receipt_id": f"receipt-{dataset}",
+                "replayable": dataset == "instruments",
+                "unpinned_datasets": [] if dataset == "instruments" else [dataset],
+                "coverage": {"completeness": "not_assessed"},
+            },
+        )
+
+    report = inspect_cnequity_metadata(
+        "fake-lake",
+        loader=loader,
+        schema_reader=lambda _: {"symbol": pl.String},
+        as_of=date(2026, 11, 16),
+    )
+
+    diagnostic = report["datasets"]["instruments"]["listing_date_missingness"]
+    assert diagnostic["status"] == "AVAILABLE"
+    assert diagnostic["total_rows"] == 6
+    assert diagnostic["missing_or_unparseable_rows"] == 4
+    assert diagnostic["stock_rows"] == 4
+    assert diagnostic["stock_missing_list_date_rows"] == 3
+    assert diagnostic["a_share_stock_rows"] == 3
+    assert diagnostic["a_share_stock_missing_list_date_rows"] == 2
+    assert diagnostic["unqualified_stock_missing_list_date_rows"] == 1
+    assert diagnostic["non_stock_missing_list_date_rows"] == 1
+    assert {
+        row["symbol"] for row in diagnostic["a_share_stock_missing_records"]
+    } == {"000001.SZ", "430001.BJ"}
+
+    asset_groups = {
+        item["value"]: item
+        for item in diagnostic["missing_by_asset_type"]["groups"]
+    }
+    assert asset_groups["stock"]["rows"] == 4
+    assert asset_groups["stock"]["missing_list_date_rows"] == 3
+    assert asset_groups["etf"]["missing_list_date_rows"] == 1
+
+    listing_events = report["cross_checks"]["listing_event_evidence"]
+    assert listing_events["status"] == "NOT_CONNECTED"
+    assert listing_events["expected_stock_symbols"] == 3
+    assert report["historical_universe_admitted"] is False
+
+
+def test_listing_event_evidence_without_source_identity_is_not_validated() -> None:
+    frames = {
+        "instruments": _instrument_frame(),
+        "delisting_events": pl.DataFrame(schema={"symbol": pl.String}),
+    }
+
+    def loader(dataset: str, **kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            frame=frames[dataset],
+            receipt={"dataset": dataset, "receipt_id": f"receipt-{dataset}"},
+        )
+
+    report = inspect_cnequity_metadata(
+        "fake-lake",
+        loader=loader,
+        schema_reader=lambda _: {"symbol": pl.String},
+        as_of=date(2026, 11, 16),
+        listing_event_evidence=pl.DataFrame({"instrument": ["600000.SH"]}),
+    )
+
+    listing_events = report["cross_checks"]["listing_event_evidence"]
+    assert listing_events["status"] == "NOT_VALIDATED"
+    assert listing_events["evidence_rows"] == 1
+    assert "without receipt-derived source identities" in listing_events["reason"]
+    assert report["historical_universe_admitted"] is False
+
+
+def test_invalid_listing_event_evidence_fails_closed() -> None:
+    frames = {
+        "instruments": _instrument_frame(),
+        "delisting_events": pl.DataFrame(schema={"symbol": pl.String}),
+    }
+
+    def loader(dataset: str, **kwargs: object) -> SimpleNamespace:
+        return SimpleNamespace(
+            frame=frames[dataset],
+            receipt={"dataset": dataset, "receipt_id": f"receipt-{dataset}"},
+        )
+
+    report = inspect_cnequity_metadata(
+        "fake-lake",
+        loader=loader,
+        schema_reader=lambda _: {"symbol": pl.String},
+        as_of=date(2026, 11, 16),
+        listing_event_evidence=pl.DataFrame({"instrument": ["600000.SH"]}),
+        listing_event_source_identities={},
+    )
+
+    listing_events = report["cross_checks"]["listing_event_evidence"]
+    assert listing_events["status"] == "INVALID"
+    assert "missing columns" in listing_events["validation_error"]
+    assert report["historical_universe_admitted"] is False

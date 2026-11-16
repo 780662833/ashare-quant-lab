@@ -43,7 +43,41 @@ def main() -> int:
             f"{dataset}: {result.get('status', 'ERROR')}"
             + (f" rows={result['row_count']}" if "row_count" in result else "")
         )
-    print("Listing-date PIT admission: NOT_ADMITTED")
+
+    instruments = report["datasets"].get("instruments", {})
+    missingness = instruments.get("listing_date_missingness", {})
+    if missingness.get("status") == "AVAILABLE":
+        print(
+            "list_date missing/unparseable: "
+            f"{missingness['missing_or_unparseable_rows']}/{missingness['total_rows']}"
+        )
+        print(
+            "A-share stock list_date missing: "
+            f"{missingness['a_share_stock_missing_list_date_rows']}/"
+            f"{missingness['a_share_stock_rows']}"
+        )
+        print(
+            "Other/unqualified stock list_date missing: "
+            f"{missingness['unqualified_stock_missing_list_date_rows']}"
+        )
+        print(
+            "Non-stock list_date missing: "
+            f"{missingness['non_stock_missing_list_date_rows']}"
+        )
+        print(
+            "Full missing A-share stock symbol list: "
+            "see listing_date_missingness.a_share_stock_missing_records in JSON"
+        )
+
+    listing_events = report.get("cross_checks", {}).get("listing_event_evidence", {})
+    print(
+        "Official listing-event evidence: "
+        f"{listing_events.get('status', 'NOT_EVALUABLE')}"
+    )
+    print(
+        "Listing-date PIT admission: "
+        f"{instruments.get('listing_date_admission', {}).get('status', 'NOT_ADMITTED')}"
+    )
     print(f"JSON: {output_path.resolve()}")
     return 0 if report["overall_read_status"] == "READ" else 2
 
