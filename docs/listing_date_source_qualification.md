@@ -335,3 +335,121 @@ Public references for this recheck:
   authoritative specification and not used as a production source):
   https://pipeworx.io/docs/reference/china-exchange-data/
 
+## CNINFO public disclosure archive evaluation (2026-11-16)
+
+CNINFO is a strong no-paid-contract candidate to test before purchasing the
+SSE InfoNet Announcement File Service. The current CNINFO homepage describes
+itself as the Shenzhen Stock Exchange's official information-disclosure
+website, operated by Shenzhen Securities Information Co., Ltd., a wholly owned
+SZSE subsidiary. Its current site navigation exposes Shenzhen and Shanghai
+markets, Shenzhen Main Board, ChiNext, Shanghai Main Board, STAR Market, and a
+`终止/退市` (termination/delisting) information section. This supports broad
+market relevance, but the visible navigation is not evidence of complete
+historical event coverage.
+
+The CSRC's 2009 announcement formally designated CNINFO among five websites
+for ChiNext legal disclosures and said that all ChiNext IPO prospectuses,
+listing announcements, interim announcements and periodic reports would be
+published free of charge, timely, accurately and completely. That official
+decision is explicitly about ChiNext. It must not be extrapolated into a claim
+that CNINFO was the sole designated disclosure outlet for all SSE/SZSE boards
+or that its query archive is complete from 2018 onward.
+
+### Query protocol: research lead, not official API specification
+
+An independently maintained third-party client currently documents and uses
+the following reverse-engineered interface:
+
+- query endpoint: `https://www.cninfo.com.cn/new/hisAnnouncement/query`;
+- request method: HTTP POST, form-encoded;
+- search page bootstrap: `https://www.cninfo.com.cn/new/commonUrl/pageOfSearch?url=disclosure/list/search`;
+- request fields include `pageNum`, `pageSize`, `column`, `tabName`,
+  `plate`, `stock`, `searchkey`, `category`, and `seDate`;
+- response fields observed by that client include `totalpages`,
+  `totalRecordNum`, `hasMore`, and announcement rows with
+  `secCode`, `secName`, `orgId`, `announcementId`,
+  `announcementTitle`, `announcementTime`, `adjunctUrl`, and
+  `adjunctType`;
+- the associated original file is commonly addressed through
+  `https://static.cninfo.com.cn/` plus `adjunctUrl`.
+
+This interface description is derived from third-party code, not a CNINFO
+published API contract. Parameter semantics, current availability, rate
+limits, pagination stability, field stability, access conditions, and reuse
+licensing have not been independently verified here. The official homepage
+also exposes a public Data API/data-service section; this repository has not
+obtained its technical specification or pricing.
+
+One third-party implementation notes that `announcementTime` commonly
+represents 00:00:00 China time for a calendar date. This is a warning that the
+field may be a date stamp, not proof of the original intraday publication
+instant. Unless CNINFO's source semantics prove a precise original release
+timestamp, normalize date-only publication conservatively to
+23:59:59 Asia/Shanghai for PIT decisions. Do not set `available_at` to
+midnight merely because a JSON field is encoded as a millisecond timestamp.
+
+### Comparison with the SSE InfoNet paid service
+
+| Candidate | Current evidence | Principal unresolved risks |
+|---|---|---|
+| CNINFO public site / reverse-engineered query | Official disclosure website operated by an SZSE subsidiary; current navigation spans SH/SZ markets and boards; a third-party client demonstrates a POST search pattern and announcement IDs/file URLs. | No official API specification reviewed; query protocol is reverse-engineered; exact publication-time semantics, legal scope by board, full retention, delisted coverage, page exhaustiveness, revisions and bulk-reuse terms are unproven. |
+| SSE InfoNet Announcement File Service | Official commercial product; published list price CNY 60,000/year; older 2022 service document includes SZSE announcements, while the current product overview does not expressly confirm SZSE scope. | Cost; current SH/SZ scope discrepancy; historical/delisted coverage, first-publication timestamps, revision replay and trial conditions unproven. |
+
+The recommended order is therefore: qualify the no-cost public CNINFO path with a
+small, rate-limited and replayable metadata probe first; only seek a paid
+InfoNet trial if the CNINFO path cannot demonstrate the required SH/SZ coverage
+and provenance. “Publicly viewable” does not automatically mean unrestricted
+bulk redistribution; any production use must respect the applicable website
+terms and provider licensing.
+
+### Bounded CNINFO proof-of-coverage plan
+
+Do not ingest CNINFO records into the production metadata datasets yet. The
+first probe must be read-only, bounded, and explicitly marked experimental:
+
+1. Bootstrap the official search page and issue one small query for a known
+   listing notice and one known termination/delisting notice in each in-scope
+   board family (SSE main, SSE STAR, SZSE main, ChiNext). Do not include BSE or
+   ETFs in the frozen SH/SZ MVP.
+2. Capture the exact request parameters, response bytes, retrieval time,
+   response digest, page number, `totalpages`, `totalRecordNum`, and
+   `hasMore`. Keep the raw response; do not store only parsed rows.
+3. Verify that every page in the requested bounded interval is retrievable,
+   that total counts remain consistent across pages, and that no page repeats
+   or silently disappears. If the page cap is reached, label the probe
+   PARTIAL; never infer completeness from the first page.
+4. Verify the identity join among exchange-qualified symbol, company name,
+   announcement ID, announcement title, and original file URL. Preserve the
+   original downloaded document bytes and SHA-256 for the small set of
+   qualification samples; do not treat a result-row ID alone as proof that
+   the underlying document is immutable.
+5. Compare publication date/time with the original disclosure page/document
+   and determine whether the source exposes first-publication time or only a
+   date/update timestamp. Revisions, replacements, duplicate notices and
+   corrected announcements must remain distinguishable.
+6. Reconcile listing and termination events across a bounded historical slice
+   against independently enumerated exchange event inventories. Explicitly
+   include delisted issuers and exceptional code changes. Only after the
+   bounded proof succeeds should the team expand the interval toward
+   2018-01-01 and compare against the accepted historical PIT universe.
+
+A passing metadata probe is not a production source qualification. The full
+historical expected universe still must come from an independently accepted
+PIT universe source, and each accepted listing event must pass the existing
+receipt-bound immutable-event evidence validator and signal-date availability
+audit. No production adapter, training feature, or backtest input is enabled
+by this research phase.
+
+### Public references
+
+- CNINFO current homepage and its description of official status, operator,
+  market sections and termination/delisting navigation:
+  https://www.cninfo.com.cn/
+- CSRC 2009 formal announcement designating CNINFO among the ChiNext disclosure
+  websites:
+  https://www.csrc.gov.cn/csrc/c100028/c1002699/content.shtml
+- Third-party reverse-engineered CNINFO query client (research lead only):
+  https://github.com/Hsiangpo/cninfo-/blob/main/src/cninfo_ssgs/cninfo_api.py
+- Additional third-party protocol example (not an authoritative specification):
+  https://github.com/gaodechen/cninfo_process/blob/master/spider.py
+
