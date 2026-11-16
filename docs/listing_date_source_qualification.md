@@ -488,10 +488,10 @@ between network requests (default 1 second). It bootstraps the search page,
 submits one form-encoded POST per captured result page, and writes only to
 `reports/source_probes/cninfo/` (or the caller-selected output directory).
 It stores the bootstrap response, raw JSON response pages, request parameters,
-request/capture timestamps, response byte counts and SHA-256 hashes, server page
+request/capture timestamps, request-body/response byte counts and SHA-256 hashes, server page
 and record counters, duplicate announcement IDs, and missing identity fields.
 It does not download announcement PDFs, call CNEquity, read or write
-`F:\\cnequity`, backfill data, train a model, or run a backtest.
+`F:\cnequity`, backfill data, train a model, or run a backtest.
 
 Probe statuses have deliberately narrow meanings:
 
