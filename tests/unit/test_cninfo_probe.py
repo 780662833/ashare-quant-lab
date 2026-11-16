@@ -185,7 +185,7 @@ def test_probe_stops_at_page_cap_and_marks_partial(tmp_path: Path) -> None:
             1: _payload(
                 [_announcement("notice-1")],
                 totalpages=3,
-                total_records=75,
+                total_records=3,
                 has_more=True,
             ),
             2: _payload(
