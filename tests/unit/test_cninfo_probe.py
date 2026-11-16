@@ -286,6 +286,8 @@ def test_probe_marks_missing_identity_fields_as_warning(tmp_path: Path) -> None:
     assert report["status"] == "COMPLETE_WITH_WARNINGS"
     missing = report["query_counters"]["rows_missing_identity_fields"]
     assert missing[0]["missing_fields"] == [
+        "secName",
+        "orgId",
         "announcementId",
         "announcementTime",
         "adjunctUrl",
