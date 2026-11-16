@@ -127,8 +127,9 @@ def test_date_precision_release_is_not_available_before_end_of_publication_day()
     report = _audit(
         [
             _event_row(
+                publication_date="2026-11-03",
                 publication_precision="date",
-                published_at="2026-11-02T23:59:59+08:00",
+                published_at="2026-11-03T23:59:59+08:00",
             )
         ],
         ["600000.SH"],
