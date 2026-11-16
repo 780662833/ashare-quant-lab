@@ -231,10 +231,30 @@ research window**. The public product summary does not establish:
 6. trial/production rate limits, API technical documentation, fee schedule,
    and contract/license terms.
 
-The public product summary does not publish a price table. Do not assume that a
-free unauthenticated endpoint and this authenticated service have equivalent
-coverage or service guarantees. Do not create credentials, accept a contract,
-or incur a fee as part of this repository phase.
+The provider publishes a separate official price page and price-list PDF.
+The price list reviewed on 2026-11-16 states **CNY 60,000 per year** for the
+Announcement File Service. This is the published list price; confirm whether it
+is still applicable to the required scope, whether any trial is available, and
+whether taxes, implementation, or additional access fees apply. This annual
+fee is not justified for the MVP's listing-event evidence requirement without
+a successful historical-coverage proof. Do not create credentials, accept a
+contract, or incur a fee as part of this repository phase.
+
+There is also a scope discrepancy that must be resolved in writing. The
+provider's current product overview describes Announcement File Service as
+covering Shanghai-market stock, bond and fund announcements, regulatory
+inquiry letters, and issuance/listing announcements. The older 2022 product
+description explicitly lists Shenzhen stock announcements as part of the
+product scope. Until the provider confirms that SZSE coverage remains included
+in the current priced product, do not treat this service as a combined SH/SZ
+source.
+
+The current provider product page offers business application and lists service
+phone 4008888400 (extension 2-5) and consultation email ywsun@sse.com.cn. Its
+application guide says applicants submit an application, pass approval, and
+sign a data-service agreement. The older product description mentioned an API
+trial before formal contracting; whether that trial path remains available
+must be confirmed.
 
 ### Source decision
 
@@ -305,6 +325,12 @@ Public references for this recheck:
 - Financial-industry standard JR/T 0021.1-2023, announcement structure and
   header metadata:
   https://www.sse.com.cn/lawandrules/regulations/csrcannoun/c/10751844/files/c231e94e119145c2ba0c44ecd84dc713.pdf
+- Provider's current disclosure-data service overview and application/contact
+  information: https://www.sseinfo.com/services/data/szjr/
+- Provider's current product price page: https://www.sseinfo.com/services/cpfwjg/
+- Provider's current official price-list PDF:
+  https://www.sseinfo.com/services/charge/pricelist/c/10010718/files/6e4e8d001bbd4554a254aeac11ee0e50.pdf
+- Provider's application guide: https://bsp.sseinfo.com/business/?id=1703679027550273537
 - Third-party reverse-engineering lead for exchange bulletin APIs (not an
   authoritative specification and not used as a production source):
   https://pipeworx.io/docs/reference/china-exchange-data/
