@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import http.cookiejar
 import json
+import math
 import time
 import urllib.error
 import urllib.parse
@@ -81,10 +82,13 @@ def _validate_request(
         raise ValueError("page_size must be between 1 and 100")
     if not 1 <= max_pages <= 10:
         raise ValueError("max_pages must be between 1 and 10")
-    if min_interval_seconds < 0.5:
-        raise ValueError("min_interval_seconds must be at least 0.5")
-    if timeout_seconds <= 0:
-        raise ValueError("timeout_seconds must be positive")
+    if (
+        not math.isfinite(min_interval_seconds)
+        or min_interval_seconds < 0.5
+    ):
+        raise ValueError("min_interval_seconds must be finite and at least 0.5")
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be finite and positive")
     return start, end
 
 
@@ -142,9 +146,14 @@ def _official_host(url: str) -> bool:
     except ValueError:
         return False
     host = (parsed.hostname or "").lower().rstrip(".")
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
     return (
         parsed.scheme.lower() == "https"
         and host in {"www.cninfo.com.cn", "static.cninfo.com.cn"}
+        and port in (None, 443)
         and parsed.username is None
         and parsed.password is None
     )
@@ -391,9 +400,10 @@ def probe_cninfo_announcement_api(
                     report["anomalies"].append(
                         "totalpages is zero while totalRecordNum is positive"
                     )
-                if calculated_pages > total_pages_raw:
+                if total_records_raw > 0 and calculated_pages != total_pages_raw:
                     report["anomalies"].append(
-                        "totalpages is smaller than the page count implied by totalRecordNum"
+                        "totalpages differs from the page count implied by "
+                        "totalRecordNum and pageSize"
                     )
             if expected_pages is None:
                 expected_pages = reported_pages
@@ -488,7 +498,7 @@ def probe_cninfo_announcement_api(
                 "reported page count changed" in item
                 or "reported record count changed" in item
                 or "totalpages is zero" in item
-                or "totalpages is smaller" in item
+                or "totalpages differs" in item
                 or "hasMore=false before" in item
                 or "captured record count" in item
             )
