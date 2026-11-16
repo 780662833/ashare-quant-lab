@@ -6,8 +6,9 @@ completeness or PIT eligibility.
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
+
+import hashlib
 import http.cookiejar
 import json
 import time
@@ -306,8 +307,8 @@ def probe_cninfo_announcement_api(
                 },
                 method="POST",
             )
-            previous_request_at = time.monotonic()
             raw_bytes, status, final_url = _read_response(client, request, timeout_seconds)
+            previous_request_at = time.monotonic()
             if not _official_host(final_url):
                 raise ValueError("query request redirected outside the official CNINFO host")
             page_path = target_dir / f"page_{page_num:03d}.json"
@@ -469,9 +470,22 @@ def probe_cninfo_announcement_api(
             )
         elif report["query_counters"]["captured_records"] == 0:
             report["status"] = "NO_RESULTS"
+        elif (
+            report["anomalies"]
+            or report["query_counters"]["duplicate_announcement_ids"]
+            or report["query_counters"]["rows_missing_identity_fields"]
+        ):
+            report["status"] = "COMPLETE_WITH_WARNINGS"
         else:
             report["status"] = "COMPLETE_FOR_QUERY"
-    except (urllib.error.URLError, TimeoutError, OSError, ValueError, RuntimeError) as exc:
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        OSError,
+        TypeError,
+        ValueError,
+        RuntimeError,
+    ) as exc:
         report["status"] = "ERROR"
         report["error"] = f"{type(exc).__name__}: {exc}"
         report["page_traversal_complete_for_query"] = False
