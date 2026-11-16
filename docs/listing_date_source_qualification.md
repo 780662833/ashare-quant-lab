@@ -453,3 +453,70 @@ by this research phase.
 - Additional third-party protocol example (not an authoritative specification):
   https://github.com/gaodechen/cninfo_process/blob/master/spider.py
 
+## Experimental metadata probe tool (Phase 9.29)
+
+The repository now contains
+`scripts/probe_cninfo_announcement_api.py` and
+`ashare_quant.research.cninfo_probe.probe_cninfo_announcement_api(...)`.
+This is a bounded research probe for the reverse-engineered CNINFO search
+route, not a registered provider adapter.
+
+The CLI is deliberately **no-network by default**. For example, this first
+command only prints the request plan:
+
+```text
+python scripts/probe_cninfo_announcement_api.py --start-date 2026-10-12 --end-date 2026-10-12 --column szse --plate szcy --keyword "上市公告书"
+```
+
+To make the bounded request, the operator must explicitly append `--execute`:
+
+```text
+python scripts/probe_cninfo_announcement_api.py --start-date 2026-10-12 --end-date 2026-10-12 --column szse --plate szcy --keyword "上市公告书" --execute
+```
+
+A second example uses a known SZSE delisting-notice date as a search lead; it
+must be treated as a protocol check, not a guarantee that the reverse-engineered
+keyword returns the document:
+
+```text
+python scripts/probe_cninfo_announcement_api.py --start-date 2020-05-22 --end-date 2020-05-22 --column szse --plate sz --keyword "终止上市" --execute
+```
+
+The tool enforces a maximum 31-calendar-day date window, a page cap of 10
+(default 2), page size 1-100 (default 30), and a minimum 0.5-second interval
+between network requests (default 1 second). It bootstraps the search page,
+submits one form-encoded POST per captured result page, and writes only to
+`reports/source_probes/cninfo/` (or the caller-selected output directory).
+It stores the bootstrap response, raw JSON response pages, request parameters,
+request/capture timestamps, request-body/response byte counts and SHA-256 hashes, server page
+and record counters, duplicate announcement IDs, and missing identity fields.
+It does not download announcement PDFs, call CNEquity, read or write
+`F:\cnequity`, backfill data, train a model, or run a backtest.
+
+Probe statuses have deliberately narrow meanings:
+
+- `COMPLETE_FOR_QUERY`: every page reported for this one query was captured
+  and no integrity warning was observed. This is not source-wide archive
+  completeness.
+- `COMPLETE_WITH_WARNINGS`: all query pages were traversed, but duplicate IDs,
+  missing identity fields or other query-counter anomalies were observed.
+- `PARTIAL`: the server reports more pages than the configured cap, a page
+  disappeared, or page/record counters are inconsistent.
+- `NO_RESULTS`: the query returned no rows.
+- `ERROR`: the bootstrap, request, response schema or transport failed.
+
+Every report permanently leaves
+`source_coverage_proven=false`, `pit_admitted=false`,
+`training_unlocked=false`, and `backtest_admitted=false`. Raw response hashes
+are capture hashes only; they do not constitute CNINFO revision receipts or
+prove that an announcement PDF is immutable. The announcement-time observation
+is informational only: midnight-valued timestamps are marked
+`midnight_date_stamp_suspected`, and non-midnight values remain
+`intraday_value_unverified`.
+
+This script has not been run against CNINFO by the project CI environment.
+Synthetic unit tests exercise request planning, bounded pagination, raw capture,
+hashing, partial status, duplicate IDs, no-result behavior, and missing
+identity fields. A local execution result is still required before we can claim
+that the endpoint works with the current service.
+

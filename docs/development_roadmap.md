@@ -626,3 +626,27 @@ feature, or backtest input was enabled. See
 `docs/listing_date_source_qualification.md` for the bounded qualification
 protocol and source limitations.
 
+### Phase 9.29 — bounded, opt-in CNINFO metadata probe
+
+Added `scripts/probe_cninfo_announcement_api.py` and the
+`ashare_quant.research.cninfo_probe` module. Without `--execute`, the CLI
+only validates and prints a request plan and performs no network access. With
+the explicit flag, it bootstraps the CNINFO search page and issues a small,
+rate-limited number of form-encoded POST requests to the reverse-engineered
+announcement query route.
+
+The probe limits each date interval to 31 calendar days and each run to at most
+10 result pages (default 2). It captures raw bootstrap/JSON response bytes,
+query parameters, request and capture times, SHA-256 hashes, announcement
+identity-field missingness, duplicate IDs, and consistency between page/record
+counters. It never downloads announcement PDFs, accesses the local CNEquity
+lake, writes production datasets, or unlocks PIT/training/backtesting. A
+complete traversal means only that the server-reported pages for that one query
+were captured; it is not historical source coverage.
+
+Synthetic tests cover no-network planning, complete query traversal, a page-cap
+PARTIAL result, duplicate IDs, no-result responses, date-window bounds, and
+missing announcement identity fields. CI validates the code only. The live
+CNINFO endpoint has not been called from the project CI environment; local
+network verification is still pending before any adapter or source qualification.
+
