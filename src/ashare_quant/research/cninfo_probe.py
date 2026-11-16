@@ -121,7 +121,11 @@ def _make_opener() -> Any:
     return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
 
-def _read_response(opener: Any, request: urllib.request.Request, timeout: float) -> tuple[bytes, int, str]:
+def _read_response(
+    opener: Any,
+    request: urllib.request.Request,
+    timeout: float,
+) -> tuple[bytes, int, str]:
     with opener.open(request, timeout=timeout) as response:
         status = int(getattr(response, "status", 200))
         final_url = response.geturl() if hasattr(response, "geturl") else request.full_url
@@ -232,10 +236,22 @@ def probe_cninfo_announcement_api(
         "page_traversal_complete_for_query": False,
         "source_coverage_proven": False,
         "notes": [
-            "The query endpoint and parameter schema are reverse-engineered research leads, not an official CNINFO API contract.",
-            "A complete traversal covers only the server-reported query result and does not prove historical archive completeness.",
-            "announcementTime is not accepted as an exact first-publication timestamp by this probe.",
-            "Raw response hashes are capture identities, not source revision receipts or immutable-document proofs.",
+            (
+                "The query endpoint and parameter schema are reverse-engineered "
+                "research leads, not an official CNINFO API contract."
+            ),
+            (
+                "A complete traversal covers only the server-reported query result "
+                "and does not prove historical archive completeness."
+            ),
+            (
+                "announcementTime is not accepted as an exact first-publication "
+                "timestamp by this probe."
+            ),
+            (
+                "Raw response hashes are capture identities, not source revision "
+                "receipts or immutable-document proofs."
+            ),
         ],
     }
 
@@ -366,7 +382,8 @@ def probe_cninfo_announcement_api(
             else:
                 if reported_pages != expected_pages:
                     report["anomalies"].append(
-                        f"reported page count changed from {expected_pages} to {reported_pages} on page {page_num}"
+                        "reported page count changed from "
+                        f"{expected_pages} to {reported_pages} on page {page_num}"
                     )
                 if (
                     total_records_raw is not None
@@ -374,7 +391,8 @@ def probe_cninfo_announcement_api(
                     and total_records_raw != expected_records
                 ):
                     report["anomalies"].append(
-                        f"reported record count changed from {expected_records} to {total_records_raw} on page {page_num}"
+                        "reported record count changed from "
+                        f"{expected_records} to {total_records_raw} on page {page_num}"
                     )
 
             page_report["record_count"] = len(announcements)
@@ -430,7 +448,9 @@ def probe_cninfo_announcement_api(
         report["query_counters"]["unique_announcement_ids"] = len(set(all_ids))
         report["query_counters"]["duplicate_announcement_ids"] = duplicates
         if duplicates:
-            report["anomalies"].append("duplicate announcementId values appeared across captured pages")
+            report["anomalies"].append(
+                "duplicate announcementId values appeared across captured pages"
+            )
         pagination_anomalies = [
             item
             for item in report["anomalies"]
@@ -534,7 +554,10 @@ def render_probe_plan(
                 "max_pages": max_pages,
                 "min_interval_seconds": min_interval_seconds,
             },
-            "writes": "Only the report and raw responses under the selected probe output directory after --execute.",
+            "writes": (
+                "Only the report and raw responses under the selected probe "
+                "output directory after --execute."
+            ),
             "production_admitted": False,
         },
         ensure_ascii=False,
