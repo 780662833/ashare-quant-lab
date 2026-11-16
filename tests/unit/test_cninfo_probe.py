@@ -108,6 +108,7 @@ def _probe(
         plate="sh",
         search_key="上市公告书",
         output_dir=tmp_path,
+        page_size=1,
         max_pages=max_pages,
         min_interval_seconds=0.5,
         opener=opener,
