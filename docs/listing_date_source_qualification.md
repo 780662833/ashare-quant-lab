@@ -199,3 +199,95 @@ References reviewed:
 
 **Decision remains unchanged:** SSE issuer listing notices and SZSE listing/termination notices remain official event-level candidates, not production-qualified sources. The next source-research step is to identify and test the exact query/pagination mechanism over bounded historical intervals, prove exhaustive enumeration and stable document identity, and reconcile the resulting event inventory against the accepted historical SH/SZ PIT universe. Do not write a crawler that assumes search-engine result completeness or a current page's visible items represent the full archive.
 
+## Official announcement API evaluation (2026-11-16)
+
+A separate official service channel was identified: Shanghai Stock Exchange Information
+Network Co., Ltd. (SSE InfoNet) publishes an **Announcement File Service** product
+description. The published service document states:
+
+- the service is delivered through authenticated APIs;
+- its stated stock-announcement scope includes SSE main board, SSE STAR Market,
+  and SZSE-listed companies (plus separate bond/fund/regulatory modules);
+- announcement metadata can be queried by date and includes an index, security
+  code, title, category, update time, and download URL;
+- the index and download URL can each serve as a unique identifier; and
+- the described business flow is application, review, credential provisioning,
+  API trial, formal contract, and payment.
+
+This is a materially stronger candidate than inferring archive completeness from
+the public web search pages. It is nevertheless **not yet qualified for the
+research window**. The public product summary does not establish:
+
+1. whether historical metadata can be queried back to 2018-01-01, or only
+   recent/daily updates can be polled;
+2. whether records cover securities after delisting and all historical code
+   migrations;
+3. whether the reported `update time` is the original first-publication time,
+   rather than a later update/correction time;
+4. whether the service returns an exchange/company announcement publication
+   date and, where available, an exact public-release timestamp;
+5. stable pagination, correction/deletion semantics, duplicate handling,
+   retention SLA, per-market completeness, or revision replay; and
+6. trial/production rate limits, API technical documentation, fee schedule,
+   and contract/license terms.
+
+The public product summary does not publish a price table. Do not assume that a
+free unauthenticated endpoint and this authenticated service have equivalent
+coverage or service guarantees. Do not create credentials, accept a contract,
+or incur a fee as part of this repository phase.
+
+### Source decision
+
+For the frozen SH/SZ MVP, request the API technical documentation and a
+time-bounded trial quotation as the first evaluation path. The evaluation must
+ask the provider to demonstrate an exhaustive historical export for a bounded
+period, including delisted companies and listing/termination events, and to
+explain the temporal meaning of every timestamp. A successful trial sample is
+not full-window qualification.
+
+The public SSE and SZSE web interfaces remain a no-cost fallback candidate.
+Reverse-engineered endpoints reported by third parties are research leads only:
+they are not official API specifications, and their parameter names, result
+schemas, rate limits, and historical coverage have not been independently
+verified in this project. They must not be used as an admitted PIT source or
+quietly promoted to a production adapter.
+
+### Additional public-interface observations
+
+- The SZSE company-notice archive exposes static numbered pages. The reviewed
+  `index_7.html` page contains notice dates in June-August 2024, while
+  individual official delisting notice pages from 2020 are still reachable.
+  These facts establish old individual records and some archive pagination, but
+  not exhaustive enumeration between 2018 and the present.
+- The SSE `上市/退市公告` entry is a distinct official interface. The public
+  result reviewed on 2026-11-16 includes bond listing/quotation notices, so
+  stock event retrieval requires an explicit security-type filter and
+  verification that both stock listing and delisting event classes are covered.
+- The 2023 financial-industry announcement electronic specification defines
+  announcement-header fields including a unique announcement identifier,
+  company/security code, announcement number, and formal publication date.
+  This is a useful capture-schema reference, but does not prove that an
+  exchange search interface returns the complete fields or original bytes.
+
+### Required decision gate before adapter implementation
+
+Do not select a production collector until one of these paths passes a bounded
+proof-of-coverage exercise:
+
+A. **SSE InfoNet trial:** receive the actual technical specification and sample
+credentials through the provider's authorized process; prove historical query
+semantics, full pagination/export, original publication-time semantics,
+delisted-symbol coverage, and exact downloadable-document identity.
+
+B. **Public exchange archive:** independently enumerate all result pages and
+event types over the same bounded historical window; retain raw responses and
+original documents; reconcile expected versus observed symbols and events;
+prove that reruns produce the same record inventory or explain revisions.
+
+Whichever path is selected must map source publication dates/timestamps to the
+existing `available_at` rule, retain document bytes and SHA-256 digests, and
+produce replayable revision/receipt identities before it can feed
+`validate_listing_event_evidence(...)`. The expected universe must still come
+from the project's independently qualified historical PIT universe, never from
+a current instruments snapshot.
+
