@@ -7,6 +7,7 @@ completeness or PIT eligibility.
 from __future__ import annotations
 
 import hashlib
+from collections import Counter
 import http.cookiejar
 import json
 import time
@@ -266,7 +267,7 @@ def probe_cninfo_announcement_api(
         expected_pages: int | None = None
         expected_records: int | None = None
         all_ids: list[str] = []
-        previous_request_at: float | None = None
+        previous_request_at: float | None = time.monotonic()
         for page_num in range(1, max_pages + 1):
             if expected_pages is not None and page_num > expected_pages:
                 break
@@ -423,18 +424,43 @@ def probe_cninfo_announcement_api(
         captured_pages = len(report["pages"])
         report["query_counters"]["captured_pages"] = captured_pages
         duplicates = sorted(
-            value for value, count in __import__("collections").Counter(all_ids).items()
-            if count > 1
+            value for value, count in Counter(all_ids).items() if count > 1
         )
         report["query_counters"]["unique_announcement_ids"] = len(set(all_ids))
         report["query_counters"]["duplicate_announcement_ids"] = duplicates
         if duplicates:
             report["anomalies"].append("duplicate announcementId values appeared across captured pages")
-        page_complete = (
-            isinstance(reported_pages_final, int)
-            and captured_pages == reported_pages_final
-            and not any("hasMore=false before" in item for item in report["anomalies"])
+        pagination_anomalies = [
+            item
+            for item in report["anomalies"]
+            if (
+                "reported page count changed" in item
+                or "reported record count changed" in item
+                or "totalpages is zero" in item
+                or "totalpages is smaller" in item
+                or "hasMore=false before" in item
+            )
+        ]
+        expected_response_pages = (
+            max(1, reported_pages_final)
+            if isinstance(reported_pages_final, int)
+            else None
         )
+        page_complete = (
+            expected_response_pages is not None
+            and captured_pages == expected_response_pages
+            and not pagination_anomalies
+        )
+        if (
+            isinstance(reported_pages_final, int)
+            and captured_pages == expected_response_pages
+            and report["pages"]
+            and report["pages"][-1].get("has_more") is True
+        ):
+            report["anomalies"].append(
+                "hasMore=true on the reported final page"
+            )
+            page_complete = False
         report["page_traversal_complete_for_query"] = page_complete
         if not page_complete:
             report["status"] = "PARTIAL"
