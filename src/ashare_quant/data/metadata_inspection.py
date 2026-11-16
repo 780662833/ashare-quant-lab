@@ -163,6 +163,331 @@ def _date_anomalies(frame: pl.DataFrame, as_of: date) -> dict[str, Any]:
     return result
 
 
+
+def _listing_date_missingness(frame: pl.DataFrame) -> dict[str, Any]:
+    """Attribute null/unparseable listing dates without treating the snapshot as PIT."""
+    if "list_date" not in frame.columns:
+        return {
+            "status": "UNAVAILABLE",
+            "reason": "instruments has no list_date column",
+            "total_rows": frame.height,
+            "missing_or_unparseable_rows": None,
+        }
+
+    try:
+        parsed_dates = frame.select(
+            pl.col("list_date").cast(pl.Date, strict=False).alias("_parsed_list_date")
+        ).get_column("_parsed_list_date").to_list()
+    except Exception as exc:
+        return {
+            "status": "ERROR",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "total_rows": frame.height,
+            "missing_or_unparseable_rows": None,
+        }
+
+    rows = frame.to_dicts()
+    missing_flags = [value is None for value in parsed_dates]
+
+    def grouped(dimension: str) -> dict[str, Any]:
+        if dimension not in frame.columns:
+            return {
+                "available": False,
+                "missing_column": dimension,
+                "groups": [],
+            }
+        buckets: dict[str, dict[str, Any]] = {}
+        for row, is_missing in zip(rows, missing_flags, strict=True):
+            raw_value = row.get(dimension)
+            label = "<NULL>" if raw_value is None else str(raw_value)
+            bucket = buckets.setdefault(
+                label,
+                {"value": label, "rows": 0, "missing_list_date_rows": 0},
+            )
+            bucket["rows"] += 1
+            if is_missing:
+                bucket["missing_list_date_rows"] += 1
+        groups = []
+        for label in sorted(buckets):
+            bucket = buckets[label]
+            bucket["non_missing_list_date_rows"] = (
+                bucket["rows"] - bucket["missing_list_date_rows"]
+            )
+            bucket["missing_rate"] = (
+                bucket["missing_list_date_rows"] / bucket["rows"]
+                if bucket["rows"] else 0.0
+            )
+            groups.append(bucket)
+        return {"available": True, "dimension": dimension, "groups": groups}
+
+    def serialize_record(row: Mapping[str, Any]) -> dict[str, Any]:
+        fields = (
+            "symbol", "name", "exchange", "asset_type", "source",
+            "list_date", "delist_date",
+        )
+        record = {
+            field: _iso(row.get(field))
+            for field in fields
+            if field in frame.columns
+        }
+        record["list_date_missing_reason"] = (
+            "null" if row.get("list_date") is None else "unparseable"
+        )
+        return record
+
+    asset_type_available = "asset_type" in frame.columns
+    symbol_available = "symbol" in frame.columns
+    stock_total = 0
+    a_share_stock_total = 0
+    stock_missing: list[dict[str, Any]] = []
+    a_share_stock_missing: list[dict[str, Any]] = []
+    unqualified_stock_missing: list[dict[str, Any]] = []
+    non_stock_missing = 0
+    unclassified_missing = 0
+
+    for row, is_missing in zip(rows, missing_flags, strict=True):
+        asset_type = row.get("asset_type")
+        is_stock = (
+            asset_type is not None
+            and str(asset_type).strip().lower() == "stock"
+        )
+        symbol = row.get("symbol")
+        symbol_is_exchange_qualified = (
+            isinstance(symbol, str)
+            and len(symbol) == 9
+            and symbol[:6].isdigit()
+            and symbol[6:] in {".SH", ".SZ", ".BJ"}
+        )
+        reported_exchange = row.get("exchange")
+        exchange_matches = (
+            symbol_is_exchange_qualified
+            and (
+                reported_exchange is None
+                or str(reported_exchange).strip().upper() == symbol[7:]
+            )
+        )
+        if is_stock:
+            stock_total += 1
+            if exchange_matches:
+                a_share_stock_total += 1
+
+        if not is_missing:
+            continue
+        if asset_type is None:
+            unclassified_missing += 1
+            continue
+        if not is_stock:
+            non_stock_missing += 1
+            continue
+
+        record = serialize_record(row)
+        stock_missing.append(record)
+        if exchange_matches:
+            a_share_stock_missing.append(record)
+        else:
+            unqualified_stock_missing.append(record)
+
+    missing_count = sum(missing_flags)
+    return {
+        "status": "AVAILABLE",
+        "total_rows": frame.height,
+        "missing_or_unparseable_rows": missing_count,
+        "missing_rate": missing_count / frame.height if frame.height else 0.0,
+        "asset_type_available": asset_type_available,
+        "symbol_available": symbol_available,
+        "missing_by_asset_type": grouped("asset_type"),
+        "missing_by_exchange": grouped("exchange"),
+        "missing_by_source": grouped("source"),
+        "stock_rows": stock_total,
+        "stock_missing_list_date_rows": len(stock_missing),
+        "stock_missing_rate": len(stock_missing) / stock_total if stock_total else 0.0,
+        "a_share_stock_rows": a_share_stock_total,
+        "a_share_stock_missing_list_date_rows": len(a_share_stock_missing),
+        "a_share_stock_missing_rate": (
+            len(a_share_stock_missing) / a_share_stock_total
+            if a_share_stock_total else 0.0
+        ),
+        "unqualified_stock_missing_list_date_rows": len(unqualified_stock_missing),
+        "non_stock_missing_list_date_rows": non_stock_missing,
+        "unclassified_missing_list_date_rows": unclassified_missing,
+        "stock_missing_records": stock_missing,
+        "a_share_stock_missing_records": a_share_stock_missing,
+        "unqualified_stock_missing_records": unqualified_stock_missing,
+    }
+
+
+def _listing_event_evidence_coverage(
+    instruments: pl.DataFrame,
+    evidence: pl.DataFrame | None,
+    source_identities: Mapping[str, Mapping[str, Any]] | None,
+) -> dict[str, Any]:
+    """Audit event-evidence coverage for the current stock reference snapshot.
+
+    This is intentionally not a historical-universe completeness assertion.
+    Evidence is accepted only after the existing official-document validator
+    binds every row to a replayable source receipt and capability audit.
+    """
+    exchange_specs = (
+        ("SSE", ".SH", "sse_listing_events"),
+        ("SZSE", ".SZ", "szse_listing_events"),
+        ("BSE", ".BJ", "bse_listing_events"),
+    )
+    expected_by_exchange: dict[str, set[str]] = {
+        exchange: set() for exchange, _, _ in exchange_specs
+    }
+    if {"symbol", "asset_type"}.issubset(instruments.columns):
+        for row in instruments.select("symbol", "asset_type").to_dicts():
+            symbol = row.get("symbol")
+            if (
+                str(row.get("asset_type") or "").strip().lower() == "stock"
+                and isinstance(symbol, str)
+                and len(symbol) == 9
+                and symbol[:6].isdigit()
+            ):
+                for exchange, suffix, _ in exchange_specs:
+                    if symbol.endswith(suffix):
+                        expected_by_exchange[exchange].add(symbol)
+                        break
+
+    expected_count = sum(len(values) for values in expected_by_exchange.values())
+    base: dict[str, Any] = {
+        "scope": "current instruments stock snapshot only; not historical-universe completeness",
+        "expected_stock_symbols": expected_count,
+        "source_datasets": [
+            {"exchange": exchange, "dataset": dataset}
+            for exchange, _, dataset in exchange_specs
+        ],
+    }
+
+    if evidence is None:
+        return {
+            **base,
+            "status": "NOT_CONNECTED",
+            "evidence_rows": None,
+            "verified_event_symbols": None,
+            "missing_evidence_symbols": None,
+            "reason": (
+                "No official listing-event evidence frame/source is connected to this "
+                "read-only metadata inspection. No exchange event data was inferred "
+                "from instruments.list_date."
+            ),
+            "by_exchange": [
+                {
+                    "exchange": exchange,
+                    "dataset": dataset,
+                    "expected_stock_symbols": len(expected_by_exchange[exchange]),
+                    "verified_event_symbols": None,
+                    "missing_evidence_symbols": None,
+                    "status": "NOT_CONNECTED",
+                }
+                for exchange, _, dataset in exchange_specs
+            ],
+        }
+
+    if source_identities is None:
+        return {
+            **base,
+            "status": "NOT_VALIDATED",
+            "evidence_rows": evidence.height,
+            "verified_event_symbols": None,
+            "missing_evidence_symbols": None,
+            "reason": (
+                "Evidence rows were supplied without receipt-derived source identities; "
+                "official-document and replayable-receipt validation was not performed."
+            ),
+        }
+
+    try:
+        from ashare_quant.research.listing_event_evidence import (
+            validate_listing_event_evidence,
+        )
+
+        validated = validate_listing_event_evidence(
+            evidence,
+            source_identities=source_identities,
+        )
+    except Exception as exc:
+        return {
+            **base,
+            "status": "INVALID",
+            "evidence_rows": evidence.height,
+            "verified_event_symbols": None,
+            "missing_evidence_symbols": None,
+            "validation_error": f"{type(exc).__name__}: {exc}",
+        }
+
+    validated_rows = validated.to_dicts()
+    event_symbols = {str(row["instrument"]) for row in validated_rows}
+    expected_symbols = set().union(*expected_by_exchange.values())
+    missing_symbols = sorted(expected_symbols - event_symbols)
+    unexpected_symbols = sorted(event_symbols - expected_symbols)
+
+    instrument_dates: dict[str, str | None] = {}
+    if {"symbol", "list_date"}.issubset(instruments.columns):
+        for row in instruments.select("symbol", "list_date").to_dicts():
+            instrument_dates[str(row["symbol"])] = _iso(row.get("list_date"))
+
+    date_mismatches = []
+    for row in validated_rows:
+        current_date = instrument_dates.get(str(row["instrument"]))
+        if current_date is not None and current_date != str(row["listing_date"]):
+            date_mismatches.append({
+                "instrument": row["instrument"],
+                "instruments_list_date": current_date,
+                "official_listing_date": str(row["listing_date"]),
+            })
+
+    by_exchange = []
+    for exchange, suffix, dataset in exchange_specs:
+        expected = expected_by_exchange[exchange]
+        observed = {
+            str(row["instrument"])
+            for row in validated_rows
+            if row["exchange"] == exchange
+        }
+        missing = sorted(expected - observed)
+        rate = len(expected & observed) / len(expected) if expected else 0.0
+        by_exchange.append({
+            "exchange": exchange,
+            "dataset": dataset,
+            "expected_stock_symbols": len(expected),
+            "verified_event_symbols": len(observed),
+            "covered_expected_symbols": len(expected & observed),
+            "missing_evidence_symbols": len(missing),
+            "missing_evidence_sample": missing[:20],
+            "coverage_rate": rate,
+            "status": "PASS" if expected and not missing else "FAIL",
+        })
+
+    status = (
+        "PASS"
+        if expected_symbols
+        and not missing_symbols
+        and not unexpected_symbols
+        and not date_mismatches
+        else "FAIL"
+    )
+    return {
+        **base,
+        "status": status,
+        "evidence_rows": validated.height,
+        "verified_event_symbols": len(event_symbols),
+        "covered_expected_symbols": len(expected_symbols & event_symbols),
+        "missing_evidence_symbols": len(missing_symbols),
+        "missing_evidence_sample": missing_symbols[:30],
+        "unexpected_evidence_symbols": len(unexpected_symbols),
+        "unexpected_evidence_sample": unexpected_symbols[:30],
+        "listing_date_mismatches": len(date_mismatches),
+        "listing_date_mismatch_sample": date_mismatches[:30],
+        "by_exchange": by_exchange,
+        "validation": "PASS",
+        "note": (
+            "PASS means official event evidence covers the current instruments stock "
+            "snapshot only. It does not prove historical security-universe completeness "
+            "or independently admit a historical backtest."
+        ),
+    }
+
 def _contract_metadata(dataset: str) -> dict[str, Any]:
     """Read semantics from the installed CNEquity registry."""
     try:
@@ -207,8 +532,9 @@ def _dataset_role(dataset: str) -> dict[str, str]:
             "role": "derived_supplementary_dataset",
             "next_step": (
                 "This is a derived output, not a normal source backfill. Do not run "
-                "cne backfill delisting_events; the CNEquity delisted_ops workflow "
-                "owns its one-off rebuild and coverage checks."
+                "cne backfill delisting_events. This repository does not provide "
+                "scripts/delisted_ops.py; verify the installed CNEquity version's "
+                "documented rebuild workflow before considering any rebuild."
             ),
         }
     return {"role": "unknown", "next_step": "Inspect the dataset-specific contract."}
@@ -258,6 +584,7 @@ def _summarize_dataset(
     if dataset == "instruments":
         result["symbols"] = _symbol_diagnostics(frame)
         result["dates"] = _date_anomalies(frame, as_of)
+        result["listing_date_missingness"] = _listing_date_missingness(frame)
         result["temporal_evidence_columns"] = {
             field: {
                 "present": field in frame.columns,
@@ -289,6 +616,8 @@ def inspect_cnequity_metadata(
     schema_reader: Callable[[str], Mapping[str, Any]] | None = None,
     adapter: Any | None = None,
     as_of: date | None = None,
+    listing_event_evidence: pl.DataFrame | None = None,
+    listing_event_source_identities: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Inspect local instruments and delisting metadata through CNEquity's API.
 
@@ -332,6 +661,8 @@ def inspect_cnequity_metadata(
             "Receipt completeness=not_assessed is not promoted to complete.",
             "A non-replayable receipt may describe readable rows but cannot pin their source revision.",
             "Listing-date PIT eligibility remains NOT_ADMITTED until event publication and revision evidence are independently audited.",
+            "Official listing-event coverage is NOT_CONNECTED unless a validated evidence frame and source identities are supplied.",
+            "Current instruments membership and delisting summaries do not prove historical-universe completeness.",
             "No daily-bar history is loaded, and no backfill, model fit, or empirical backtest is run.",
         ],
     }
@@ -371,6 +702,14 @@ def inspect_cnequity_metadata(
 
     instruments = frames.get("instruments")
     delistings = frames.get("delisting_events")
+    if instruments is not None:
+        report["cross_checks"]["listing_event_evidence"] = (
+            _listing_event_evidence_coverage(
+                instruments,
+                listing_event_evidence,
+                listing_event_source_identities,
+            )
+        )
     if instruments is not None and delistings is not None:
         if "symbol" in instruments.columns and "symbol" in delistings.columns:
             master_symbols = set(
