@@ -291,3 +291,21 @@ produce replayable revision/receipt identities before it can feed
 from the project's independently qualified historical PIT universe, never from
 a current instruments snapshot.
 
+Public references for this recheck:
+
+- SSE InfoNet Announcement File Service product description (published
+  2022-10-26; later hosted under the provider's public document service):
+  https://bsp.sseinfo.com/admin/static/public/2024-06-07/1fb00bf6492f41fa8aafbadd4c7fe19d/%E4%B8%8A%E8%AF%81%E9%87%91%E8%9E%8D%E6%95%B0%E6%8D%AE%E5%85%AC%E5%91%8A%E6%96%87%E4%BB%B6%E6%9C%8D%E5%8A%A1%E8%AF%B4%E6%98%8E%E4%B9%A6.pdf
+- SZSE older numbered company-notice archive page:
+  https://www.szse.cn/disclosure/notice/company/index_7.html
+- SZSE individual 2020 delisting notice example:
+  https://www.szse.cn/disclosure/notice/t20200522_577530.html
+- SSE listing/delisting notice entry:
+  https://www.sse.com.cn/disclosure/announcement/listing/
+- Financial-industry standard JR/T 0021.1-2023, announcement structure and
+  header metadata:
+  https://www.sse.com.cn/lawandrules/regulations/csrcannoun/c/10751844/files/c231e94e119145c2ba0c44ecd84dc713.pdf
+- Third-party reverse-engineering lead for exchange bulletin APIs (not an
+  authoritative specification and not used as a production source):
+  https://pipeworx.io/docs/reference/china-exchange-data/
+
