@@ -595,3 +595,34 @@ only. No API was invoked, no credentials or paid service were acquired, no data
 was downloaded, and no local lake read, CNEquity query/backfill, training or
 real backtest was performed.
 
+### Phase 9.28 — CNINFO as a public listing-event source candidate
+
+The current CNINFO site identifies itself as the SZSE official disclosure
+website operated by an SZSE wholly owned subsidiary. Its public navigation
+covers both Shanghai and Shenzhen boards and includes a termination/delisting
+section. The CSRC's 2009 designation explicitly names CNINFO as one of five
+ChiNext legal-disclosure websites; this is board-specific evidence and is not
+extrapolated to every SSE/SZSE board or to complete archive retention.
+
+A third-party maintained client documents a reverse-engineered POST query at
+`/new/hisAnnouncement/query`, with date range, page, exchange/board and
+keyword/category parameters, response counts, announcement IDs and PDF URLs.
+This is a protocol research lead, not an official API contract. An observed
+millisecond `announcementTime` can be a date stamp at 00:00 Asia/Shanghai;
+until original first-publication semantics are established, it must not be
+treated as an exact intraday timestamp.
+
+The team should qualify the public CNINFO route before considering the
+CNY 60,000/year SSE InfoNet Announcement File Service. The initial probe must
+be small, read-only, rate-limited, and retain raw request/response captures,
+hashes, page totals, stable announcement identity, original files and
+publication-time semantics. It must sample listing and termination events in
+SSE main, SSE STAR, SZSE main and ChiNext, and include delisted issuers.
+A capped or partial query is never a completeness PASS.
+
+No CNINFO endpoint was called and no sample data were collected in this phase.
+No production adapter, source receipt, PIT listing-date admission, training
+feature, or backtest input was enabled. See
+`docs/listing_date_source_qualification.md` for the bounded qualification
+protocol and source limitations.
+
