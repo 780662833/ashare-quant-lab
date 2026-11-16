@@ -7,7 +7,7 @@ universe completeness.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime, time
 from typing import Any
 from urllib.parse import urlsplit
@@ -279,3 +279,126 @@ def validate_listing_event_evidence(
         source_identities=source_identities,
     )
     return pl.DataFrame(normalized).sort(["exchange", "instrument"])
+
+
+def audit_listing_event_signal_coverage(
+    evidence: pl.DataFrame,
+    *,
+    instruments: Sequence[str],
+    source_identities: Mapping[str, Mapping[str, Any]],
+    signal_date: str,
+    decision_at: str,
+) -> dict[str, Any]:
+    """Audit listing-event evidence known for one historical signal date.
+
+    instruments must be the exact exchange-qualified membership snapshot
+    supplied by the caller's independently accepted point-in-time universe.
+    This function validates event provenance and publication timing; it does
+    not establish that the supplied universe itself is complete or PIT.
+
+    Date-only public releases are conservatively represented by the validator
+    as 23:59:59 Asia/Shanghai, so they cannot be used for an earlier same-day
+    decision.
+    """
+    if isinstance(instruments, (str, bytes)) or not isinstance(instruments, Sequence):
+        raise TypeError("instruments must be a sequence of exchange-qualified symbols")
+    if not instruments:
+        raise ValueError("instruments must contain at least one expected symbol")
+
+    normalized_expected: list[str] = []
+    for value in instruments:
+        if not isinstance(value, str):
+            raise ValueError("expected instruments must be strings")
+        symbol = value.strip().upper()
+        if not _INSTRUMENT.fullmatch(symbol):
+            raise ValueError(
+                "expected instruments must use six digits and .SH, .SZ or .BJ suffixes"
+            )
+        normalized_expected.append(symbol)
+    if len(normalized_expected) != len(set(normalized_expected)):
+        raise ValueError("expected instruments must be unique")
+
+    normalized_signal_date = _iso_date(signal_date, "signal_date")
+    cutoff = _aware_timestamp(decision_at, "decision_at")
+    if cutoff.date().isoformat() != normalized_signal_date:
+        raise ValueError("decision_at must fall on signal_date")
+
+    validated = validate_listing_event_evidence(
+        evidence,
+        source_identities=source_identities,
+    )
+    event_by_symbol = {
+        str(row["instrument"]): row
+        for row in validated.to_dicts()
+    }
+    expected = set(normalized_expected)
+    missing_evidence: list[str] = []
+    not_yet_public: list[str] = []
+    future_listing_events: list[str] = []
+    available_by_cutoff: set[str] = set()
+
+    for symbol in sorted(expected):
+        event = event_by_symbol.get(symbol)
+        if event is None:
+            missing_evidence.append(symbol)
+            continue
+        if str(event["listing_date"]) > normalized_signal_date:
+            future_listing_events.append(symbol)
+            continue
+        published = _document_timestamp(event, "available_at")
+        if published > cutoff:
+            not_yet_public.append(symbol)
+            continue
+        available_by_cutoff.add(symbol)
+
+    by_exchange: list[dict[str, Any]] = []
+    for exchange, suffix in (("SSE", ".SH"), ("SZSE", ".SZ"), ("BSE", ".BJ")):
+        exchange_expected = sorted(symbol for symbol in expected if symbol.endswith(suffix))
+        exchange_covered = sorted(available_by_cutoff.intersection(exchange_expected))
+        exchange_missing = sorted(set(exchange_expected).intersection(missing_evidence))
+        exchange_late = sorted(set(exchange_expected).intersection(not_yet_public))
+        exchange_future = sorted(
+            set(exchange_expected).intersection(future_listing_events)
+        )
+        by_exchange.append({
+            "exchange": exchange,
+            "expected": len(exchange_expected),
+            "available_by_decision": len(exchange_covered),
+            "missing_evidence": len(exchange_missing),
+            "not_yet_public": len(exchange_late),
+            "listing_after_signal_date": len(exchange_future),
+            "missing_symbols": exchange_missing,
+            "not_yet_public_symbols": exchange_late,
+            "future_listing_symbols": exchange_future,
+        })
+
+    unexpected_evidence = sorted(set(event_by_symbol).difference(expected))
+    passed = not (
+        missing_evidence or not_yet_public or future_listing_events
+    )
+    return {
+        "status": "PASS" if passed else "FAIL",
+        "signal_date": normalized_signal_date,
+        "decision_at": cutoff.isoformat(),
+        "expected_instruments": len(expected),
+        "validated_evidence_rows": validated.height,
+        "available_by_decision": len(available_by_cutoff),
+        "missing_evidence_count": len(missing_evidence),
+        "not_yet_public_count": len(not_yet_public),
+        "listing_after_signal_date_count": len(future_listing_events),
+        "missing_evidence_symbols": missing_evidence,
+        "not_yet_public_symbols": not_yet_public,
+        "listing_after_signal_date_symbols": future_listing_events,
+        "additional_validated_evidence_count": len(unexpected_evidence),
+        "additional_validated_evidence_symbols": unexpected_evidence,
+        "by_exchange": by_exchange,
+        "scope_note": (
+            "The expected membership snapshot is caller-supplied. PASS means "
+            "the supplied members have validated listing-event evidence public "
+            "by this decision cutoff; it does not prove historical-universe "
+            "completeness, delisting history, or training/backtest admission."
+        ),
+        "historical_universe_completeness_proven": False,
+        "training_dataset_unlocked": False,
+        "backtest_admitted": False,
+    }
