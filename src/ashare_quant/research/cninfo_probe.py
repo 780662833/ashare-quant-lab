@@ -32,6 +32,8 @@ _USER_AGENT = (
 )
 _REQUIRED_ANNOUNCEMENT_FIELDS = (
     "secCode",
+    "secName",
+    "orgId",
     "announcementId",
     "announcementTitle",
     "announcementTime",
@@ -207,6 +209,14 @@ def probe_cninfo_announcement_api(
             "page_size": page_size,
             "max_pages": max_pages,
             "min_interval_seconds": min_interval_seconds,
+            "tab_name": "fulltext",
+            "stock": "",
+            "secid": "",
+            "category": "",
+            "trade": "",
+            "sort_name": "",
+            "sort_type": "",
+            "highlight_title": True,
         },
         "endpoint": QUERY_URL,
         "search_page": SEARCH_PAGE_URL,
@@ -267,14 +277,18 @@ def probe_cninfo_announcement_api(
             },
             method="GET",
         )
+        bootstrap_requested_at = datetime.now(timezone.utc).isoformat()
         bootstrap_bytes, bootstrap_status, bootstrap_url = _read_response(
             client, bootstrap_request, timeout_seconds
         )
+        bootstrap_captured_at = datetime.now(timezone.utc).isoformat()
         if not _official_host(bootstrap_url):
             raise ValueError("search-page bootstrap redirected outside the official CNINFO host")
         bootstrap_path = target_dir / "search_page_bootstrap.html"
         bootstrap_path.write_bytes(bootstrap_bytes)
         report["bootstrap"] = {
+            "request_started_at": bootstrap_requested_at,
+            "captured_at": bootstrap_captured_at,
             "status_code": bootstrap_status,
             "final_url": bootstrap_url,
             "bytes": len(bootstrap_bytes),
@@ -327,6 +341,7 @@ def probe_cninfo_announcement_api(
                 method="POST",
             )
             raw_bytes, status, final_url = _read_response(client, request, timeout_seconds)
+            request_started_at = datetime.now(timezone.utc).isoformat()
             previous_request_at = time.monotonic()
             if not _official_host(final_url):
                 raise ValueError("query request redirected outside the official CNINFO host")
@@ -334,6 +349,9 @@ def probe_cninfo_announcement_api(
             page_path.write_bytes(raw_bytes)
             page_report: dict[str, Any] = {
                 "page_num": page_num,
+                "request_started_at": request_started_at,
+                "captured_at": datetime.now(timezone.utc).isoformat(),
+                "request_form": form,
                 "status_code": status,
                 "final_url": final_url,
                 "bytes": len(raw_bytes),
@@ -454,6 +472,15 @@ def probe_cninfo_announcement_api(
             report["anomalies"].append(
                 "duplicate announcementId values appeared across captured pages"
             )
+        if (
+            isinstance(expected_records, int)
+            and report["query_counters"]["captured_records"] != expected_records
+        ):
+            report["anomalies"].append(
+                "captured record count "
+                f"{report['query_counters']['captured_records']} differs from "
+                f"server-reported totalRecordNum {expected_records}"
+            )
         pagination_anomalies = [
             item
             for item in report["anomalies"]
@@ -463,6 +490,7 @@ def probe_cninfo_announcement_api(
                 or "totalpages is zero" in item
                 or "totalpages is smaller" in item
                 or "hasMore=false before" in item
+                or "captured record count" in item
             )
         ]
         expected_response_pages = (
