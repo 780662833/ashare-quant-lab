@@ -179,3 +179,23 @@ the supplied membership snapshot and one signal-date decision cutoff. The
 weekly research window still requires a separate audit for every rebalance
 signal date, plus the historical-universe and delisting gates.
 
+## Public archive recheck (2026-11-16)
+
+This recheck inspected the public search interfaces only. No archive API was
+called, no announcement or PDF was downloaded, and no source was promoted.
+
+| Exchange | Confirmed from the public interface | Still unproven |
+|---|---|---|
+| SSE | The company-announcement page exposes security code/name, keyword, and start/end-date search fields. A per-company announcement view renders security code, short name, title, and announcement date. The current listing-announcement rule requires the issuer's listing information to include the listing time and stock code. | The public page review did not establish a stable, reproducible API, full-page pagination, retention back to the start of the research window, or complete coverage of subsequently delisted securities. The search interface alone does not prove when each exact record first became public. |
+| SZSE | The official listed-company notice index exposes keyword and publication-date search and shows listing/termination notices with publication dates. The index is paginated; the reviewed first pages include recent 2026 notices and an older page extending into 2025. | The reviewed pages do not establish the oldest retained record, exhaustive pagination, a stable record identifier for every event, or complete coverage of delisted and code-migrated securities. Publication date is visible, but an exact intraday public-release timestamp was not demonstrated. |
+
+References reviewed:
+
+- SSE company-announcement search interface: https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml
+- SSE example per-company announcement view: https://www.sse.com.cn/assortment/stock/list/info/announcement/index.shtml?productId=600035
+- SSE 2025 listing-announcement content rule: https://www.sse.com.cn/lawandrules/sselawsrules2025/stocks/issue/c/c_20250515_10779011.shtml
+- SZSE listed-company notice index: https://www.szse.cn/www/disclosure/notice/company/index.html
+- SZSE older paginated notice index: https://www.szse.cn/disclosure/notice/company/index_2.html
+
+**Decision remains unchanged:** SSE issuer listing notices and SZSE listing/termination notices remain official event-level candidates, not production-qualified sources. The next source-research step is to identify and test the exact query/pagination mechanism over bounded historical intervals, prove exhaustive enumeration and stable document identity, and reconcile the resulting event inventory against the accepted historical SH/SZ PIT universe. Do not write a crawler that assumes search-engine result completeness or a current page's visible items represent the full archive.
+
