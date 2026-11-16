@@ -6,8 +6,6 @@ completeness or PIT eligibility.
 """
 from __future__ import annotations
 
-from collections import Counter
-
 import hashlib
 import http.cookiejar
 import json
@@ -15,6 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections import Counter
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -59,6 +58,7 @@ def _validate_request(
     page_size: int,
     max_pages: int,
     min_interval_seconds: float,
+    timeout_seconds: float = 20.0,
 ) -> tuple[date, date]:
     try:
         start = date.fromisoformat(start_date)
@@ -81,6 +81,8 @@ def _validate_request(
         raise ValueError("max_pages must be between 1 and 10")
     if min_interval_seconds < 0.5:
         raise ValueError("min_interval_seconds must be at least 0.5")
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
     return start, end
 
 
@@ -183,6 +185,7 @@ def probe_cninfo_announcement_api(
         page_size=page_size,
         max_pages=max_pages,
         min_interval_seconds=min_interval_seconds,
+        timeout_seconds=timeout_seconds,
     )
     if not isinstance(plate, str):
         raise ValueError("plate must be a string; use the value for the board under test")
