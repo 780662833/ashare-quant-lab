@@ -57,6 +57,7 @@ def _event_row(
     publication_date: str = "2026-11-02",
     publication_precision: str = "timestamp",
     published_at: str = "2026-11-02T11:00:00+08:00",
+    captured_at: str = "2026-11-03T09:00:00+08:00",
 ) -> dict[str, object]:
     dataset = {
         "SSE": "sse_listing_events",
@@ -83,7 +84,7 @@ def _event_row(
         "published_at": published_at,
         "available_at": published_at,
         "document_date": "2026-11-01",
-        "captured_at": "2026-11-03T09:00:00+08:00",
+        "captured_at": captured_at,
         "is_bse_select_layer_transfer": False,
         "source_revision_id": f"revision-{dataset}",
         "source_contract_fingerprint": "b" * 64,
@@ -130,6 +131,7 @@ def test_date_precision_release_is_not_available_before_end_of_publication_day()
                 publication_date="2026-11-03",
                 publication_precision="date",
                 published_at="2026-11-03T23:59:59+08:00",
+                captured_at="2026-11-04T09:00:00+08:00",
             )
         ],
         ["600000.SH"],
