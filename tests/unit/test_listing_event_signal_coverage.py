@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import pytest
 import polars as pl
+import pytest
 
 from ashare_quant.research.listing_event_evidence import (
     audit_listing_event_signal_coverage,
