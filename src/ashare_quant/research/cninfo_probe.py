@@ -218,6 +218,7 @@ def probe_cninfo_announcement_api(
             "page_size": page_size,
             "max_pages": max_pages,
             "min_interval_seconds": min_interval_seconds,
+            "timeout_seconds": timeout_seconds,
             "tab_name": "fulltext",
             "stock": "",
             "secid": "",
@@ -361,6 +362,7 @@ def probe_cninfo_announcement_api(
                 "request_started_at": request_started_at,
                 "captured_at": datetime.now(timezone.utc).isoformat(),
                 "request_form": form,
+                "request_body_sha256": hashlib.sha256(encoded).hexdigest(),
                 "status_code": status,
                 "final_url": final_url,
                 "bytes": len(raw_bytes),
@@ -570,6 +572,7 @@ def render_probe_plan(
     page_size: int,
     max_pages: int,
     min_interval_seconds: float,
+    timeout_seconds: float = 20.0,
 ) -> str:
     """Return a no-network plan for the requested bounded probe."""
     _validate_request(
@@ -580,6 +583,7 @@ def render_probe_plan(
         page_size=page_size,
         max_pages=max_pages,
         min_interval_seconds=min_interval_seconds,
+        timeout_seconds=timeout_seconds,
     )
     return json.dumps(
         {
@@ -594,6 +598,7 @@ def render_probe_plan(
                 "page_size": page_size,
                 "max_pages": max_pages,
                 "min_interval_seconds": min_interval_seconds,
+                "timeout_seconds": timeout_seconds,
             },
             "writes": (
                 "Only the report and raw responses under the selected probe "
