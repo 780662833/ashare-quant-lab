@@ -32,7 +32,6 @@ The script:
 2. Captures a caller-selected contiguous list-page range using the observed `index.html`, `index_1.html`, ... naming pattern.
 3. Extracts candidate article links that match the 本所公告 detail-page pattern `tYYYYMMDD_ID.html`, including links encoded in per-row `curHref` / `curTitle` script variables.
 4. Applies optional keyword and publication-date filters locally to the captured list-page candidates; it does not call an undocumented search endpoint.
-
 5. Captures at most the selected number of article HTML pages. An operator can also supply an exact official article URL as a seed; the report labels it `operator_supplied_seed` rather than pretending the archive discovered it.
 6. Saves the original HTML bytes and SHA-256 digest for every captured page, along with URL, response status, request/capture timestamps, extracted record ID, title and date observations.
 7. Does not follow PDF or other attachment links.
