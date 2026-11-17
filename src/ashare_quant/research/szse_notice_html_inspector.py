@@ -136,7 +136,7 @@ def _safe_excerpt(value: str, *, limit: int = 320) -> str:
         r"api[_-]?key|signature|session[_-]?id|jwt)[A-Za-z0-9_.-]*)"
     )
     credential_assignment = re.compile(
-        rf"""(?i)(?P<prefix>["']?{credential_key}["']\s*[:=]\s*)"""
+        rf"""(?i)(?P<prefix>["']?{credential_key}["']?\s*[:=]\s*)"""
         rf"""(?P<value>["'][^"']*["']|[A-Za-z0-9._~+/=-]{{4,}})"""
     )
 
