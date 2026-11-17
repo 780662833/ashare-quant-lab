@@ -520,3 +520,38 @@ hashing, partial status, duplicate IDs, no-result behavior, and missing
 identity fields. A local execution result is still required before we can claim
 that the endpoint works with the current service.
 
+## Live CNINFO probe observation and pagination counter correction (2026-11-16)
+
+The first user-run live probe completed both the official search-page bootstrap
+and the reverse-engineered query POST with HTTP 200. The bounded query was:
+
+- board selector: `column=szse`, `plate=sz`;
+- date interval: 2020-05-22 through 2020-05-22;
+- keyword: `终止上市`;
+- requested page size: 30; maximum pages: 1.
+
+The returned page contained 5 announcement rows, 5 unique
+`announcementId` values, and no missing required identity fields. The query
+reported `totalRecordNum=5` and `hasMore=false`, but also
+`totalpages=0`. All five `announcementTime` values were classified by the
+probe as midnight-valued date stamps; none is accepted as an exact intraday
+first-publication time.
+
+The initial probe version returned `PARTIAL` because it treated the zero
+`totalpages` counter as a hard pagination failure. The current parser change
+preserves that raw counter while deriving an effective one-page expectation
+from `totalRecordNum/pageSize`. When the captured row count equals
+the reported total, all five IDs are unique, no required identity field is
+missing, and `hasMore=false`, the revised status is
+`COMPLETE_WITH_WARNINGS`: the one query page appears completely traversed,
+but the server's page counter remains anomalous. A `hasMore=true`, record-count
+mismatch, changed counter, duplicate ID or identity-field gap remains
+PARTIAL or warning-bearing as appropriate.
+
+This observation demonstrates that the current CNINFO public search route is
+reachable from the operator's network and returns announcement metadata for
+this one query. It does not yet prove that the five rows are all relevant
+listing/termination events for the issuer set, that the raw field timestamps
+are original first-publication times, or that the 2020 archive is complete.
+The raw response page must be reviewed before expanding query scope.
+

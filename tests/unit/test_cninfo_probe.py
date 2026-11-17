@@ -100,6 +100,7 @@ def _probe(
     opener: FakeOpener,
     *,
     max_pages: int = 2,
+    page_size: int = 1,
 ) -> dict[str, Any]:
     return probe_cninfo_announcement_api(
         start_date="2026-11-02",
@@ -108,7 +109,7 @@ def _probe(
         plate="sh",
         search_key="上市公告书",
         output_dir=tmp_path,
-        page_size=1,
+        page_size=page_size,
         max_pages=max_pages,
         min_interval_seconds=0.5,
         opener=opener,
@@ -292,3 +293,81 @@ def test_probe_marks_missing_identity_fields_as_warning(tmp_path: Path) -> None:
         "announcementTime",
         "adjunctUrl",
     ]
+
+
+def test_zero_totalpages_with_reconciled_records_and_has_more_false_is_warning(
+    tmp_path: Path,
+) -> None:
+    records = [_announcement(f"notice-{index}") for index in range(5)]
+    opener = FakeOpener(
+        {
+            1: _payload(
+                records,
+                totalpages=0,
+                total_records=5,
+                has_more=False,
+            )
+        }
+    )
+
+    report = _probe(tmp_path, opener, max_pages=1, page_size=30)
+
+    assert report["status"] == "COMPLETE_WITH_WARNINGS"
+    assert report["page_traversal_complete_for_query"] is True
+    assert report["query_counters"]["reported_total_pages"] == 0
+    assert report["query_counters"]["effective_expected_pages"] == 1
+    assert report["query_counters"]["reported_total_records"] == 5
+    assert report["query_counters"]["captured_pages"] == 1
+    assert report["query_counters"]["captured_records"] == 5
+    assert report["query_counters"]["unique_announcement_ids"] == 5
+    assert report["query_counters"]["midnight_timestamp_rows"] == 5
+    assert report["query_counters"]["reported_total_pages"] == 0
+    assert report["pages"][0]["reported_total_pages"] == 0
+    assert report["pages"][0]["effective_expected_pages"] == 1
+    assert any("totalpages is zero" in item for item in report["anomalies"])
+    assert report["source_coverage_proven"] is False
+    assert report["safety"]["pit_admitted"] is False
+
+
+def test_zero_totalpages_with_has_more_true_remains_partial(tmp_path: Path) -> None:
+    records = [_announcement(f"notice-{index}") for index in range(5)]
+    opener = FakeOpener(
+        {
+            1: _payload(
+                records,
+                totalpages=0,
+                total_records=5,
+                has_more=True,
+            )
+        }
+    )
+
+    report = _probe(tmp_path, opener, max_pages=1, page_size=30)
+
+    assert report["status"] == "PARTIAL"
+    assert report["page_traversal_complete_for_query"] is False
+    assert report["query_counters"]["captured_records"] == 5
+    assert report["source_coverage_proven"] is False
+
+
+def test_zero_totalpages_with_record_count_mismatch_remains_partial(
+    tmp_path: Path,
+) -> None:
+    records = [_announcement(f"notice-{index}") for index in range(4)]
+    opener = FakeOpener(
+        {
+            1: _payload(
+                records,
+                totalpages=0,
+                total_records=5,
+                has_more=False,
+            )
+        }
+    )
+
+    report = _probe(tmp_path, opener, max_pages=1, page_size=30)
+
+    assert report["status"] == "PARTIAL"
+    assert report["page_traversal_complete_for_query"] is False
+    assert report["query_counters"]["captured_records"] == 4
+    assert any("captured record count" in item for item in report["anomalies"])

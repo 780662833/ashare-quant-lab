@@ -246,6 +246,7 @@ def probe_cninfo_announcement_api(
         "pages": [],
         "query_counters": {
             "reported_total_pages": None,
+            "effective_expected_pages": None,
             "reported_total_records": None,
             "captured_pages": 0,
             "captured_records": 0,
@@ -394,29 +395,53 @@ def probe_cninfo_announcement_api(
                 if total_records_raw is not None and total_records_raw > 0
                 else 0
             )
-            reported_pages = (
-                total_pages_raw if total_pages_raw is not None else calculated_pages
-            )
-            if total_pages_raw is not None and total_records_raw is not None:
-                if total_records_raw > 0 and total_pages_raw == 0:
-                    report["anomalies"].append(
-                        "totalpages is zero while totalRecordNum is positive"
-                    )
-                if total_records_raw > 0 and calculated_pages != total_pages_raw:
-                    report["anomalies"].append(
-                        "totalpages differs from the page count implied by "
-                        "totalRecordNum and pageSize"
-                    )
+            if total_pages_raw == 0 and total_records_raw is not None and total_records_raw > 0:
+                # CNINFO has been observed returning totalpages=0 together with
+                # a positive totalRecordNum and hasMore=false. Keep the raw
+                # counter, but derive the expected page count from records and
+                # pageSize. The inconsistency remains a warning, not a reason
+                # to discard an otherwise fully reconciled one-page query.
+                reported_pages = calculated_pages
+                report["anomalies"].append(
+                    "totalpages is zero while totalRecordNum is positive; "
+                    "effective page count derived from totalRecordNum and pageSize"
+                )
+            else:
+                reported_pages = (
+                    total_pages_raw
+                    if total_pages_raw is not None
+                    else calculated_pages
+                )
+            if (
+                total_pages_raw is not None
+                and total_pages_raw > 0
+                and total_records_raw is not None
+                and total_records_raw > 0
+                and calculated_pages != total_pages_raw
+            ):
+                report["anomalies"].append(
+                    "totalpages differs from the page count implied by "
+                    "totalRecordNum and pageSize"
+                )
             if expected_pages is None:
                 expected_pages = reported_pages
                 expected_records = total_records_raw
-                report["query_counters"]["reported_total_pages"] = expected_pages
+                report["query_counters"]["reported_total_pages"] = total_pages_raw
+                report["query_counters"]["effective_expected_pages"] = expected_pages
                 report["query_counters"]["reported_total_records"] = expected_records
             else:
                 if reported_pages != expected_pages:
                     report["anomalies"].append(
-                        "reported page count changed from "
+                        "effective page count changed from "
                         f"{expected_pages} to {reported_pages} on page {page_num}"
+                    )
+                if (
+                    total_pages_raw is not None
+                    and report["query_counters"]["reported_total_pages"] is not None
+                    and total_pages_raw != report["query_counters"]["reported_total_pages"]
+                ):
+                    report["anomalies"].append(
+                        "raw totalpages counter changed across query pages"
                     )
                 if (
                     total_records_raw is not None
@@ -429,7 +454,8 @@ def probe_cninfo_announcement_api(
                     )
 
             page_report["record_count"] = len(announcements)
-            page_report["reported_total_pages"] = reported_pages
+            page_report["reported_total_pages"] = total_pages_raw
+            page_report["effective_expected_pages"] = reported_pages
             page_report["reported_total_records"] = total_records_raw
             page_report["has_more"] = has_more
             missing_identity_rows: list[dict[str, Any]] = []
@@ -499,8 +525,9 @@ def probe_cninfo_announcement_api(
             if (
                 "reported page count changed" in item
                 or "reported record count changed" in item
-                or "totalpages is zero" in item
                 or "totalpages differs" in item
+                or "effective page count changed" in item
+                or "raw totalpages counter changed" in item
                 or "hasMore=false before" in item
                 or "captured record count" in item
             )
