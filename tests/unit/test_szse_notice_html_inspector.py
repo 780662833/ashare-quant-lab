@@ -171,12 +171,16 @@ def test_inspector_redacts_compound_credential_names_and_query_values(
     source = tmp_path / "captured.html"
     source.write_text(
         f"""
-        <div data-url="/search?refresh_token={refresh_secret}"></div>
+        <button data-url="/search?refresh_token={refresh_secret}">查询</button>
         <script>
-          const headers = {{
-            "access_token": "{access_secret}",
-            csrfToken: "{csrf_secret}"
-          }};
+          $.ajax({{
+            url: "/api/notice/search",
+            headers: {{
+              "access_token": "{access_secret}",
+              csrfToken: "{csrf_secret}"
+            }},
+            data: {{ keyword: "龙力" }}
+          }});
         </script>
         """,
         encoding="utf-8",
@@ -214,7 +218,10 @@ def test_inspector_detects_jquery_class_selector_and_click_handler(
     assert "confirm-query" in script["query_binding_markers"]
     assert "event_binding" in clue_types
     assert "jquery_selector" in clue_types
-    assert any(".confirm-query" in clue["context"] for clue in script["query_binding_clues"])
+    assert any(
+        ".confirm-query" in clue["context"]
+        for clue in script["query_binding_clues"]
+    )
     assert script["candidate_routes"] == ["/api/disc/info/search"]
     assert report["query_discovery"]["request_call_clue_count"] == 1
 
