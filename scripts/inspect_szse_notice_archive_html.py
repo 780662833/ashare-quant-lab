@@ -37,7 +37,8 @@ def main() -> int:
         output = write_szse_html_inspection_report(report, args.output)
         print(f"Inspection report: {output.resolve()}")
     discovery = report["query_discovery"]
-    print("Candidate request routes: " + (", ".join(discovery["candidate_routes"]) or "none detected"))
+    candidate_routes = ", ".join(discovery["candidate_routes"]) or "none detected"
+    print(f"Candidate request routes: {candidate_routes}")
     print(f"Request-call clues: {discovery['request_call_clue_count']}")
     print(f"Query-binding clues: {discovery['binding_clue_count']}")
     print(json.dumps(report, ensure_ascii=False, indent=2))
