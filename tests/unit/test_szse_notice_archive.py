@@ -102,13 +102,10 @@ def test_probe_captures_page_and_article_original_bytes_and_hashes(
     listing_url = LISTING_URL
     article_url = "https://www.szse.cn/disclosure/notice/t20200522_577530.html"
     listing_bytes = (
-        b'<ul><li><a href="/disclosure/notice/t20200522_577530.html">'
-        b'\xe5\x85\xb3\xe4\xba\x8e\xe5\xb1\xb1\xe4\xb8\x9c\xe9\xbe\x99\xe5\x8a\x9b'
-        b'\xe7\x94\x9f\xe7\x89\xa9\xe7\xa7\x91\xe6\x8a\x80\xe8\x82\xa1\xe4\xbb\xbd'
-        b'\xe6\x9c\x89\xe9\x99\x90\xe5\x85\xac\xe5\x8f\xb8\xe8\x82\xa1\xe7\xa5\xa8'
-        b'\xe7\xbb\x88\xe6\xad\xa2\xe4\xb8\x8a\xe5\xb8\x82\xe7\x9a\x84\xe5\x85\xac'
-        b'\xe5\x91\x8a</a><span>2020-05-22</span></li></ul>'
-    )
+        '<ul><li><a href="/disclosure/notice/t20200522_577530.html">'
+        '关于山东龙力生物科技股份有限公司股票终止上市的公告'
+        '</a><span>2020-05-22</span></li></ul>'
+    ).encode("utf-8")
     article_bytes = (
         "<html><head><title>关于山东龙力生物科技股份有限公司股票终止上市的公告</title></head>"
         "<body><h1>关于山东龙力生物科技股份有限公司股票终止上市的公告</h1>"
