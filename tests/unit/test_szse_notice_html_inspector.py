@@ -14,7 +14,7 @@ from ashare_quant.research.szse_notice_html_inspector import (
 def test_inspector_reports_search_form_and_script_route_clues_without_execution(
     tmp_path: Path,
 ) -> None:
-    raw = b"""<html>
+    raw = """<html>
     <head><title>SZSE Notice</title>
       <script src="/static/js/notice.js"></script>
       <script>
@@ -29,7 +29,7 @@ def test_inspector_reports_search_form_and_script_route_clues_without_execution(
         <input type="hidden" name="csrf" value="do-not-emit-this">
         <button type="submit" name="query">查询</button>
       </form>
-    </body></html>"""
+    </body></html>""".encode("utf-8")
     source = tmp_path / "archive_page_00000.html"
     source.write_bytes(raw)
 
