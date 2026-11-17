@@ -812,3 +812,20 @@ row-level receipts and PIT/production admission remain unqualified. No CNEquity
 change/read/backfill, local data-lake access, production data write, training
 or real backtest was enabled.
 
+### Phase 9.36 — offline SZSE 本所公告 HTML structure inspection
+
+Added an offline inspector for previously captured official SZSE HTML. It records
+form actions/methods, visible input/select/button names and placeholders,
+first-party script references, inline-script SHA-256 values, literal route
+candidates and query-parameter names. Hidden input values are excluded, raw
+capture bytes are not changed, external scripts are not fetched and JavaScript
+is not executed. The utility has a 20 MiB input cap and produces a structured
+JSON inspection report.
+
+This phase is diagnostic only. Candidate route strings do not constitute an
+API contract; server-side search must not be implemented until the relevant
+first-party script/request shape is captured and reviewed. The existing
+`--keyword` and date-bound options remain local filters over bounded captured
+list-page candidates. No live query request, CNEquity access, local data-lake
+read, production write, backfill, training or real backtest is enabled.
+
