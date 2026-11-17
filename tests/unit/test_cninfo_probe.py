@@ -371,3 +371,43 @@ def test_zero_totalpages_with_record_count_mismatch_remains_partial(
     assert report["page_traversal_complete_for_query"] is False
     assert report["query_counters"]["captured_records"] == 4
     assert any("captured record count" in item for item in report["anomalies"])
+
+def test_zero_totalpages_across_two_pages_uses_effective_page_count(
+    tmp_path: Path,
+) -> None:
+    first_page = [
+        _announcement(f"notice-{index}") for index in range(30)
+    ]
+    second_page = [_announcement("notice-30")]
+    opener = FakeOpener(
+        {
+            1: _payload(
+                first_page,
+                totalpages=0,
+                total_records=31,
+                has_more=True,
+            ),
+            2: _payload(
+                second_page,
+                totalpages=0,
+                total_records=31,
+                has_more=False,
+            ),
+        }
+    )
+
+    report = _probe(tmp_path, opener, max_pages=2, page_size=30)
+
+    assert report["status"] == "COMPLETE_WITH_WARNINGS"
+    assert report["page_traversal_complete_for_query"] is True
+    assert report["query_counters"]["reported_total_pages"] == 0
+    assert report["query_counters"]["effective_expected_pages"] == 2
+    assert report["query_counters"]["captured_pages"] == 2
+    assert report["query_counters"]["reported_total_records"] == 31
+    assert report["query_counters"]["captured_records"] == 31
+    assert report["query_counters"]["unique_announcement_ids"] == 31
+    assert [page["reported_total_pages"] for page in report["pages"]] == [0, 0]
+    assert [page["effective_expected_pages"] for page in report["pages"]] == [2, 2]
+    assert any("totalpages is zero" in item for item in report["anomalies"])
+    assert report["source_coverage_proven"] is False
+    assert report["safety"]["pit_admitted"] is False
