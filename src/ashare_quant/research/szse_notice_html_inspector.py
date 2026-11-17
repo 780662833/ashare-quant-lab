@@ -136,17 +136,13 @@ def _safe_excerpt(value: str, *, limit: int = 320) -> str:
         r"api[_-]?key|signature|session[_-]?id|jwt)[A-Za-z0-9_.-]*)"
     )
     credential_assignment = re.compile(
-        rf"""(?i)(?P<prefix>["']?{credential_key}["']?\s*[:=]\s*)"""
+        rf"""(?i)(?P<key>["']?{credential_key}["']?)\s*[:=]\s*"""
         rf"""(?P<value>["'][^"']*["']|[A-Za-z0-9._~+/=-]{{4,}})"""
     )
 
     def redact_assignment(match: re.Match[str]) -> str:
-        value = match.group("value")
-        if value[:1] in {"'", '"'} and value[-1:] == value[:1]:
-            redacted_value = value[0] + "<redacted>" + value[0]
-        else:
-            redacted_value = "<redacted>"
-        return match.group("prefix") + redacted_value
+        key = match.group("key").strip("'\"")
+        return key + "=<redacted>"
 
     snippet = credential_assignment.sub(redact_assignment, snippet)
     snippet = re.sub(
