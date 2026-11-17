@@ -11,6 +11,8 @@ import pytest
 
 from ashare_quant.research.cninfo_probe import (
     QUERY_URL,
+    STOCK_LOOKUP_URL,
+    _extract_stock_identity,
     classify_cninfo_announcement_row,
     probe_cninfo_announcement_api,
     render_probe_plan,
@@ -59,8 +61,18 @@ def _announcement(
 
 
 class FakeOpener:
-    def __init__(self, pages: dict[int, dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        pages: dict[int, dict[str, Any]],
+        *,
+        stock_identity_payload: Any | None = None,
+    ) -> None:
         self.pages = pages
+        self.stock_identity_payload = (
+            stock_identity_payload
+            if stock_identity_payload is not None
+            else [{"code": "002604", "orgId": "9900002604", "zwjc": "龙力生物"}]
+        )
         self.requests: list[object] = []
 
     def open(self, request: object, *, timeout: float) -> FakeResponse:
@@ -71,9 +83,18 @@ class FakeOpener:
                 b"<html>search bootstrap</html>",
                 url=url,
             )
+        if url == STOCK_LOOKUP_URL:
+            body = getattr(request, "data")
+            form = parse_qs(body.decode("utf-8"))
+            assert form["keyWord"] == ["002604"]
+            assert form["maxNum"] == ["10"]
+            return FakeResponse(
+                json.dumps(self.stock_identity_payload, ensure_ascii=False).encode("utf-8"),
+                url=url,
+            )
         assert url == QUERY_URL
         body = getattr(request, "data")
-        form = parse_qs(body.decode("utf-8"))
+        form = parse_qs(body.decode("utf-8"), keep_blank_values=True)
         page_num = int(form["pageNum"][0])
         return FakeResponse(
             json.dumps(self.pages[page_num], ensure_ascii=False).encode("utf-8"),
@@ -187,6 +208,25 @@ def test_probe_captures_all_reported_pages_and_raw_hashes(tmp_path: Path) -> Non
 
 
 
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [{"code": "002604", "orgId": "9900002604", "zwjc": "龙力生物"}],
+        {"stockList": [{"code": "002604", "orgId": "9900002604", "fullName": "山东龙力"}]},
+        {"data": [{"stockCode": "002604", "orgId": "9900002604", "secName": "龙力生物"}]},
+    ],
+)
+def test_extract_stock_identity_supports_observed_cninfo_response_shapes(
+    payload: Any,
+) -> None:
+    identity = _extract_stock_identity(payload, "002604")
+
+    assert identity["stock_code"] == "002604"
+    assert identity["org_id"] == "9900002604"
+    assert identity["sec_name"] in {"龙力生物", "山东龙力", ""}
+
 def test_probe_stock_filter_is_sent_without_keyword(tmp_path: Path) -> None:
     opener = FakeOpener(
         {
@@ -208,13 +248,47 @@ def test_probe_stock_filter_is_sent_without_keyword(tmp_path: Path) -> None:
         stock="002604",
     )
 
-    query_request = opener.requests[1]
+    lookup_request = opener.requests[1]
+    query_request = opener.requests[2]
     form = parse_qs(getattr(query_request, "data").decode("utf-8"), keep_blank_values=True)
-    assert form["stock"] == ["002604"]
+    assert getattr(lookup_request, "full_url") == STOCK_LOOKUP_URL
+    assert form["stock"] == ["002604,9900002604"]
     assert form["searchkey"] == [""]
     assert report["request"]["stock"] == "002604"
+    assert report["request"]["resolved_org_id"] == "9900002604"
+    assert report["request"]["stock_query_value"] == "002604,9900002604"
+    assert report["stock_identity_lookup"]["resolved_sec_name"] == "龙力生物"
     assert report["status"] == "COMPLETE_FOR_QUERY"
 
+
+
+
+def test_probe_refuses_stock_query_when_org_id_cannot_be_resolved(
+    tmp_path: Path,
+) -> None:
+    opener = FakeOpener(
+        {1: _payload([], totalpages=0, total_records=0, has_more=False)},
+        stock_identity_payload=[{"code": "000001", "orgId": "9900000001"}],
+    )
+
+    report = probe_cninfo_announcement_api(
+        start_date="2020-05-22",
+        end_date="2020-05-22",
+        column="szse",
+        plate="sz",
+        search_key="",
+        stock="002604",
+        output_dir=tmp_path,
+        page_size=30,
+        max_pages=1,
+        min_interval_seconds=0.5,
+        opener=opener,
+        sleep_fn=lambda _: None,
+    )
+
+    assert report["status"] == "ERROR"
+    assert "must return exactly one orgId for 002604" in report["error"]
+    assert len(opener.requests) == 2  # bootstrap + lookup; no announcement query
 
 def test_probe_rejects_null_announcements_without_reconciled_zero_counters(
     tmp_path: Path,
