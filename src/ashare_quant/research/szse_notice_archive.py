@@ -342,6 +342,7 @@ def _validate_options(
     keyword: str,
     start_date: str | None,
     end_date: str | None,
+    article_urls: list[str] | None = None,
 ) -> None:
     if not isinstance(start_page, int) or isinstance(start_page, bool) or start_page < 0:
         raise ValueError("start_page must be a non-negative integer")
@@ -403,6 +404,7 @@ def probe_szse_notice_archive(
         keyword=keyword,
         start_date=start_date,
         end_date=end_date,
+        article_urls=article_urls,
     )
     target = Path(output_dir)
     target.mkdir(parents=True, exist_ok=True)
