@@ -714,3 +714,18 @@ risk-warning notice, not a completed delisting decision. The exact *ST龙力
 API-row match remains pending a focused one-day `龙力` keyword probe and
 row-level reconciliation. No listing-date source, PIT availability,
 historical-universe coverage, training or backtest gate was promoted.
+
+### Phase 9.33 — retain auxiliary CNINFO result counters without over-interpreting them
+
+The 2020-05-22 five-row response reported `totalAnnouncement=5`,
+`totalRecordNum=5`, but `totalSecurities=0`; the captured rows contain
+three distinct security codes. The row-level `id` field is null while
+`announcementId` is populated and unique. Because the reverse-engineered
+protocol does not define the semantics of `totalSecurities`, the probe now
+preserves this raw counter and separately reports the observed distinct
+security-code count. It does not assert that the two counts must be equal or
+use `totalSecurities` for universe coverage. Auxiliary counter changes
+between pages are retained as query warnings. Synthetic tests cover the
+zero-counter / three-observed-codes case.
+
+No source-coverage, PIT, training or backtest admission is changed.
