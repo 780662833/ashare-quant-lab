@@ -10,6 +10,7 @@ import hashlib
 import html
 import http.cookiejar
 import json
+import math
 import re
 import time
 import urllib.error
@@ -27,6 +28,7 @@ _USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
 )
+_MAX_HTML_BYTES = 20 * 1024 * 1024
 _ARTICLE_PATH = re.compile(
     r"^/(?:www/)?disclosure/notice/t(?P<date>\d{8})_(?P<record_id>\d+)\.html$",
     re.IGNORECASE,
@@ -241,9 +243,14 @@ def _read_response(
     timeout_seconds: float,
 ) -> tuple[bytes, int, str]:
     with opener.open(request, timeout=timeout_seconds) as response:
+        raw = response.read()
+        if len(raw) > _MAX_HTML_BYTES:
+            raise ValueError(
+                f"SZSE HTML response exceeds the {_MAX_HTML_BYTES}-byte capture limit"
+            )
         status = int(getattr(response, "status", 200))
         final_url = response.geturl() if hasattr(response, "geturl") else request.full_url
-        return response.read(), status, str(final_url)
+        return raw, status, str(final_url)
 
 
 def _make_opener() -> Any:
@@ -289,9 +296,7 @@ def _fetch_official_html(
     _validate_https_szse_url(final_url, article=article)
     if status != 200:
         raise RuntimeError(f"SZSE HTML request returned HTTP {status}: {url}")
-    content_type = ""
-    # Fake responses and some urllib response wrappers do not expose headers;
-    # UTF-8/GB18030 decoding below is therefore the authoritative text check.
+    # UTF-8/GB18030 decoding below is the authoritative text check.
     if not raw:
         raise ValueError(f"SZSE returned an empty HTML body: {url}")
     return raw, status, final_url
@@ -338,16 +343,21 @@ def _validate_options(
     start_date: str | None,
     end_date: str | None,
 ) -> None:
-    if isinstance(start_page, bool) or start_page < 0:
+    if not isinstance(start_page, int) or isinstance(start_page, bool) or start_page < 0:
         raise ValueError("start_page must be a non-negative integer")
-    if isinstance(max_pages, bool) or not 1 <= max_pages <= 10:
+    if not isinstance(max_pages, int) or isinstance(max_pages, bool) or not 1 <= max_pages <= 10:
         raise ValueError("max_pages must be between 1 and 10")
-    if isinstance(max_articles, bool) or not 1 <= max_articles <= 50:
+    if not isinstance(max_articles, int) or isinstance(max_articles, bool) or not 1 <= max_articles <= 50:
         raise ValueError("max_articles must be between 1 and 50")
-    if min_interval_seconds < 0.5:
-        raise ValueError("min_interval_seconds must be at least 0.5")
-    if timeout_seconds <= 0:
-        raise ValueError("timeout_seconds must be positive")
+    if not math.isfinite(min_interval_seconds) or min_interval_seconds < 0.5:
+        raise ValueError("min_interval_seconds must be finite and at least 0.5")
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be finite and positive")
+    if article_urls is not None and (
+        not isinstance(article_urls, list)
+        or any(not isinstance(url, str) for url in article_urls)
+    ):
+        raise ValueError("article_urls must be a list of URL strings")
     if not isinstance(keyword, str):
         raise ValueError("keyword must be a string")
     if (start_date is None) != (end_date is None):
