@@ -732,7 +732,7 @@ No source-coverage, PIT, training or backtest admission is changed.
 
 ### Phase 9.34 — qualify SZSE exchange-issued delisting decision evidence
 
-The operator completed three further bounded CNINFO query variants for the
+The operator completed four further bounded CNINFO query variants for the
 known *ST龙力 (002604) termination decision dated 2020-05-22: keyword
 `龙力`; stock code with the current CNINFO orgId; and stock code/current orgId
 with the historical SZSE SME-board selector `szzx;`. All returned a 165-byte
