@@ -570,3 +570,62 @@ This confirms that 2020-05-22 is a valid SZSE termination-event control date and
 Neither the PDF footer date nor the probe's midnight-valued `announcementTime` proves an exact first-publication instant. Until the web publication event is independently established, this sample cannot supply a precise `available_at`. It is a control sample for identity and event classification only, not a PIT-availability pass.
 
 No source adapter was promoted, no row was written to production metadata, and no universe-coverage or archive-completeness claim was made.
+
+## Row-level review of the 2020-05-22 CNINFO keyword sample
+
+The operator supplied the complete raw `page_001.json` response for the query
+`column=szse`, `plate=sz`, date `2020-05-22`, keyword `终止上市`.
+The response contains five rows across three issuers. **None is a notice
+announcing that the exchange has already decided to terminate that issuer's
+listing; all five titles are risk-warning notices.**
+
+| Security | Code | Announcement ID | Title-stage classification | Page column |
+|---|---:|---:|---|---|
+| ST天宝 | 002220 | 1207845542 | Fourth warning that the stock may be terminated | SZZX |
+| 盛运环保 | 300090 | 1207845413 | Fourth warning of possible termination because the share price is below par | SZCY |
+| 盛运环保 | 300090 | 1207845412 | Risk warning about possible suspension and termination | SZCY |
+| 神雾环保 | 300156 | 1207844345 | Risk warning about possible suspension and termination | SZCY |
+| 神雾环保 | 300156 | 1207844344 | Seventh warning of possible termination because the share price is below par | SZCY |
+
+All five rows report `announcementTime=1590076800000`, which resolves to
+2020-05-22 00:00:00 Asia/Shanghai. It remains a midnight date-stamp
+observation, not an exact intraday first-publication time. The five
+`announcementId` values are unique and the required identity fields are
+present. The result includes one `SZZX` and four `SZCY` `pageColumn`
+values even though the request used `plate=sz`; until selector semantics are
+independently mapped, this request must not be described as a single-board
+query. The meanings of the raw `announcementType` codes have not been
+qualified.
+
+The original CNINFO PDF for row `1207844344` was independently opened and
+visually inspected. It is headed "第七次风险提示性公告" and states that
+300156 had closed below RMB 1 for 16 consecutive trading days through
+2020-05-21; the notice discusses a possible termination if the 20-day
+condition is met. It is a risk notice, not a completed termination decision:
+https://static.cninfo.com.cn/finalpage/2020-05-22/1207844344.PDF
+
+The SZSE official chronology separately records that it made a termination
+decision for *ST龙力 (002604) on 2020-05-22:
+https://www.szse.cn/aboutus/sse/events/t20210114_584257.html
+The five CNINFO rows above do **not** include code 002604 or the *ST龙力
+decision. Therefore the first query was a useful keyword-search connectivity
+test but was not a successful retrieval of the intended *ST龙力 decision
+notice. The matching *ST龙力 official exchange notice is:
+https://www.szse.cn/disclosure/notice/t20200522_577530.html
+
+The repository now includes title-stage triage labels and the offline script
+`scripts/analyze_cninfo_announcement_capture.py`. The script reads an
+existing raw response JSON, calculates its SHA-256, normalizes HTML title
+markup and classifies termination-related titles without making a network
+request or following `adjunctUrl`. Risk-warning labels are explicitly
+`TERMINATION_RISK_WARNING_NOT_DECISION`; apparent decision/result titles
+remain candidates requiring review of the original document and exchange
+record. The classifier is not a legal adjudicator, a source-coverage proof,
+or a PIT availability validator.
+
+A focused follow-up probe should use the same one-day window and Shenzhen
+selector with keyword `龙力`, then reconcile its returned security code,
+announcement ID, title and `adjunctUrl` to the SZSE decision notice and
+issuer PDF. Do not repeat broad keyword queries or download all five risk
+warnings. No source adapter, listing-date record, PIT availability, training
+or backtest gate is admitted by this sample.

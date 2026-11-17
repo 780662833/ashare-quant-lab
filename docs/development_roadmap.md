@@ -683,3 +683,34 @@ The final completion check now uses `effective_expected_pages` while preserving 
 PR #97 was merged as `f7d93aa57cdb743a8b551a1f1b8ced504eaea914`. GitHub Actions Run #380 passed **437 tests, with 2 skipped**. These are synthetic code tests only.
 
 A public control-sample review also confirmed the SZSE *ST龙力 termination decision dated 2020-05-22 and a CNINFO-hosted PDF candidate for that event. The exact match between that document and one of the operator's five captured API rows remains pending review of `page_001.json`; the PDF filename is not treated as the API announcement ID. No announcement adapter, source coverage, PIT availability, training or backtest gate was promoted.
+
+### Phase 9.32 — distinguish termination risk warnings from completed listing events
+
+The operator supplied the complete raw CNINFO response for the 2020-05-22
+Shenzhen `终止上市` keyword query. The five returned rows cover ST天宝
+(002220), 盛运环保 (300090) and 神雾环保 (300156). All five titles are
+risk warnings about a possible suspension/termination or possible delisting
+because the share price is below par. No row is the *ST龙力 (002604)
+termination decision recorded by SZSE for the same date.
+
+The sample proves that the keyword endpoint can return relevant historical
+announcement metadata, but it also demonstrates a major classification
+hazard: a full-text/title hit on `终止上市` is not equivalent to a completed
+delisting event. The `plate=sz` query returned both `SZZX` and `SZCY`
+page-column values, so the selector's exact board semantics remain unqualified.
+All five announcement-time fields are the same midnight timestamp and do not
+establish first-publication time.
+
+Added `classify_cninfo_announcement_row(...)`, row-level classification
+summaries in probe reports, and the offline
+`scripts/analyze_cninfo_announcement_capture.py` utility for reviewing
+previously captured JSON without network calls or PDF downloads. Risk-warning
+titles cannot be promoted to decision/result events. Decision/result-looking
+titles remain candidates until the original document and exchange decision are
+reviewed.
+
+The original PDF for 神雾环保 row `1207844344` was verified as a seventh
+risk-warning notice, not a completed delisting decision. The exact *ST龙力
+API-row match remains pending a focused one-day `龙力` keyword probe and
+row-level reconciliation. No listing-date source, PIT availability,
+historical-universe coverage, training or backtest gate was promoted.

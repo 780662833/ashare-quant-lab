@@ -7,9 +7,11 @@ completeness or PIT eligibility.
 from __future__ import annotations
 
 import hashlib
+import html
 import http.cookiejar
 import json
 import math
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -166,6 +168,46 @@ def _announcement_identity(row: dict[str, Any]) -> str | None:
     return str(value).strip()
 
 
+def classify_cninfo_announcement_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Classify title-level termination hits without asserting a legal outcome.
+
+    This is a triage label only. Original notice content and exchange decisions
+    must be reviewed before a row can be treated as a listing/delisting event.
+    """
+    raw_title = row.get("announcementTitle")
+    title = html.unescape(re.sub(r"<[^>]*>", "", str(raw_title or "")))
+    title = re.sub(r"\s+", " ", title).strip()
+
+    if "终止上市" not in title:
+        classification = "OTHER_ANNOUNCEMENT"
+        decision_candidate = False
+        reason = "normalized title does not contain 终止上市"
+    elif any(marker in title for marker in ("风险提示", "可能", "存在被", "将被", "面临")):
+        classification = "TERMINATION_RISK_WARNING_NOT_DECISION"
+        decision_candidate = False
+        reason = "title expresses a possible risk or warning, not a completed exchange decision"
+    elif (
+        "终止上市决定" in title
+        or re.search(r"决定.{0,30}终止上市|终止上市.{0,30}决定", title)
+        or "股票终止上市的公告" in title
+    ):
+        classification = "TERMINATION_DECISION_OR_RESULT_CANDIDATE"
+        decision_candidate = True
+        reason = "title resembles a decision/result notice; original document and exchange source still require review"
+    else:
+        classification = "TERMINATION_KEYWORD_HIT_REQUIRES_DOCUMENT_REVIEW"
+        decision_candidate = False
+        reason = "title contains termination wording but does not establish an actual decision or result"
+
+    return {
+        "normalized_title": title,
+        "classification": classification,
+        "decision_or_result_candidate": decision_candidate,
+        "requires_original_document_review": True,
+        "classification_basis": reason,
+    }
+
+
 def probe_cninfo_announcement_api(
     *,
     start_date: str,
@@ -244,6 +286,8 @@ def probe_cninfo_announcement_api(
         },
         "bootstrap": {},
         "pages": [],
+        "announcement_classifications": [],
+        "classification_counts": {},
         "query_counters": {
             "reported_total_pages": None,
             "effective_expected_pages": None,
@@ -482,6 +526,31 @@ def probe_cninfo_announcement_api(
                     all_ids.append(announcement_id)
                 time_observation = _publication_time_observation(
                     row.get("announcementTime")
+                )
+                classification = classify_cninfo_announcement_row(row)
+                classification_row = {
+                    "page_num": page_num,
+                    "row_index": row_index,
+                    "sec_code": row.get("secCode"),
+                    "sec_name": row.get("secName"),
+                    "announcement_id": announcement_id,
+                    "announcement_title_raw": row.get("announcementTitle"),
+                    "normalized_title": classification["normalized_title"],
+                    "adjunct_url": row.get("adjunctUrl"),
+                    "page_column": row.get("pageColumn"),
+                    "announcement_time_observation": time_observation,
+                    "classification": classification["classification"],
+                    "decision_or_result_candidate": classification[
+                        "decision_or_result_candidate"
+                    ],
+                    "requires_original_document_review": classification[
+                        "requires_original_document_review"
+                    ],
+                    "classification_basis": classification["classification_basis"],
+                }
+                report["announcement_classifications"].append(classification_row)
+                report["classification_counts"][classification["classification"]] = (
+                    report["classification_counts"].get(classification["classification"], 0) + 1
                 )
                 if time_observation["timestamp_semantics"] == "midnight_date_stamp_suspected":
                     report["query_counters"]["midnight_timestamp_rows"] += 1

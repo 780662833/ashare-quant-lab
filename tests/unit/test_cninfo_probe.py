@@ -11,6 +11,7 @@ import pytest
 
 from ashare_quant.research.cninfo_probe import (
     QUERY_URL,
+    classify_cninfo_announcement_row,
     probe_cninfo_announcement_api,
     render_probe_plan,
 )
@@ -411,3 +412,46 @@ def test_zero_totalpages_across_two_pages_uses_effective_page_count(
     assert any("totalpages is zero" in item for item in report["anomalies"])
     assert report["source_coverage_proven"] is False
     assert report["safety"]["pit_admitted"] is False
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "关于股票可能将被<em>终止</em><em>上市</em>的第四次风险提示公告",
+        "关于公司股票可能因股价低于面值将被终止上市的第四次风险提示性公告",
+        "关于公司股票存在被暂停上市及终止上市的风险提示公告",
+        "关于股票存在被暂停上市及终止上市的风险提示性公告",
+        "关于公司股票可能因股价低于面值将被终止上市的第七次风险提示性公告",
+    ],
+)
+def test_cninfo_termination_risk_titles_are_not_decision_events(title: str) -> None:
+    result = classify_cninfo_announcement_row({"announcementTitle": title})
+
+    assert result["classification"] == "TERMINATION_RISK_WARNING_NOT_DECISION"
+    assert result["normalized_title"].find("<em>") == -1
+    assert result["decision_or_result_candidate"] is False
+    assert result["requires_original_document_review"] is True
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "关于公司股票终止上市的公告",
+        "关于公司股票终止上市决定的公告",
+        "关于决定公司股票终止上市的公告",
+    ],
+)
+def test_cninfo_decision_or_result_titles_are_candidates_only(title: str) -> None:
+    result = classify_cninfo_announcement_row({"announcementTitle": title})
+
+    assert result["classification"] == "TERMINATION_DECISION_OR_RESULT_CANDIDATE"
+    assert result["decision_or_result_candidate"] is True
+    assert result["requires_original_document_review"] is True
+
+
+def test_cninfo_unrelated_announcement_title_is_not_termination_event() -> None:
+    result = classify_cninfo_announcement_row(
+        {"announcementTitle": "关于召开年度股东大会的通知"}
+    )
+
+    assert result["classification"] == "OTHER_ANNOUNCEMENT"
+    assert result["decision_or_result_candidate"] is False
