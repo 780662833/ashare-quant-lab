@@ -105,6 +105,10 @@ def main() -> int:
         timeout_seconds=args.timeout_seconds,
     )
     counters = report["query_counters"]
+    resolved_org_id = report.get("request", {}).get("resolved_org_id")
+    if resolved_org_id:
+        print(f"Resolved CNINFO orgId: {resolved_org_id}")
+        print(f"Resolved security name: {report['request'].get('resolved_sec_name', '')}")
     print(f"Probe status: {report['status']}")
     print(
         "Pages captured: "
