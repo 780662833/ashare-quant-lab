@@ -176,7 +176,7 @@ def classify_cninfo_announcement_row(row: dict[str, Any]) -> dict[str, Any]:
     """
     raw_title = row.get("announcementTitle")
     title = html.unescape(re.sub(r"<[^>]*>", "", str(raw_title or "")))
-    title = re.sub(r"\\s+", " ", title).strip()
+    title = re.sub(r"\s+", " ", title).strip()
 
     if "终止上市" not in title:
         classification = "OTHER_ANNOUNCEMENT"
