@@ -498,7 +498,6 @@ def probe_cninfo_announcement_api(
                 )
                 break
 
-        reported_pages_final = report["query_counters"]["reported_total_pages"]
         effective_pages_final = report["query_counters"]["effective_expected_pages"]
         captured_pages = len(report["pages"])
         report["query_counters"]["captured_pages"] = captured_pages
