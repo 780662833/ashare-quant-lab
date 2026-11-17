@@ -272,7 +272,6 @@ def probe_cninfo_announcement_api(
             "min_interval_seconds": min_interval_seconds,
             "timeout_seconds": timeout_seconds,
             "tab_name": "fulltext",
-            "stock": "",
             "secid": "",
             "category": "",
             "trade": "",
