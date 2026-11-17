@@ -314,6 +314,47 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
         if len(targeted_contexts) >= 20:
             break
 
+    event_api_contexts: list[dict[str, str | int]] = []
+    event_api_pattern = re.compile(
+        r"(?:addEventListener|removeEventListener|\\.on|\\.one|\\.click|"
+        r"\\.submit|\\.change|\\.bind|\\.delegate|\\.live|"
+        r"\\.onclick|\\.onsubmit|\\.onchange|\\.oninput)\\s*\\(",
+        re.IGNORECASE,
+    )
+    for match in event_api_pattern.finditer(script_text):
+        start = max(0, match.start() - 260)
+        end = min(len(script_text), match.end() + 360)
+        event_api_contexts.append(
+            {
+                "offset": match.start(),
+                "context": _safe_excerpt(script_text[start:end], limit=700),
+            }
+        )
+        if len(event_api_contexts) >= 20:
+            break
+
+    script_loader_clues: list[dict[str, str | int]] = []
+    script_loader_pattern = re.compile(
+        r"(?:createElement\\s*\\(\\s*['\\\"]script|"
+        r"document\\.write\\s*\\(|"
+        r"appendChild\\s*\\(|"
+        r"(?:script|\\$script)\\.src\\s*=|"
+        r"import\\s*\\(\\s*['\\\"]|"
+        r"requirejs?\\s*\\()",
+        re.IGNORECASE,
+    )
+    for match in script_loader_pattern.finditer(script_text):
+        start = max(0, match.start() - 240)
+        end = min(len(script_text), match.end() + 360)
+        script_loader_clues.append(
+            {
+                "offset": match.start(),
+                "context": _safe_excerpt(script_text[start:end], limit=700),
+            }
+        )
+        if len(script_loader_clues) >= 12:
+            break
+
     return {
         "search_markers": search_markers,
         "query_binding_markers": query_binding_markers,
@@ -322,6 +363,8 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
         "request_call_clues": request_calls,
         "query_binding_clues": binding_clues,
         "targeted_script_contexts": targeted_contexts,
+        "event_api_contexts": event_api_contexts,
+        "script_loader_clues": script_loader_clues,
     }
 
 
@@ -335,6 +378,8 @@ class _SourceStructureParser(HTMLParser):
         self.controls: list[dict[str, str]] = []
         self.controls_outside_forms: list[dict[str, str]] = []
         self.scripts: list[dict[str, Any]] = []
+        self.dom_event_attributes: list[dict[str, str]] = []
+        self.script_resource_hints: list[dict[str, str]] = []
         self._form_stack: list[dict[str, Any]] = []
         self._script: dict[str, Any] | None = None
         self._script_parts: list[str] = []
@@ -344,6 +389,60 @@ class _SourceStructureParser(HTMLParser):
     ) -> None:
         tag = tag.lower()
         values = _attrs_dict(attrs)
+
+        for attr_name, attr_value in attrs:
+            normalized_name = attr_name.lower()
+            if normalized_name.startswith("on") and attr_value:
+                self.dom_event_attributes.append(
+                    {
+                        "tag": tag,
+                        "event_attribute": normalized_name,
+                        "id": _safe_excerpt(values.get("id", ""), limit=120),
+                        "class": _safe_excerpt(values.get("class", ""), limit=180),
+                        "context": _safe_excerpt(attr_value, limit=240),
+                    }
+                )
+
+        resource_values = (
+            ("src", values.get("src", "")),
+            ("href", values.get("href", "")),
+            ("data-src", values.get("data-src", "")),
+            ("data-main", values.get("data-main", "")),
+            ("data-url", values.get("data-url", "")),
+        )
+        rel_tokens = set(values.get("rel", "").lower().split())
+        is_script_hint = (
+            tag == "script"
+            or tag == "link" and (
+                "preload" in rel_tokens
+                or "modulepreload" in rel_tokens
+                or "prefetch" in rel_tokens and values.get("as", "").lower() == "script"
+            )
+        )
+        for attr_name, resource_value in resource_values:
+            if not resource_value:
+                continue
+            parsed_resource = urlsplit(resource_value)
+            looks_like_script = (
+                parsed_resource.path.lower().endswith((".js", ".mjs", ".cjs"))
+                or attr_name == "data-main"
+                or is_script_hint and tag == "link"
+            )
+            if looks_like_script:
+                resolved = urljoin(self.page_url, resource_value)
+                resolved_parts = urlsplit(resolved)
+                if resolved_parts.scheme == "https" and resolved_parts.hostname == _ALLOWED_HOST:
+                    self.script_resource_hints.append(
+                        {
+                            "tag": tag,
+                            "attribute": attr_name,
+                            "rel": _safe_excerpt(values.get("rel", ""), limit=80),
+                            "as": _safe_excerpt(values.get("as", ""), limit=40),
+                            "resource_url": _safe_excerpt(resource_value, limit=320),
+                            "resolved_url": _safe_excerpt(resolved, limit=400),
+                        }
+                    )
+
         if tag == "title":
             self._in_title = True
         elif tag == "form":
@@ -470,6 +569,12 @@ def inspect_szse_notice_html(
     targeted_context_count = sum(
         len(item.get("targeted_script_contexts", [])) for item in parser.scripts
     )
+    event_api_context_count = sum(
+        len(item.get("event_api_contexts", [])) for item in parser.scripts
+    )
+    script_loader_clue_count = sum(
+        len(item.get("script_loader_clues", [])) for item in parser.scripts
+    )
 
     return {
         "schema_version": 2,
@@ -483,6 +588,8 @@ def inspect_szse_notice_html(
         "controls_outside_forms": parser.controls_outside_forms,
         "first_party_scripts": first_party_scripts,
         "other_script_references": other_scripts,
+        "dom_event_attributes": parser.dom_event_attributes,
+        "script_resource_hints": parser.script_resource_hints,
         "query_discovery": {
             "candidate_routes": unique_routes,
             "query_parameter_names": unique_query_keys,
@@ -506,6 +613,10 @@ def inspect_szse_notice_html(
             "request_call_clue_count": request_clue_count,
             "binding_clue_count": binding_clue_count,
             "targeted_script_context_count": targeted_context_count,
+            "dom_event_attribute_count": len(parser.dom_event_attributes),
+            "script_resource_hint_count": len(parser.script_resource_hints),
+            "event_api_context_count": event_api_context_count,
+            "script_loader_clue_count": script_loader_clue_count,
         },
         "safety": {
             "network_requests_made": False,
@@ -529,6 +640,10 @@ def inspect_szse_notice_html(
             "credential-like values.",
             "Targeted script contexts are selected by known page-control and "
             "initialization markers; absence is not proof that no handler exists.",
+            "DOM event attributes are collected from all elements, not only form controls.",
+            "Resource hints are static URL clues only; no referenced script is fetched.",
+            "Dynamic script-loader and generic event API matches are clues, not proof "
+            "that a matched handler belongs to the notice query button.",
             "A missing form, route or request clue in captured HTML does "
             "not prove that the live page has no search behavior.",
         ],
