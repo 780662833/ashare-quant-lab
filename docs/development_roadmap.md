@@ -778,3 +778,37 @@ capture, replayable receipts and complete delisting-event coverage remain
 unqualified. No production adapter, source receipt, PIT admission, CNEquity
 change/read/backfill, training or real backtest was enabled.
 
+### Phase 9.35 — bounded SZSE 本所公告 HTML capture
+
+Added a read-only, opt-in capture module and CLI for the publicly indexed
+SZSE 本所公告 list-page sequence and individual notice pages. The observed
+list routes include `index.html` and numbered `index_N.html` pages; notice
+detail routes use `tYYYYMMDD_ID.html`. The code treats these as observed
+public-page conventions, not an official API contract.
+
+The capture is capped at 10 listing pages and 50 notice pages per run, enforces
+at least 0.5 seconds between requests, limits each HTML body to 20 MiB, and
+only follows HTTPS HTML URLs on `www.szse.cn`. It preserves the original
+listing/article HTML bytes, URLs, request/capture timestamps, SHA-256 hashes,
+record IDs and extracted title/date observations. It never follows PDF
+attachments. Operator-supplied article URLs are explicitly labeled as seeds
+and prioritized under the article cap rather than being misrepresented as
+archive-discovered records.
+
+Added `scripts/capture_szse_notice_archive.py`,
+`src/ashare_quant/research/szse_notice_archive.py`,
+`tests/unit/test_szse_notice_archive.py` and
+`docs/szse_notice_archive_capture.md`. The parser supports regular article
+anchors and observed inline `curHref`/`curTitle` metadata. Synthetic tests
+cover parsing, official-host allowlisting, redirects, response hashes, bounded
+options and explicit seed labeling.
+
+This phase captures a bounded HTML sample only. The numbered-page convention
+does not prove the archive's historical pagination boundary or availability of
+all years; the current list pages may be recent-only. A zero-link parse is not
+a zero-event archive result. Historical date-range discovery, full pagination
+reconciliation, original attachment retention, full SZSE-universe reconciliation,
+row-level receipts and PIT/production admission remain unqualified. No CNEquity
+change/read/backfill, local data-lake access, production data write, training
+or real backtest was enabled.
+
