@@ -629,3 +629,21 @@ announcement ID, title and `adjunctUrl` to the SZSE decision notice and
 issuer PDF. Do not repeat broad keyword queries or download all five risk
 warnings. No source adapter, listing-date record, PIT availability, training
 or backtest gate is admitted by this sample.
+
+### Auxiliary response-counter observation
+
+The same raw response reported `totalAnnouncement=5`,
+`totalRecordNum=5`, and `totalSecurities=0`, while its five announcement
+rows contain three distinct non-empty `secCode` values. The per-row `id`
+field is null, while `announcementId` is populated and unique. The
+`totalSecurities` field's semantics are not established by the reviewed
+protocol material; do not interpret zero as an empty security result or use
+it to count the returned universe. Preserve it separately from the observed
+distinct-code count. The meanings of `classifiedAnnouncements` and
+`totalSecurities` remain unqualified.
+
+The probe report now retains `totalAnnouncement` and `totalSecurities`
+as raw numeric observations on each captured page, and separately counts
+distinct non-empty security codes in the captured rows. It explicitly labels
+the `totalSecurities` semantics as unqualified rather than silently
+reconciling the two quantities.

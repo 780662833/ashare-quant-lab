@@ -455,3 +455,50 @@ def test_cninfo_unrelated_announcement_title_is_not_termination_event() -> None:
 
     assert result["classification"] == "OTHER_ANNOUNCEMENT"
     assert result["decision_or_result_candidate"] is False
+
+def test_auxiliary_counters_are_preserved_without_assuming_security_count_semantics(
+    tmp_path: Path,
+) -> None:
+    records = [
+        {
+            **_announcement("notice-002220"),
+            "secCode": "002220",
+            "secName": "ST天宝",
+        },
+        {
+            **_announcement("notice-300090"),
+            "secCode": "300090",
+            "secName": "盛运环保",
+        },
+        {
+            **_announcement("notice-300156"),
+            "secCode": "300156",
+            "secName": "神雾环保",
+        },
+    ]
+    payload = _payload(
+        records,
+        totalpages=0,
+        total_records=3,
+        has_more=False,
+    )
+    payload["totalAnnouncement"] = 3
+    payload["totalSecurities"] = 0
+    report = _probe(
+        tmp_path,
+        FakeOpener({1: payload}),
+        max_pages=1,
+        page_size=30,
+    )
+
+    counters = report["query_counters"]
+    assert counters["reported_total_announcements"] == 3
+    assert counters["reported_total_securities"] == 0
+    assert counters["captured_unique_security_codes"] == 3
+    assert (
+        counters["security_count_counter_semantics"]
+        == "unqualified_do_not_use_as_universe_count"
+    )
+    assert report["pages"][0]["reported_total_announcements"] == 3
+    assert report["pages"][0]["reported_total_securities"] == 0
+    assert report["status"] == "COMPLETE_WITH_WARNINGS"

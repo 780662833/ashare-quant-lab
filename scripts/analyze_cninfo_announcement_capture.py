@@ -23,6 +23,13 @@ def analyze_capture(source_path: Path) -> dict[str, Any]:
 
     classified_rows: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
+    security_codes = {
+        str(row.get("secCode")).strip()
+        for row in announcements
+        if isinstance(row, dict)
+        and row.get("secCode") is not None
+        and str(row.get("secCode")).strip()
+    }
     for row_index, row in enumerate(announcements):
         if not isinstance(row, dict):
             classified_rows.append(
@@ -63,7 +70,13 @@ def analyze_capture(source_path: Path) -> dict[str, Any]:
         "source_file": source_path.name,
         "source_sha256": hashlib.sha256(raw).hexdigest(),
         "reported_total_records": payload.get("totalRecordNum"),
+        "reported_total_announcements": payload.get("totalAnnouncement"),
         "reported_total_pages": payload.get("totalpages"),
+        "reported_total_securities": payload.get("totalSecurities"),
+        "captured_unique_security_codes": len(security_codes),
+        "security_count_counter_semantics": (
+            "unqualified_do_not_use_as_universe_count"
+        ),
         "has_more": payload.get("hasMore"),
         "captured_rows": len(announcements),
         "classification_counts": dict(sorted(counts.items())),
