@@ -17,7 +17,8 @@ from urllib.parse import urljoin, urlsplit
 _MAX_HTML_BYTES = 20 * 1024 * 1024
 _ALLOWED_HOST = "www.szse.cn"
 _ROUTE_LITERAL = re.compile(
-    r"""(?P<route>(?:https://www\.szse\.cn)?/(?:api|new|disclosure|marketServices|search)[^'"\s<>)]*)""",
+    r"""(?P<route>(?:https://www\.szse\.cn)?/"""
+    r"""(?:api|new|disclosure|marketServices|search)[^'"\s<>)]*)""",
     re.IGNORECASE,
 )
 _QUERY_KEY = re.compile(r"(?:^|&)([A-Za-z][A-Za-z0-9_-]{0,39})=")
@@ -25,7 +26,8 @@ _GENERIC_QUERY_KEY = re.compile(
     r"\b([A-Za-z_$][A-Za-z0-9_$]{0,39})\s*:"
 )
 _REQUEST_CALL = re.compile(
-    r"""(?:\$\.ajax|jQuery\.ajax|XMLHttpRequest|fetch\s*\(|axios\.(?:get|post|request)|\$\.get|\$\.post)""",
+    r"""(?:\$\.ajax|jQuery\.ajax|XMLHttpRequest|fetch\s*\("""
+    r"""|axios\.(?:get|post|request)|\$\.get|\$\.post)""",
     re.IGNORECASE,
 )
 _QUERY_BINDING_MARKERS = (
@@ -128,7 +130,8 @@ def _safe_excerpt(value: str, *, limit: int = 320) -> str:
     """Return a compact code clue with likely secret values redacted."""
     snippet = re.sub(r"\s+", " ", value).strip()
     snippet = re.sub(
-        r"""(?i)\b(token|csrf|secret|authorization|cookie|password)\b\s*[:=]\s*(['"]?)[A-Za-z0-9._~+/=-]{4,}""",
+        r"""(?i)\b(token|csrf|secret|authorization|cookie|password)\b"""
+        r"""\s*[:=]\s*(['"]?)[A-Za-z0-9._~+/=-]{4,}""",
         r"\1=<redacted>",
         snippet,
     )
@@ -441,11 +444,15 @@ def inspect_szse_notice_html(
             "backtest_admitted": False,
         },
         "limitations": [
-            "This is a static inspection of one captured HTML file; it does not execute JavaScript.",
+            "This is a static inspection of one captured HTML file; "
+            "it does not execute JavaScript.",
             "External script references are listed but never fetched.",
-            "Candidate routes, request calls and payload keys are investigative clues, not a verified API contract.",
-            "Inline code excerpts are short, bounded and redact common credential-like values.",
-            "A missing form, route or request clue in captured HTML does not prove that the live page has no search behavior.",
+            "Candidate routes, request calls and payload keys are "
+            "investigative clues, not a verified API contract.",
+            "Inline code excerpts are short, bounded and redact common "
+            "credential-like values.",
+            "A missing form, route or request clue in captured HTML does "
+            "not prove that the live page has no search behavior.",
         ],
     }
 
