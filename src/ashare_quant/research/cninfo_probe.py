@@ -419,6 +419,7 @@ def probe_cninfo_announcement_api(
 
         stock_query_value = ""
         referer_url = SEARCH_PAGE_URL
+        previous_request_at: float | None = time.monotonic()
         if stock:
             lookup_form = {"keyWord": stock, "maxNum": "10"}
             lookup_body = urllib.parse.urlencode(lookup_form).encode("utf-8")
@@ -439,6 +440,7 @@ def probe_cninfo_announcement_api(
             lookup_bytes, lookup_status, lookup_url = _read_response(
                 client, lookup_request, timeout_seconds
             )
+            previous_request_at = time.monotonic()
             lookup_captured_at = datetime.now(timezone.utc).isoformat()
             if not _official_host(lookup_url):
                 raise ValueError("stock lookup redirected outside the official CNINFO host")
@@ -488,7 +490,6 @@ def probe_cninfo_announcement_api(
         expected_records: int | None = None
         all_ids: list[str] = []
         all_security_codes: set[str] = set()
-        previous_request_at: float | None = time.monotonic()
         for page_num in range(1, max_pages + 1):
             if expected_pages is not None and page_num > expected_pages:
                 break
