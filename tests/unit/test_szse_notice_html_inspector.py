@@ -91,6 +91,11 @@ def test_inspector_rejects_non_szse_page_url_and_empty_or_oversized_source(
     with pytest.raises(ValueError, match="captured HTML file is empty"):
         inspect_szse_notice_html(source)
 
+    with source.open("wb") as handle:
+        handle.truncate(20 * 1024 * 1024 + 1)
+    with pytest.raises(ValueError, match="inspection limit"):
+        inspect_szse_notice_html(source)
+
 
 def test_write_inspection_report_preserves_json_shape(tmp_path: Path) -> None:
     source = tmp_path / "captured.html"
