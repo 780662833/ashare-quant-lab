@@ -271,6 +271,50 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
         if len(binding_clues) >= 12:
             break
 
+    targeted_patterns = (
+        (
+            "query_button_token",
+            re.compile(r"confirm-query|btn-query-primary", re.IGNORECASE),
+        ),
+        ("keyword_control", re.compile(r"article-text", re.IGNORECASE)),
+        ("date_control", re.compile(r"aticle-datepicker", re.IGNORECASE)),
+        (
+            "query_button_event",
+            re.compile(
+                r"(?:(?:confirm-query|btn-query-primary)[\\s\\S]{0,240}"
+                r"\\.(?:on|one|click|bind|delegate|live|submit)\\s*\\(|"
+                r"\\.(?:on|one|click|bind|delegate|live|submit)\\s*\\("
+                r"[^)]{0,220}(?:confirm-query|btn-query-primary))",
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "template_or_init",
+            re.compile(r"article-template|createPageHTML|artInitHtml|cmsParam", re.IGNORECASE),
+        ),
+    )
+    targeted_contexts: list[dict[str, str | int]] = []
+    targeted_seen: set[tuple[str, int]] = set()
+    for clue_type, pattern in targeted_patterns:
+        for match in pattern.finditer(script_text):
+            identity = (clue_type, match.start())
+            if identity in targeted_seen:
+                continue
+            targeted_seen.add(identity)
+            start = max(0, match.start() - 320)
+            end = min(len(script_text), match.end() + 380)
+            targeted_contexts.append(
+                {
+                    "clue_type": clue_type,
+                    "offset": match.start(),
+                    "context": _safe_excerpt(script_text[start:end], limit=700),
+                }
+            )
+            if len(targeted_contexts) >= 20:
+                break
+        if len(targeted_contexts) >= 20:
+            break
+
     return {
         "search_markers": search_markers,
         "query_binding_markers": query_binding_markers,
@@ -278,6 +322,7 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
         "query_parameter_names": sorted(query_keys),
         "request_call_clues": request_calls,
         "query_binding_clues": binding_clues,
+        "targeted_script_contexts": targeted_contexts,
     }
 
 
@@ -423,6 +468,9 @@ def inspect_szse_notice_html(
     binding_clue_count = sum(
         len(item.get("query_binding_clues", [])) for item in parser.scripts
     )
+    targeted_context_count = sum(
+        len(item.get("targeted_script_contexts", [])) for item in parser.scripts
+    )
 
     return {
         "schema_version": 2,
@@ -458,6 +506,7 @@ def inspect_szse_notice_html(
             "candidate_route_count": len(unique_routes),
             "request_call_clue_count": request_clue_count,
             "binding_clue_count": binding_clue_count,
+            "targeted_script_context_count": targeted_context_count,
         },
         "safety": {
             "network_requests_made": False,
@@ -479,6 +528,8 @@ def inspect_szse_notice_html(
             "investigative clues, not a verified API contract.",
             "Inline code excerpts are short, bounded and redact common "
             "credential-like values.",
+            "Targeted script contexts are selected by known page-control and "
+            "initialization markers; absence is not proof that no handler exists.",
             "A missing form, route or request clue in captured HTML does "
             "not prove that the live page has no search behavior.",
         ],
