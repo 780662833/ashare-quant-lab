@@ -32,18 +32,6 @@ The script:
 2. Captures a caller-selected contiguous list-page range using the observed `index.html`, `index_1.html`, ... naming pattern.
 3. Extracts candidate article links that match the 本所公告 detail-page pattern `tYYYYMMDD_ID.html`, including links encoded in per-row `curHref` / `curTitle` script variables.
 4. Applies optional keyword and publication-date filters locally to the captured list-page candidates; it does not call an undocumented search endpoint.
-
-## Offline inspection of captured HTML
-
-The capture command deliberately preserves the raw listing HTML instead of guessing how the page's visible search controls submit requests. To inspect a captured page without making another network request, run:
-
-```powershell
-python scripts/inspect_szse_notice_archive_html.py --html "reports/source_probes/szse_notices/<capture-run>/archive_page_00000.html" --output "reports/source_probes/szse_notices/<capture-run>/archive_page_00000.inspection.json"
-```
-
-The inspector reports HTML form actions/methods, input/select/button names and placeholders, first-party script references, literal route candidates and query-parameter names found in inline scripts. It does not execute JavaScript or fetch external scripts. Hidden input values are intentionally omitted from the report. Candidate routes are investigative clues only; they are not treated as a verified API contract. When inspecting a detail page or a non-default listing page, pass its exact captured source URL with `--page-url` so relative script/form references resolve correctly.
-
-After the inspector report identifies a first-party script that appears to own the query form, the script bytes must be captured and reviewed under a separately bounded, exact-host allowlist before implementing any query request. Until that evidence exists, `--keyword`, `--start-date` and `--end-date` remain local filters over already captured page candidates; they are not server-side search options.
 5. Captures at most the selected number of article HTML pages. An operator can also supply an exact official article URL as a seed; the report labels it `operator_supplied_seed` rather than pretending the archive discovered it.
 6. Saves the original HTML bytes and SHA-256 digest for every captured page, along with URL, response status, request/capture timestamps, extracted record ID, title and date observations.
 7. Does not follow PDF or other attachment links.
@@ -85,6 +73,18 @@ The output is isolated under `reports/source_probes/szse_notices/`:
 - `capture_report.json`: request, response, discovery, capture and safety manifest.
 
 The `--article-url` argument is an operator-provided control record. It is not proof that the list archive can discover that record. Explicit seeds are prioritized within the article cap and are labeled in the report.
+
+## Offline inspection of captured HTML
+
+The capture command preserves the original listing HTML rather than guessing how visible search controls submit requests. Inspect a captured page without making another network request:
+
+```powershell
+python scripts/inspect_szse_notice_archive_html.py --html "reports/source_probes/szse_notices/<capture-run>/archive_page_00000.html" --output "reports/source_probes/szse_notices/<capture-run>/archive_page_00000.inspection.json"
+```
+
+The inspector reports form actions/methods, visible control attributes (including class, selected data-* fields and inline click/change handlers), first-party script references, inline-script SHA-256 fingerprints, candidate request routes, likely payload keys near request calls, and bounded code clues around DOM/event bindings. It does not execute JavaScript or fetch external scripts. Hidden input values are omitted, and common credential-like strings in snippets are redacted. When inspecting a detail page or a non-default listing page, pass its exact captured source URL with `--page-url` so relative references resolve correctly.
+
+Candidate routes, request calls and payload keys are investigative clues, not a verified API contract. The inspector output must be reviewed against the original HTML and script context before implementing any live request. Until then, `--keyword`, `--start-date` and `--end-date` remain local filters over already captured list-page candidates; they are not server-side search options.
 
 ## Parser and evidence limitations
 

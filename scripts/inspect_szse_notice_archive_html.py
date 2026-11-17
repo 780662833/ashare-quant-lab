@@ -36,6 +36,11 @@ def main() -> int:
     if args.output:
         output = write_szse_html_inspection_report(report, args.output)
         print(f"Inspection report: {output.resolve()}")
+    discovery = report["query_discovery"]
+    candidate_routes = ", ".join(discovery["candidate_routes"]) or "none detected"
+    print(f"Candidate request routes: {candidate_routes}")
+    print(f"Request-call clues: {discovery['request_call_clue_count']}")
+    print(f"Query-binding clues: {discovery['binding_clue_count']}")
     print(json.dumps(report, ensure_ascii=False, indent=2))
     print("\nOffline inspection only. No network request was made.")
     return 0
