@@ -265,6 +265,50 @@ def test_inspector_emits_bounded_contexts_for_known_notice_controls_and_init(
     assert report["query_discovery"]["candidate_routes"] == []
 
 
+def test_inspector_scans_dom_event_attributes_and_script_resource_hints(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "listing.html"
+    source.write_text(
+        """
+        <html><head>
+          <link rel="preload" as="script" href="/assets/shared-notices.js">
+          <link rel="stylesheet" href="/assets/site.css">
+        </head><body>
+          <div class="query-toolbar" onclick="openQueryPanel()">
+            <button class="confirm-query">查询</button>
+          </div>
+          <script>
+            const dynamicScript = document.createElement("script");
+            dynamicScript.src = "/assets/runtime-query.js";
+            document.head.appendChild(dynamicScript);
+            window.addEventListener("load", initializeNoticePage);
+          </script>
+        </body></html>
+        """,
+        encoding="utf-8",
+    )
+
+    report = inspect_szse_notice_html(source)
+
+    assert report["summary"]["dom_event_attribute_count"] == 1
+    event = report["dom_event_attributes"][0]
+    assert event["tag"] == "div"
+    assert event["event_attribute"] == "onclick"
+    assert event["class"] == "query-toolbar"
+    assert "openQueryPanel" in event["context"]
+
+    assert report["summary"]["script_resource_hint_count"] == 1
+    hint = report["script_resource_hints"][0]
+    assert hint["attribute"] == "href"
+    assert hint["resolved_url"] == "https://www.szse.cn/assets/shared-notices.js"
+
+    script = report["first_party_scripts"][0]
+    assert report["summary"]["script_loader_clue_count"] >= 2
+    assert report["summary"]["event_api_context_count"] >= 1
+    assert any("runtime-query.js" in item["context"] for item in script["script_loader_clues"])
+
+
 def test_inspector_rejects_non_szse_page_url_and_empty_or_oversized_source(
     tmp_path: Path,
 ) -> None:
