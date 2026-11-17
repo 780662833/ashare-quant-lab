@@ -82,6 +82,7 @@ class _SourceStructureParser(HTMLParser):
         self._in_title = False
         self.forms: list[dict[str, Any]] = []
         self.controls: list[dict[str, str]] = []
+        self.controls_outside_forms: list[dict[str, str]] = []
         self.scripts: list[dict[str, Any]] = []
         self._form_stack: list[dict[str, Any]] = []
         self._script: dict[str, Any] | None = None
@@ -112,6 +113,8 @@ class _SourceStructureParser(HTMLParser):
             self.controls.append(field)
             if self._form_stack:
                 self._form_stack[-1]["fields"].append(field)
+            else:
+                self.controls_outside_forms.append(field)
         elif tag == "script":
             src = values.get("src") or ""
             self._script = {
@@ -185,6 +188,10 @@ def inspect_szse_notice_html(
     """Inspect one previously captured SZSE HTML file without any network I/O."""
     _safe_page_url(page_url)
     source = Path(html_path)
+    if source.stat().st_size > _MAX_HTML_BYTES:
+        raise ValueError(
+            f"captured HTML exceeds the {_MAX_HTML_BYTES}-byte inspection limit"
+        )
     raw = source.read_bytes()
     if not raw:
         raise ValueError("captured HTML file is empty")
@@ -218,11 +225,7 @@ def inspect_szse_notice_html(
         "source_sha256": hashlib.sha256(raw).hexdigest(),
         "page_title": " ".join(" ".join(parser.title_parts).split()),
         "forms": parser.forms,
-        "controls_outside_forms": [
-            field
-            for field in parser.controls
-            if not any(field in form["fields"] for form in parser.forms)
-        ],
+        "controls_outside_forms": parser.controls_outside_forms,
         "first_party_scripts": first_party_scripts,
         "other_script_references": other_scripts,
         "summary": {
