@@ -27,6 +27,7 @@ SEARCH_PAGE_URL = (
     "?url=disclosure/list/search"
 )
 QUERY_URL = "https://www.cninfo.com.cn/new/hisAnnouncement/query"
+STOCK_LOOKUP_URL = "https://www.cninfo.com.cn/new/information/topSearch/query"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 _USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -99,6 +100,54 @@ def _validate_request(
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
         raise ValueError("timeout_seconds must be finite and positive")
     return start, end
+
+
+def _extract_stock_identity(payload: Any, stock_code: str) -> dict[str, str]:
+    """Select one exact code/orgId pair from CNINFO's reverse-engineered lookup."""
+    if isinstance(payload, list):
+        records = payload
+    elif isinstance(payload, dict):
+        records = payload.get("stockList")
+        if records is None:
+            records = payload.get("data")
+    else:
+        records = None
+
+    if not isinstance(records, list):
+        raise ValueError("CNINFO stock lookup did not return a recognized stock list")
+
+    matches: list[dict[str, str]] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        code_value = (
+            record.get("stockCode")
+            or record.get("secCode")
+            or record.get("code")
+        )
+        org_id = record.get("orgId") or record.get("orgid")
+        if str(code_value or "").strip() != stock_code or not str(org_id or "").strip():
+            continue
+        matches.append(
+            {
+                "stock_code": stock_code,
+                "org_id": str(org_id).strip(),
+                "sec_name": str(
+                    record.get("zwjc")
+                    or record.get("secName")
+                    or record.get("fullName")
+                    or ""
+                ).strip(),
+            }
+        )
+
+    unique_org_ids = {item["org_id"] for item in matches}
+    if len(unique_org_ids) != 1:
+        raise ValueError(
+            f"CNINFO stock lookup must return exactly one orgId for {stock_code}; "
+            f"found {len(unique_org_ids)} distinct matches"
+        )
+    return matches[0]
 
 
 def _publication_time_observation(value: Any) -> dict[str, Any]:
@@ -267,6 +316,7 @@ def probe_cninfo_announcement_api(
             "plate": plate,
             "search_key": search_key,
             "stock": stock,
+            "stock_filter_semantics": "code_plus_resolved_orgId",
             "page_size": page_size,
             "max_pages": max_pages,
             "min_interval_seconds": min_interval_seconds,
@@ -294,6 +344,7 @@ def probe_cninfo_announcement_api(
             "backtest_admitted": False,
         },
         "bootstrap": {},
+        "stock_identity_lookup": {},
         "pages": [],
         "announcement_classifications": [],
         "classification_counts": {},
@@ -366,6 +417,73 @@ def probe_cninfo_announcement_api(
         if bootstrap_status != 200:
             raise RuntimeError(f"search-page bootstrap returned HTTP {bootstrap_status}")
 
+        stock_query_value = ""
+        referer_url = SEARCH_PAGE_URL
+        if stock:
+            lookup_form = {"keyWord": stock, "maxNum": "10"}
+            lookup_body = urllib.parse.urlencode(lookup_form).encode("utf-8")
+            lookup_request = urllib.request.Request(
+                STOCK_LOOKUP_URL,
+                data=lookup_body,
+                headers={
+                    "User-Agent": _USER_AGENT,
+                    "Referer": SEARCH_PAGE_URL,
+                    "Origin": "https://www.cninfo.com.cn",
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "Accept": "application/json, text/javascript, */*; q=0.01",
+                },
+                method="POST",
+            )
+            lookup_started_at = datetime.now(timezone.utc).isoformat()
+            lookup_bytes, lookup_status, lookup_url = _read_response(
+                client, lookup_request, timeout_seconds
+            )
+            lookup_captured_at = datetime.now(timezone.utc).isoformat()
+            if not _official_host(lookup_url):
+                raise ValueError("stock lookup redirected outside the official CNINFO host")
+            lookup_path = target_dir / "stock_identity_lookup.json"
+            lookup_path.write_bytes(lookup_bytes)
+            lookup_report = {
+                "request_started_at": lookup_started_at,
+                "captured_at": lookup_captured_at,
+                "request_form": lookup_form,
+                "request_body_sha256": hashlib.sha256(lookup_body).hexdigest(),
+                "status_code": lookup_status,
+                "final_url": lookup_url,
+                "bytes": len(lookup_bytes),
+                "sha256": hashlib.sha256(lookup_bytes).hexdigest(),
+                "capture_file": lookup_path.name,
+            }
+            report["stock_identity_lookup"] = lookup_report
+            if lookup_status != 200:
+                raise RuntimeError(f"stock lookup returned HTTP {lookup_status}")
+            try:
+                lookup_payload = json.loads(lookup_bytes.decode("utf-8-sig"))
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ValueError("stock lookup did not return UTF-8 JSON") from exc
+            stock_identity = _extract_stock_identity(lookup_payload, stock)
+            stock_query_value = f"{stock},{stock_identity['org_id']}"
+            referer_query = urllib.parse.urlencode(
+                {"stockCode": stock, "orgId": stock_identity["org_id"]}
+            )
+            referer_url = (
+                "https://www.cninfo.com.cn/new/disclosure/stock?"
+                f"{referer_query}"
+            )
+            report["request"]["resolved_org_id"] = stock_identity["org_id"]
+            report["request"]["resolved_sec_name"] = stock_identity["sec_name"]
+            report["request"]["stock_query_value"] = stock_query_value
+            report["stock_identity_lookup"]["matched_stock_code"] = stock_identity[
+                "stock_code"
+            ]
+            report["stock_identity_lookup"]["resolved_org_id"] = stock_identity[
+                "org_id"
+            ]
+            report["stock_identity_lookup"]["resolved_sec_name"] = stock_identity[
+                "sec_name"
+            ]
+
         expected_pages: int | None = None
         expected_records: int | None = None
         all_ids: list[str] = []
@@ -385,7 +503,7 @@ def probe_cninfo_announcement_api(
                 "column": column,
                 "tabName": "fulltext",
                 "plate": plate,
-                "stock": stock,
+                "stock": stock_query_value,
                 "searchkey": search_key,
                 "secid": "",
                 "category": "",
@@ -401,7 +519,7 @@ def probe_cninfo_announcement_api(
                 data=encoded,
                 headers={
                     "User-Agent": _USER_AGENT,
-                    "Referer": SEARCH_PAGE_URL,
+                    "Referer": referer_url,
                     "Origin": "https://www.cninfo.com.cn",
                     "X-Requested-With": "XMLHttpRequest",
                     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -765,6 +883,7 @@ def render_probe_plan(
                 "plate": plate,
                 "search_key": search_key,
                 "stock": stock,
+                "stock_filter_semantics": "code_plus_resolved_orgId",
                 "page_size": page_size,
                 "max_pages": max_pages,
                 "min_interval_seconds": min_interval_seconds,
