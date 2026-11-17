@@ -555,3 +555,18 @@ listing/termination events for the issuer set, that the raw field timestamps
 are original first-publication times, or that the 2020 archive is complete.
 The raw response page must be reviewed before expanding query scope.
 
+## Targeted SZSE delisting-event control sample (2026-11-16)
+
+A public-source cross-check was completed for the selected probe date and keyword:
+
+- The SZSE official notice page, titled "关于山东龙力生物科技股份有限公司股票终止上市的公告", is dated 2020-05-22 and states that SZSE decided to terminate the listing of *ST龙力 (002604) on that date:
+  https://www.szse.cn/disclosure/notice/t20200522_577530.html
+- CNINFO's static document host exposes a PDF at
+  https://static.cninfo.com.cn/finalpage/2020-05-22/1207850222.PDF
+  titled "关于山东龙力生物科技股份有限公司股票终止上市的公告". The first page identifies *ST龙力 and describes the 2020-05-22 termination decision. The PDF path's numeric filename is retained as a document locator only; it is not assumed to be the query API's `announcementId`.
+
+This confirms that 2020-05-22 is a valid SZSE termination-event control date and that a matching CNINFO-hosted original-document candidate exists. It does **not** establish that this PDF is one of the five rows returned by the operator's `2020-05-22 / szse / 终止上市` API query. The raw `page_001.json` has not yet been reviewed in this repository context. Row-level confirmation still requires matching the API row's `secCode`, `secName`, `announcementTitle`, `announcementId` and `adjunctUrl` to the official record and document.
+
+Neither the PDF footer date nor the probe's midnight-valued `announcementTime` proves an exact first-publication instant. Until the web publication event is independently established, this sample cannot supply a precise `available_at`. It is a control sample for identity and event classification only, not a PIT-availability pass.
+
+No source adapter was promoted, no row was written to production metadata, and no universe-coverage or archive-completeness claim was made.
