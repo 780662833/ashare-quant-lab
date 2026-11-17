@@ -729,3 +729,52 @@ between pages are retained as query warnings. Synthetic tests cover the
 zero-counter / three-observed-codes case.
 
 No source-coverage, PIT, training or backtest admission is changed.
+
+### Phase 9.34 — qualify SZSE exchange-issued delisting decision evidence
+
+The operator completed three further bounded CNINFO query variants for the
+known *ST龙力 (002604) termination decision dated 2020-05-22: keyword
+`龙力`; stock code with the current CNINFO orgId; and stock code/current orgId
+with the historical SZSE SME-board selector `szzx;`. All returned a 165-byte
+zero-result JSON body with the same SHA-256
+`c2a890bbf3a6a53ab02ddc6c1794bf1c72ba45799fe9f59dcc5ba2cc18467114`, although
+the request bodies differed. The top-search identity endpoint returned the
+current mapping `002604 / 9900021073 / 龙力退 / delisted=true`. That current
+alias/orgId is not evidence of the 2020 historical identity.
+
+The identical empty result across distinct filters means this reverse-engineered
+query route did not provide discriminating evidence for the known event. It
+does not prove the event is absent from CNINFO static archives or explain
+whether the limitation is historical indexing, a hidden session prerequisite
+or a request-protocol mismatch. Retain the probe as research-only; do not use
+`NO_RESULTS` as an archive-completeness finding or as a veto against an
+official event record.
+
+The SZSE original exchange-issued notice was independently located at
+`https://www.szse.cn/disclosure/notice/t20200522_577530.html`. It identifies
+the 2020-05-22 decision to terminate listing of 山东龙力生物科技股份有限公司
+(*ST龙力, 002604) and states that the stock would enter the 30-trading-day
+delisting consolidation period on 2020-06-01. The issuer-authored notice
+published on 2020-05-23 independently confirms receipt of the exchange
+decision on 2020-05-22 and cites 深证上〔2020〕428号. These are different
+records with different publishers and publication dates.
+
+The source-selection decision is to use the SZSE `/disclosure/notice/`
+**本所公告** record as the primary event evidence for SZSE termination
+decisions, and the issuer notice as corroboration. Do not conflate this with
+the `/www/disclosure/notice/company/` issuer-notice archive or the
+`/marketServices/deal/period/delisted/` post-delisting announcement
+collection. Keep decision date, delisting-consolidation start, last trading
+date, final delisting-effective date and issuer notice date as separate
+fields. The exchange page exposes date-level publication metadata only;
+until exact release time is established, use the conservative
+23:59:59 Asia/Shanghai availability cutoff for that publication date.
+
+Added `docs/delisting_event_source_qualification.md` with the case evidence,
+CNINFO probe interpretation, source hierarchy, temporal/event field semantics
+and full production acceptance gates. This verifies one official case only;
+SZSE archive discovery, historical-universe reconciliation, original-byte
+capture, replayable receipts and complete delisting-event coverage remain
+unqualified. No production adapter, source receipt, PIT admission, CNEquity
+change/read/backfill, training or real backtest was enabled.
+
