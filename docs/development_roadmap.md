@@ -829,3 +829,29 @@ first-party script/request shape is captured and reviewed. The existing
 list-page candidates. No live query request, CNEquity access, local data-lake
 read, production write, backfill, training or real backtest is enabled.
 
+
+
+### Phase 9.37 — inspect SZSE 本所公告 query bindings
+
+The Phase 9.36 offline inspector now retains additional non-secret UI
+attributes (`class`, selected `data-*` fields and inline click/change
+handlers) and assigns stable 1-based indexes to script blocks. It scans
+inline JavaScript for the listing page's known search-control IDs, DOM
+lookups, event bindings and request-call markers (jQuery AJAX, fetch,
+XMLHttpRequest and axios). Around request calls it reports bounded likely
+query/payload keys and short context excerpts; common credential-like values
+are redacted. It summarizes candidate routes and query keys across scripts
+and distinguishes inline scripts from external script references.
+
+This remains offline static analysis only: JavaScript is not executed,
+external scripts are not fetched and no request is issued. Candidate routes
+and payload keys are not an API contract. The real 2026-11-17 operator
+inspection report shows the live list page contains `article-text` and
+`aticle-datepicker` inputs plus a query button outside any HTML form, and
+36 inline script blocks; the prior Phase 9.36 parser did not identify an
+endpoint. The enhanced inspector is intended to locate the handler/request
+clues from the preserved HTML before another separately bounded capture of
+any relevant first-party script is considered.
+
+No live search request, CNEquity change/read/backfill, local data-lake
+access, production write, training or real backtest is enabled.
