@@ -281,13 +281,12 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
         (
             "query_button_event",
             re.compile(
-                r"(?:(?:confirm-query|btn-query-primary)[\\s\\S]{0,240}"
-                r"\\.(?:on|one|click|bind|delegate|live|submit)\\s*\\(|"
-                r"\\.(?:on|one|click|bind|delegate|live|submit)\\s*\\("
+                r"(?:(?:confirm-query|btn-query-primary)[\s\S]{0,240}\."
+                r"(?:on|one|click|bind|delegate|live|submit)\s*\(|"
+                r"\.(?:on|one|click|bind|delegate|live|submit)\s*\("
                 r"[^)]{0,220}(?:confirm-query|btn-query-primary))",
                 re.IGNORECASE,
-            ),
-        ),
+            )        ),
         (
             "template_or_init",
             re.compile(r"article-template|createPageHTML|artInitHtml|cmsParam", re.IGNORECASE),
