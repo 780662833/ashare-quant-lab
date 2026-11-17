@@ -209,7 +209,7 @@ def test_probe_stock_filter_is_sent_without_keyword(tmp_path: Path) -> None:
     )
 
     query_request = opener.requests[1]
-    form = parse_qs(getattr(query_request, "data").decode("utf-8"))
+    form = parse_qs(getattr(query_request, "data").decode("utf-8"), keep_blank_values=True)
     assert form["stock"] == ["002604"]
     assert form["searchkey"] == [""]
     assert report["request"]["stock"] == "002604"
