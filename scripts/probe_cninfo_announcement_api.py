@@ -33,8 +33,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--keyword",
-        required=True,
-        help="One search term, such as 上市公告书 or 终止上市",
+        default="",
+        help="Optional search term; provide this or --stock",
+    )
+    parser.add_argument(
+        "--stock",
+        default="",
+        help="Optional six-digit A-share code for a security-filtered query",
     )
     parser.add_argument("--page-size", type=int, default=30)
     parser.add_argument(
@@ -69,6 +74,7 @@ def main() -> int:
             column=args.column,
             plate=args.plate,
             search_key=args.keyword,
+            stock=args.stock,
             page_size=args.page_size,
             max_pages=args.max_pages,
             min_interval_seconds=args.minimum_interval_seconds,
@@ -92,6 +98,7 @@ def main() -> int:
         plate=args.plate,
         search_key=args.keyword,
         output_dir=output_dir,
+        stock=args.stock,
         page_size=args.page_size,
         max_pages=args.max_pages,
         min_interval_seconds=args.minimum_interval_seconds,
