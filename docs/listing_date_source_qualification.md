@@ -538,9 +538,9 @@ probe as midnight-valued date stamps; none is accepted as an exact intraday
 first-publication time.
 
 The initial probe version returned `PARTIAL` because it treated the zero
-`totalpages` counter as a hard pagination failure. The parser is being
-corrected to preserve that raw counter while deriving an effective one-page
-expectation from `totalRecordNum/pageSize`. When the captured row count equals
+`totalpages` counter as a hard pagination failure. The current parser change
+preserves that raw counter while deriving an effective one-page expectation
+from `totalRecordNum/pageSize`. When the captured row count equals
 the reported total, all five IDs are unique, no required identity field is
 missing, and `hasMore=false`, the revised status is
 `COMPLETE_WITH_WARNINGS`: the one query page appears completely traversed,
