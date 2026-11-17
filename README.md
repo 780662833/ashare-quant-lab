@@ -53,6 +53,7 @@ directly. See the system-level architecture before extending a component.
 - [PIT security metadata contract](docs/security_metadata_contract.md) — listing-date event, industry validity, market-cap availability, source receipts and coverage requirements.
 - [Listing-date source qualification](docs/listing_date_source_qualification.md) — exchange-event source review, evidence timestamps, BSE code migration and full-universe acceptance gates.
 - [Delisting-event source qualification](docs/delisting_event_source_qualification.md) — SZSE exchange-issued decision evidence, CNINFO query limitations, event-date semantics and archive-completeness gates.
+- [SZSE 本所公告 bounded capture](docs/szse_notice_archive_capture.md) — read-only paginated HTML capture, raw SHA-256 receipts, parser limits and archive-completeness restrictions.
 - [Research protocol](docs/research_protocol.md) — experiment fairness and anti-bias rules.
 - [Backtest rules](docs/backtest_rules.md) — timing, fills, accounting, known gaps.
 - [Momentum benchmark](docs/momentum_benchmark.md) — weekly 126/21 signal definition.
