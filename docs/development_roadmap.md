@@ -674,3 +674,12 @@ not prove archive completeness, correct event classification for every row,
 or historical universe/PIT admission. The original raw `page_001.json` still
 needs row-level inspection before expanding the probe.
 
+### Phase 9.31 — complete multi-page reconciliation when CNINFO reports zero pages
+
+A follow-up code review found that Phase 9.30 derived an effective page count from `totalRecordNum/pageSize` for a raw `totalpages=0` response, but the final traversal check still compared captured pages with the raw counter. A fully captured multi-page response could therefore be incorrectly marked PARTIAL.
+
+The final completion check now uses `effective_expected_pages` while preserving the raw `totalpages=0` value and its warning. Added a two-page synthetic regression case with 31 records, page size 30, `hasMore=true` on page 1 and `hasMore=false` on page 2. Counter mismatches, premature termination and page-cap truncation remain fail-closed.
+
+PR #97 was merged as `f7d93aa57cdb743a8b551a1f1b8ced504eaea914`. GitHub Actions Run #380 passed **437 tests, with 2 skipped**. These are synthetic code tests only.
+
+A public control-sample review also confirmed the SZSE *ST龙力 termination decision dated 2020-05-22 and a CNINFO-hosted PDF candidate for that event. The exact match between that document and one of the operator's five captured API rows remains pending review of `page_001.json`; the PDF filename is not treated as the API announcement ID. No announcement adapter, source coverage, PIT availability, training or backtest gate was promoted.
