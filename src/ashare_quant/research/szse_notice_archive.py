@@ -509,6 +509,28 @@ def probe_szse_notice_archive(
         report["discovered_notices"] = discovered_rows
 
         selected: list[dict[str, Any]] = []
+        for supplied_url in article_urls or []:
+            _validate_https_szse_url(supplied_url, article=True)
+            path_match = _ARTICLE_PATH.fullmatch(
+                urllib.parse.urlsplit(supplied_url).path
+            )
+            assert path_match is not None
+            selected.append(
+                {
+                    "record_id": path_match.group("record_id"),
+                    "article_date_from_url": datetime.strptime(
+                        path_match.group("date"), "%Y%m%d"
+                    ).date().isoformat(),
+                    "publication_date_observed": datetime.strptime(
+                        path_match.group("date"), "%Y%m%d"
+                    ).date().isoformat(),
+                    "title": "",
+                    "url": supplied_url,
+                    "discovered_from_page": None,
+                    "capture_origin": "operator_supplied_seed",
+                }
+            )
+
         for record in discovered_rows:
             published = record["publication_date_observed"]
             if keyword and keyword.casefold() not in record["title"].casefold():
@@ -517,29 +539,6 @@ def probe_szse_notice_archive(
                 if not start_date <= published <= end_date:
                     continue
             selected.append({**record, "capture_origin": "archive_discovered"})
-
-        for supplied_url in article_urls or []:
-            _validate_https_szse_url(supplied_url, article=True)
-            if supplied_url not in {row["url"] for row in selected}:
-                path_match = _ARTICLE_PATH.fullmatch(
-                    urllib.parse.urlsplit(supplied_url).path
-                )
-                assert path_match is not None
-                selected.append(
-                    {
-                        "record_id": path_match.group("record_id"),
-                        "article_date_from_url": datetime.strptime(
-                            path_match.group("date"), "%Y%m%d"
-                        ).date().isoformat(),
-                        "publication_date_observed": datetime.strptime(
-                            path_match.group("date"), "%Y%m%d"
-                        ).date().isoformat(),
-                        "title": "",
-                        "url": supplied_url,
-                        "discovered_from_page": None,
-                        "capture_origin": "operator_supplied_seed",
-                    }
-                )
 
         # A deterministic URL deduplication prevents a seed plus archive hit
         # from causing the same origin page to be downloaded twice.
