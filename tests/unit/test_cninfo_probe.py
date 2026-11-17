@@ -320,6 +320,8 @@ def test_zero_totalpages_with_reconciled_records_and_has_more_false_is_warning(
     assert report["query_counters"]["captured_pages"] == 1
     assert report["query_counters"]["captured_records"] == 5
     assert report["query_counters"]["unique_announcement_ids"] == 5
+    assert report["query_counters"]["midnight_timestamp_rows"] == 5
+    assert report["query_counters"]["reported_total_pages"] == 0
     assert report["pages"][0]["reported_total_pages"] == 0
     assert report["pages"][0]["effective_expected_pages"] == 1
     assert any("totalpages is zero" in item for item in report["anomalies"])
