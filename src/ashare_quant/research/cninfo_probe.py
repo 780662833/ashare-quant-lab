@@ -60,6 +60,7 @@ def _validate_request(
     end_date: str,
     column: str,
     search_key: str,
+    stock: str,
     page_size: int,
     max_pages: int,
     min_interval_seconds: float,
@@ -78,8 +79,14 @@ def _validate_request(
         raise ValueError("a probe date window must not exceed 31 calendar days")
     if column not in {"sse", "szse"}:
         raise ValueError("column must be sse or szse")
-    if not isinstance(search_key, str) or not search_key.strip():
-        raise ValueError("search_key must be a non-empty keyword")
+    if not isinstance(search_key, str):
+        raise ValueError("search_key must be a string")
+    if not isinstance(stock, str):
+        raise ValueError("stock must be a string")
+    if not search_key.strip() and not stock.strip():
+        raise ValueError("at least one of search_key or stock must be provided")
+    if stock and not re.fullmatch(r"\d{6}", stock):
+        raise ValueError("stock must be a six-digit A-share code")
     if not 1 <= page_size <= 100:
         raise ValueError("page_size must be between 1 and 100")
     if not 1 <= max_pages <= 10:
@@ -216,6 +223,7 @@ def probe_cninfo_announcement_api(
     plate: str,
     search_key: str,
     output_dir: str | Path,
+    stock: str = "",
     page_size: int = 30,
     max_pages: int = 2,
     min_interval_seconds: float = 1.0,
@@ -235,6 +243,7 @@ def probe_cninfo_announcement_api(
         end_date=end_date,
         column=column,
         search_key=search_key,
+        stock=stock,
         page_size=page_size,
         max_pages=max_pages,
         min_interval_seconds=min_interval_seconds,
@@ -257,12 +266,12 @@ def probe_cninfo_announcement_api(
             "column": column,
             "plate": plate,
             "search_key": search_key,
+            "stock": stock,
             "page_size": page_size,
             "max_pages": max_pages,
             "min_interval_seconds": min_interval_seconds,
             "timeout_seconds": timeout_seconds,
             "tab_name": "fulltext",
-            "stock": "",
             "secid": "",
             "category": "",
             "trade": "",
@@ -376,7 +385,7 @@ def probe_cninfo_announcement_api(
                 "column": column,
                 "tabName": "fulltext",
                 "plate": plate,
-                "stock": "",
+                "stock": stock,
                 "searchkey": search_key,
                 "secid": "",
                 "category": "",
@@ -430,8 +439,27 @@ def probe_cninfo_announcement_api(
                 raise ValueError(f"query page {page_num} JSON root must be an object")
 
             announcements = payload.get("announcements")
-            if not isinstance(announcements, list):
-                raise ValueError(f"query page {page_num} has no announcements array")
+            if announcements is None:
+                empty_result_counters = (
+                    "totalpages",
+                    "totalRecordNum",
+                    "totalAnnouncement",
+                    "totalSecurities",
+                )
+                confirmed_empty = (
+                    all(_as_int(payload.get(key)) == 0 for key in empty_result_counters)
+                    and payload.get("hasMore") is False
+                )
+                if not confirmed_empty:
+                    raise ValueError(
+                        f"query page {page_num} has null announcements without "
+                        "reconciled zero-result counters"
+                    )
+                announcements = []
+            elif not isinstance(announcements, list):
+                raise ValueError(
+                    f"query page {page_num} announcements must be an array or null"
+                )
             total_pages_raw = _as_int(payload.get("totalpages"))
             total_records_raw = _as_int(payload.get("totalRecordNum"))
             total_announcements_raw = _as_int(payload.get("totalAnnouncement"))
@@ -712,6 +740,7 @@ def render_probe_plan(
     max_pages: int,
     min_interval_seconds: float,
     timeout_seconds: float = 20.0,
+    stock: str = "",
 ) -> str:
     """Return a no-network plan for the requested bounded probe."""
     _validate_request(
@@ -719,6 +748,7 @@ def render_probe_plan(
         end_date=end_date,
         column=column,
         search_key=search_key,
+        stock=stock,
         page_size=page_size,
         max_pages=max_pages,
         min_interval_seconds=min_interval_seconds,
@@ -734,6 +764,7 @@ def render_probe_plan(
                 "column": column,
                 "plate": plate,
                 "search_key": search_key,
+                "stock": stock,
                 "page_size": page_size,
                 "max_pages": max_pages,
                 "min_interval_seconds": min_interval_seconds,

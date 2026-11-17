@@ -102,14 +102,17 @@ def _probe(
     *,
     max_pages: int = 2,
     page_size: int = 1,
+    search_key: str = "上市公告书",
+    stock: str = "",
 ) -> dict[str, Any]:
     return probe_cninfo_announcement_api(
         start_date="2026-11-02",
         end_date="2026-11-03",
         column="sse",
         plate="sh",
-        search_key="上市公告书",
+        search_key=search_key,
         output_dir=tmp_path,
+        stock=stock,
         page_size=page_size,
         max_pages=max_pages,
         min_interval_seconds=0.5,
@@ -182,6 +185,72 @@ def test_probe_captures_all_reported_pages_and_raw_hashes(tmp_path: Path) -> Non
     ]
 
 
+
+
+def test_probe_stock_filter_is_sent_without_keyword(tmp_path: Path) -> None:
+    opener = FakeOpener(
+        {
+            1: _payload(
+                [_announcement("stock-filter-hit")],
+                totalpages=1,
+                total_records=1,
+                has_more=False,
+            )
+        }
+    )
+
+    report = _probe(
+        tmp_path,
+        opener,
+        max_pages=1,
+        page_size=30,
+        search_key="",
+        stock="002604",
+    )
+
+    query_request = opener.requests[1]
+    form = parse_qs(getattr(query_request, "data").decode("utf-8"), keep_blank_values=True)
+    assert form["stock"] == ["002604"]
+    assert form["searchkey"] == [""]
+    assert report["request"]["stock"] == "002604"
+    assert report["status"] == "COMPLETE_FOR_QUERY"
+
+
+def test_probe_rejects_null_announcements_without_reconciled_zero_counters(
+    tmp_path: Path,
+) -> None:
+    payload = _payload(
+        [],
+        totalpages=0,
+        total_records=1,
+        has_more=False,
+    )
+    payload["announcements"] = None
+    payload["totalAnnouncement"] = 0
+    payload["totalSecurities"] = 0
+
+    report = _probe(tmp_path, FakeOpener({1: payload}))
+
+    assert report["status"] == "ERROR"
+    assert "null announcements without reconciled zero-result counters" in report["error"]
+
+
+def test_probe_plan_accepts_stock_only_filter() -> None:
+    plan = render_probe_plan(
+        start_date="2020-05-22",
+        end_date="2020-05-22",
+        column="szse",
+        plate="sz",
+        search_key="",
+        stock="002604",
+        page_size=30,
+        max_pages=1,
+        min_interval_seconds=1.0,
+    )
+
+    assert '"search_key": ""' in plan
+    assert '"stock": "002604"' in plan
+
 def test_probe_stops_at_page_cap_and_marks_partial(tmp_path: Path) -> None:
     opener = FakeOpener(
         {
@@ -234,17 +303,19 @@ def test_probe_reports_duplicate_ids_as_complete_with_warnings(tmp_path: Path) -
     assert report["query_counters"]["duplicate_announcement_ids"] == ["same-id"]
 
 
-def test_probe_reports_no_results_without_claiming_source_coverage(tmp_path: Path) -> None:
-    opener = FakeOpener(
-        {
-            1: _payload(
-                [],
-                totalpages=0,
-                total_records=0,
-                has_more=False,
-            )
-        }
+def test_probe_reports_no_results_when_null_announcements_have_zero_counters(
+    tmp_path: Path,
+) -> None:
+    payload = _payload(
+        [],
+        totalpages=0,
+        total_records=0,
+        has_more=False,
     )
+    payload["announcements"] = None
+    payload["totalAnnouncement"] = 0
+    payload["totalSecurities"] = 0
+    opener = FakeOpener({1: payload})
 
     report = _probe(tmp_path, opener)
 
