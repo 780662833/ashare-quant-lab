@@ -20,7 +20,7 @@ _ROUTE_LITERAL = re.compile(
     r"""(?P<route>(?:https://www\.szse\.cn)?/(?:api|new|disclosure|marketServices|search)[^'"\s<>)]*)""",
     re.IGNORECASE,
 )
-_QUERY_KEY = re.compile(r"[?&]([A-Za-z][A-Za-z0-9_-]{0,39})=")
+_QUERY_KEY = re.compile(r"(?:^|&)([A-Za-z][A-Za-z0-9_-]{0,39})=")
 _SEARCH_MARKERS = (
     "keyword",
     "timetype",
