@@ -381,6 +381,10 @@ def probe_cninfo_announcement_api(
                 "timestamp by this probe."
             ),
             (
+                "Stock-specific queries resolve the CNINFO orgId first and send "
+                "stock as code,orgId; the identity lookup schema is reverse-engineered."
+            ),
+            (
                 "Raw response hashes are capture identities, not source revision "
                 "receipts or immutable-document proofs."
             ),
@@ -421,6 +425,9 @@ def probe_cninfo_announcement_api(
         referer_url = SEARCH_PAGE_URL
         previous_request_at: float | None = time.monotonic()
         if stock:
+            elapsed = time.monotonic() - previous_request_at
+            if elapsed < min_interval_seconds:
+                sleep_fn(min_interval_seconds - elapsed)
             lookup_form = {"keyWord": stock, "maxNum": "10"}
             lookup_body = urllib.parse.urlencode(lookup_form).encode("utf-8")
             lookup_request = urllib.request.Request(
@@ -877,6 +884,7 @@ def render_probe_plan(
         {
             "mode": "PLAN_ONLY_NO_NETWORK",
             "query_url": QUERY_URL,
+            "stock_identity_lookup_url": STOCK_LOOKUP_URL,
             "request": {
                 "start_date": start_date,
                 "end_date": end_date,
