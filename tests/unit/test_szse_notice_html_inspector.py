@@ -225,6 +225,46 @@ def test_inspector_detects_jquery_class_selector_and_click_handler(
     assert script["candidate_routes"] == ["/api/disc/info/search"]
     assert report["query_discovery"]["request_call_clue_count"] == 1
 
+def test_inspector_emits_bounded_contexts_for_known_notice_controls_and_init(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "listing.html"
+    source.write_text(
+        """
+        <script>
+          function setupNoticeSearch() {
+            $('.confirm-query').click(function () {
+              const keyword = $('#article-text').val();
+              const date = $('#aticle-datepicker').val();
+              $.ajax({ url: '/candidate-only/not-an-api-contract', data: { keyword } });
+            });
+          }
+          createPageHTML(16, 0, "index", "html");
+          artInitHtml(cmsParam);
+        </script>
+        """,
+        encoding="utf-8",
+    )
+
+    report = inspect_szse_notice_html(source)
+    script = report["first_party_scripts"][0]
+    contexts = script["targeted_script_contexts"]
+    clue_types = {item["clue_type"] for item in contexts}
+
+    assert "query_button_token" in clue_types
+    assert "keyword_control" in clue_types
+    assert "date_control" in clue_types
+    assert "query_button_event" in clue_types
+    assert "template_or_init" in clue_types
+    assert any(
+        ".confirm-query" in item["context"] and ".click" in item["context"]
+        for item in contexts
+    )
+    assert all(len(item["context"]) <= 700 for item in contexts)
+    assert report["summary"]["targeted_script_context_count"] == len(contexts)
+    assert report["query_discovery"]["candidate_routes"] == []
+
+
 def test_inspector_rejects_non_szse_page_url_and_empty_or_oversized_source(
     tmp_path: Path,
 ) -> None:
