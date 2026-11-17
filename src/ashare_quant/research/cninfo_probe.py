@@ -494,11 +494,12 @@ def probe_cninfo_announcement_api(
             report["query_counters"]["captured_records"] += len(announcements)
             if has_more is False and page_num < (expected_pages or 0):
                 report["anomalies"].append(
-                    f"hasMore=false before reported final page {expected_pages}"
+                    f"hasMore=false before effective final page {expected_pages}"
                 )
                 break
 
         reported_pages_final = report["query_counters"]["reported_total_pages"]
+        effective_pages_final = report["query_counters"]["effective_expected_pages"]
         captured_pages = len(report["pages"])
         report["query_counters"]["captured_pages"] = captured_pages
         duplicates = sorted(
@@ -532,9 +533,13 @@ def probe_cninfo_announcement_api(
                 or "captured record count" in item
             )
         ]
+        # Completion must use the effective page count. The raw
+        # totalpages value is retained separately because CNINFO has been
+        # observed returning zero even when totalRecordNum implies multiple
+        # pages.
         expected_response_pages = (
-            max(1, reported_pages_final)
-            if isinstance(reported_pages_final, int)
+            max(1, effective_pages_final)
+            if isinstance(effective_pages_final, int)
             else None
         )
         page_complete = (
@@ -543,13 +548,13 @@ def probe_cninfo_announcement_api(
             and not pagination_anomalies
         )
         if (
-            isinstance(reported_pages_final, int)
+            isinstance(effective_pages_final, int)
             and captured_pages == expected_response_pages
             and report["pages"]
             and report["pages"][-1].get("has_more") is True
         ):
             report["anomalies"].append(
-                "hasMore=true on the reported final page"
+                "hasMore=true on the effective final page"
             )
             page_complete = False
         report["page_traversal_complete_for_query"] = page_complete
