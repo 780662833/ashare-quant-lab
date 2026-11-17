@@ -650,3 +650,27 @@ missing announcement identity fields. CI validates the code only. The live
 CNINFO endpoint has not been called from the project CI environment; local
 network verification is still pending before any adapter or source qualification.
 
+### Phase 9.30 — reconcile CNINFO zero-page counter with live result evidence
+
+The first operator-run live request reached the CNINFO search page and
+announcement query endpoint successfully (HTTP 200 on both). The selected
+SZSE query for 2020-05-22 and keyword `终止上市` returned five rows, five
+unique announcement IDs, and no missing required identity fields. CNINFO
+reported `totalRecordNum=5` and `hasMore=false`, while
+`totalpages=0`; the original probe treated that contradictory page counter
+as PARTIAL.
+
+The parser correction preserves the raw `totalpages=0`, derives an effective
+one-page expectation from the positive record count and requested page size,
+and allows `COMPLETE_WITH_WARNINGS` only when the captured row count matches
+the reported total and `hasMore=false`. Record-count mismatch or a claim of
+more pages remains PARTIAL. New synthetic tests cover the observed counter
+pattern and its fail-closed variants.
+
+All five returned announcement-time values were midnight-valued. They remain
+date-stamp candidates only, not exact first-publication timestamps. The live
+response proves connectivity and returns metadata for this one query; it does
+not prove archive completeness, correct event classification for every row,
+or historical universe/PIT admission. The original raw `page_001.json` still
+needs row-level inspection before expanding the probe.
+
