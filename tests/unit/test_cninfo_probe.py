@@ -12,6 +12,7 @@ import pytest
 from ashare_quant.research.cninfo_probe import (
     QUERY_URL,
     STOCK_LOOKUP_URL,
+    _extract_stock_identity,
     classify_cninfo_announcement_row,
     probe_cninfo_announcement_api,
     render_probe_plan,
@@ -206,6 +207,25 @@ def test_probe_captures_all_reported_pages_and_raw_hashes(tmp_path: Path) -> Non
 
 
 
+
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [{"code": "002604", "orgId": "9900002604", "zwjc": "龙力生物"}],
+        {"stockList": [{"code": "002604", "orgId": "9900002604", "fullName": "山东龙力"}]},
+        {"data": [{"stockCode": "002604", "orgId": "9900002604", "secName": "龙力生物"}]},
+    ],
+)
+def test_extract_stock_identity_supports_observed_cninfo_response_shapes(
+    payload: Any,
+) -> None:
+    identity = _extract_stock_identity(payload, "002604")
+
+    assert identity["stock_code"] == "002604"
+    assert identity["org_id"] == "9900002604"
+    assert identity["sec_name"] in {"龙力生物", "山东龙力", ""}
 
 def test_probe_stock_filter_is_sent_without_keyword(tmp_path: Path) -> None:
     opener = FakeOpener(
