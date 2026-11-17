@@ -161,6 +161,70 @@ def test_inspector_redacts_credential_like_inline_values_from_clues(
     assert "Bearer <redacted>" in report_text or "Authorization=<redacted>" in report_text
 
 
+
+def test_inspector_redacts_compound_credential_names_and_query_values(
+    tmp_path: Path,
+) -> None:
+    access_secret = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6"
+    csrf_secret = "csrf-0123456789-ABCDEFGHIJKLMNOP"
+    refresh_secret = "refresh-0123456789-ABCDEFGHIJKLMNOP"
+    source = tmp_path / "captured.html"
+    source.write_text(
+        f"""
+        <button data-url="/search?refresh_token={refresh_secret}">查询</button>
+        <script>
+          $.ajax({{
+            url: "/api/notice/search",
+            headers: {{
+              "access_token": "{access_secret}",
+              csrfToken: "{csrf_secret}"
+            }},
+            data: {{ keyword: "龙力" }}
+          }});
+        </script>
+        """,
+        encoding="utf-8",
+    )
+
+    report_text = str(inspect_szse_notice_html(source))
+
+    assert access_secret not in report_text
+    assert csrf_secret not in report_text
+    assert refresh_secret not in report_text
+    assert report_text.count("<redacted>") >= 3
+
+
+def test_inspector_detects_jquery_class_selector_and_click_handler(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "listing.html"
+    source.write_text(
+        """
+        <button class="confirm-query btn-query-primary" type="button">查询</button>
+        <script>
+          $('.confirm-query').click(function () {
+            const keyword = $('#article-text').val();
+            $.ajax({ url: '/api/disc/info/search', data: { keyword: keyword } });
+          });
+        </script>
+        """,
+        encoding="utf-8",
+    )
+
+    report = inspect_szse_notice_html(source)
+    script = report["first_party_scripts"][0]
+    clue_types = {clue["clue_type"] for clue in script["query_binding_clues"]}
+
+    assert "confirm-query" in script["query_binding_markers"]
+    assert "event_binding" in clue_types
+    assert "jquery_selector" in clue_types
+    assert any(
+        ".confirm-query" in clue["context"]
+        for clue in script["query_binding_clues"]
+    )
+    assert script["candidate_routes"] == ["/api/disc/info/search"]
+    assert report["query_discovery"]["request_call_clue_count"] == 1
+
 def test_inspector_rejects_non_szse_page_url_and_empty_or_oversized_source(
     tmp_path: Path,
 ) -> None:

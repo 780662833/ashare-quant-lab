@@ -47,6 +47,7 @@ _QUERY_BINDING_MARKERS = (
     "$.get",
     "curHref",
     "curTitle",
+    "confirm-query",
 )
 _SEARCH_MARKERS = (
     "keyword",
@@ -129,6 +130,21 @@ def _attrs_dict(attrs: list[tuple[str, str | None]]) -> dict[str, str]:
 def _safe_excerpt(value: str, *, limit: int = 320) -> str:
     """Return a compact code clue with likely secret values redacted."""
     snippet = re.sub(r"\s+", " ", value).strip()
+    credential_key = (
+        r"(?:[A-Za-z0-9_.-]*(?:access[_-]?token|refresh[_-]?token|"
+        r"id[_-]?token|token|csrf|secret|authorization|cookie|password|"
+        r"api[_-]?key|signature|session[_-]?id|jwt)[A-Za-z0-9_.-]*)"
+    )
+    credential_assignment = re.compile(
+        rf"""(?i)(?P<key>["']?{credential_key}["']?)\s*[:=]\s*"""
+        rf"""(?P<value>["'][^"']*["']|[A-Za-z0-9._~+/=-]{{4,}})"""
+    )
+
+    def redact_assignment(match: re.Match[str]) -> str:
+        key = match.group("key").strip("'\"")
+        return key + "=<redacted>"
+
+    snippet = credential_assignment.sub(redact_assignment, snippet)
     snippet = re.sub(
         r"""(?i)\b(token|csrf|secret|authorization|cookie|password)\b"""
         r"""\s*[:=]\s*(['"]?)[A-Za-z0-9._~+/=-]{4,}""",
@@ -218,7 +234,19 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
         (
             "event_binding",
             re.compile(
-                r"(?:addEventListener\s*\([^)]{0,180}\)|\.on\s*\([^)]{0,180}\))",
+                r"(?:addEventListener\s*\([^)]{0,180}\)|"
+                r"\.(?:on|one|click|submit|change|keyup|keydown|input|bind|delegate|live)"
+                r"\s*\([^)]{0,180}\)|"
+                r"\.on(?:click|submit|change|input|keyup|keydown)\s*=|"
+                r"\.(?:onclick|onsubmit|onchange|oninput)\s*=)",
+                re.IGNORECASE,
+            ),
+        ),
+        (
+            "jquery_selector",
+            re.compile(
+                r"""(?:\$|jQuery)\s*\(\s*(['"])(?:#[A-Za-z][\w-]*|"""
+                r"""\.[A-Za-z][\w-]*)(?:[\w\s>+~.:#-]{0,80})\1\s*\)""",
                 re.IGNORECASE,
             ),
         ),
