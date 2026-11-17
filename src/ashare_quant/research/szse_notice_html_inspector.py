@@ -316,9 +316,9 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
 
     event_api_contexts: list[dict[str, str | int]] = []
     event_api_pattern = re.compile(
-        r"(?:addEventListener|removeEventListener|\\.on|\\.one|\\.click|"
-        r"\\.submit|\\.change|\\.bind|\\.delegate|\\.live|"
-        r"\\.onclick|\\.onsubmit|\\.onchange|\\.oninput)\\s*\\(",
+        r"""(?:addEventListener|removeEventListener|\.on|\.one|\.click|"""
+        r"""\.submit|\.change|\.bind|\.delegate|\.live|"""
+        r"""\.onclick|\.onsubmit|\.onchange|\.oninput)\s*\(""",
         re.IGNORECASE,
     )
     for match in event_api_pattern.finditer(script_text):
@@ -335,12 +335,10 @@ def _script_analysis(script_text: str) -> dict[str, Any]:
 
     script_loader_clues: list[dict[str, str | int]] = []
     script_loader_pattern = re.compile(
-        r"(?:createElement\\s*\\(\\s*['\\\"]script|"
-        r"document\\.write\\s*\\(|"
-        r"appendChild\\s*\\(|"
-        r"(?:script|\\$script)\\.src\\s*=|"
-        r"import\\s*\\(\\s*['\\\"]|"
-        r"requirejs?\\s*\\()",
+        r"""(?:createElement\s*\(\s*['"]script|"""
+        r"""document\.write\s*\(|appendChild\s*\(|"""
+        r"""(?:script|\$script)\.src\s*=|import\s*\(\s*['"]|"""
+        r"""requirejs?\s*\()""",
         re.IGNORECASE,
     )
     for match in script_loader_pattern.finditer(script_text):
