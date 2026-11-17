@@ -292,6 +292,10 @@ def probe_cninfo_announcement_api(
             "reported_total_pages": None,
             "effective_expected_pages": None,
             "reported_total_records": None,
+            "reported_total_announcements": None,
+            "reported_total_securities": None,
+            "captured_unique_security_codes": 0,
+            "security_count_counter_semantics": "unqualified_do_not_use_as_universe_count",
             "captured_pages": 0,
             "captured_records": 0,
             "unique_announcement_ids": 0,
@@ -356,6 +360,7 @@ def probe_cninfo_announcement_api(
         expected_pages: int | None = None
         expected_records: int | None = None
         all_ids: list[str] = []
+        all_security_codes: set[str] = set()
         previous_request_at: float | None = time.monotonic()
         for page_num in range(1, max_pages + 1):
             if expected_pages is not None and page_num > expected_pages:
@@ -429,6 +434,8 @@ def probe_cninfo_announcement_api(
                 raise ValueError(f"query page {page_num} has no announcements array")
             total_pages_raw = _as_int(payload.get("totalpages"))
             total_records_raw = _as_int(payload.get("totalRecordNum"))
+            total_announcements_raw = _as_int(payload.get("totalAnnouncement"))
+            total_securities_raw = _as_int(payload.get("totalSecurities"))
             has_more = payload.get("hasMore")
             if total_pages_raw is None and total_records_raw is None:
                 raise ValueError(
@@ -473,6 +480,12 @@ def probe_cninfo_announcement_api(
                 report["query_counters"]["reported_total_pages"] = total_pages_raw
                 report["query_counters"]["effective_expected_pages"] = expected_pages
                 report["query_counters"]["reported_total_records"] = expected_records
+                report["query_counters"]["reported_total_announcements"] = (
+                    total_announcements_raw
+                )
+                report["query_counters"]["reported_total_securities"] = (
+                    total_securities_raw
+                )
             else:
                 if reported_pages != expected_pages:
                     report["anomalies"].append(
@@ -496,11 +509,31 @@ def probe_cninfo_announcement_api(
                         "reported record count changed from "
                         f"{expected_records} to {total_records_raw} on page {page_num}"
                     )
+                if (
+                    total_announcements_raw is not None
+                    and report["query_counters"]["reported_total_announcements"] is not None
+                    and total_announcements_raw
+                    != report["query_counters"]["reported_total_announcements"]
+                ):
+                    report["anomalies"].append(
+                        "reported totalAnnouncement counter changed across query pages"
+                    )
+                if (
+                    total_securities_raw is not None
+                    and report["query_counters"]["reported_total_securities"] is not None
+                    and total_securities_raw
+                    != report["query_counters"]["reported_total_securities"]
+                ):
+                    report["anomalies"].append(
+                        "reported totalSecurities counter changed across query pages"
+                    )
 
             page_report["record_count"] = len(announcements)
             page_report["reported_total_pages"] = total_pages_raw
             page_report["effective_expected_pages"] = reported_pages
             page_report["reported_total_records"] = total_records_raw
+            page_report["reported_total_announcements"] = total_announcements_raw
+            page_report["reported_total_securities"] = total_securities_raw
             page_report["has_more"] = has_more
             missing_identity_rows: list[dict[str, Any]] = []
             for row_index, row in enumerate(announcements):
@@ -524,6 +557,9 @@ def probe_cninfo_announcement_api(
                 announcement_id = _announcement_identity(row)
                 if announcement_id is not None:
                     all_ids.append(announcement_id)
+                security_code = row.get("secCode")
+                if security_code is not None and str(security_code).strip():
+                    all_security_codes.add(str(security_code).strip())
                 time_observation = _publication_time_observation(
                     row.get("announcementTime")
                 )
@@ -575,6 +611,9 @@ def probe_cninfo_announcement_api(
         )
         report["query_counters"]["unique_announcement_ids"] = len(set(all_ids))
         report["query_counters"]["duplicate_announcement_ids"] = duplicates
+        report["query_counters"]["captured_unique_security_codes"] = len(
+            all_security_codes
+        )
         if duplicates:
             report["anomalies"].append(
                 "duplicate announcementId values appeared across captured pages"
