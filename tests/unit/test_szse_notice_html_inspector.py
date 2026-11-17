@@ -55,6 +55,64 @@ def test_inspector_reports_search_form_and_script_route_clues_without_execution(
     assert "keyword" in script["search_markers"]
     assert report["safety"]["network_requests_made"] is False
     assert report["safety"]["hidden_input_values_emitted"] is False
+    assert report["safety"]["javascript_executed"] is False
+
+
+def test_inspector_extracts_controls_outside_forms_and_inline_query_binding_clues(
+    tmp_path: Path,
+) -> None:
+    raw = """<html><body>
+      <input id="article-text" class="search-input" placeholder="输入关键字">
+      <input id="aticle-datepicker" class="date-input" placeholder="发布日期">
+      <button id="query-btn" class="btn primary" type="button"
+        onclick="runNoticeQuery()">查询</button>
+      <script>
+        const keywordInput = document.getElementById('article-text');
+        const dateInput = $('#aticle-datepicker');
+        $('#query-btn').on('click', function () {
+          $.ajax({
+            url: '/api/disc/info/search',
+            type: 'POST',
+            data: { keyword: keywordInput.value, startDate: dateInput.val(),
+                    endDate: dateInput.val(), pageNum: 1 }
+          });
+        });
+      </script>
+    </body></html>""".encode("utf-8")
+    source = tmp_path / "listing.html"
+    source.write_bytes(raw)
+
+    report = inspect_szse_notice_html(source)
+    controls = report["controls_outside_forms"]
+
+    assert report["summary"]["form_count"] == 0
+    assert controls[0]["id"] == "article-text"
+    assert controls[0]["class"] == "search-input"
+    assert controls[1]["id"] == "aticle-datepicker"
+    button = controls[2]
+    assert button["class"] == "btn primary"
+    assert button["onclick_clue"] == "runNoticeQuery()"
+
+    script = report["first_party_scripts"][0]
+    assert {"article-text", "aticle-datepicker", "ajax", "$.post", "$.get"} & set(
+        script["query_binding_markers"]
+    )
+    assert script["candidate_routes"] == ["/api/disc/info/search"]
+    request = script["request_call_clues"][0]
+    assert set(request["payload_key_candidates"]) >= {
+        "keyword",
+        "startDate",
+        "endDate",
+        "pageNum",
+    }
+    assert any(
+        clue["clue_type"] == "article_text_id"
+        for clue in script["query_binding_clues"]
+    )
+    assert report["query_discovery"]["request_call_clue_count"] == 1
+    assert report["query_discovery"]["candidate_routes"] == [
+        "/api/disc/info/search"
+    ]
 
 
 def test_inspector_resolves_first_party_and_keeps_other_script_reference_separate(
@@ -72,11 +130,35 @@ def test_inspector_resolves_first_party_and_keeps_other_script_reference_separat
     report = inspect_szse_notice_html(source)
 
     assert report["summary"]["first_party_script_reference_count"] == 1
+    assert report["summary"]["external_script_reference_count"] == 2
+    assert report["summary"]["inline_script_count"] == 0
     assert report["first_party_scripts"][0]["resolved_src"] == (
         "https://www.szse.cn/assets/site.js"
     )
     assert report["summary"]["other_script_reference_count"] == 1
     assert "cdn.example.test" in report["other_script_references"][0]["resolved_src"]
+
+
+def test_inspector_redacts_credential_like_inline_values_from_clues(
+    tmp_path: Path,
+) -> None:
+    secret = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKL"
+    source = tmp_path / "captured.html"
+    source.write_text(
+        f"""
+        <button onclick="run()">查询</button>
+        <script>
+          $.ajax({{ url: '/api/notice/search', headers: {{ Authorization: 'Bearer {secret}' }},
+            data: {{ keyword: '龙力' }} }});
+        </script>
+        """,
+        encoding="utf-8",
+    )
+
+    report_text = str(inspect_szse_notice_html(source))
+
+    assert secret not in report_text
+    assert "Bearer <redacted>" in report_text or "Authorization=<redacted>" in report_text
 
 
 def test_inspector_rejects_non_szse_page_url_and_empty_or_oversized_source(
