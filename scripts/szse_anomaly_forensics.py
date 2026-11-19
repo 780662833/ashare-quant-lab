@@ -11,7 +11,7 @@ import argparse, csv, hashlib, json, re, time
 from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
-from urllib.request import Request, build_opener
+from urllib.request import Request, build_opener, HTTPRedirectHandler
 from pathlib import PurePosixPath
 
 CLASSES = {"confirmed_data_error","historical_channel_transition","url_alias","parser_error","audit_rule_false_positive","unresolved"}
@@ -66,6 +66,14 @@ def url_info(raw, base=None):
         out["reason"]="trusted SZSE PDF resource, not announcement HTML" if kind=="pdf_resource" and trusted else ("trusted HTTPS SZSE URL" if safe else "blocked: HTTPS SZSE host, no user-info, standard port required")
     except Exception as e: out["reason"]=f"URL parse error: {e}"
     return out
+class SafeRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        from urllib.parse import urljoin
+        destination=url_info(urljoin(req.full_url,newurl))
+        if not destination["safe_https_szse"]:
+            raise ValueError("redirect blocked before following: "+str(destination["reason"]))
+        return super().redirect_request(req,fp,code,msg,headers,newurl)
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--report-dir",type=Path,required=True)
@@ -123,7 +131,7 @@ def main():
        "interpretation":"Both are SZSE-hosted annual Shenzhen securities market overview PDF resources, not HTML announcement pages. Keep host trust separate from announcement-node eligibility. Preserve as linked resources; do not classify as external-domain URLs or automatically accept as valid pre/next announcement nodes."},
       "fetch":{"requested":args.fetch,"attempted":0,"results":[]}}
     if args.fetch:
-        opener=build_opener()
+        opener=build_opener(SafeRedirectHandler())
         for u,m in list(requests.items())[:max(0,args.max_requests)]:
             info=url_info(u)
             if m!="GET" or not info["safe_https_szse"] or info["resource_kind"]!="html_page":
