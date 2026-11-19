@@ -1,0 +1,64 @@
+# SZSE anomaly forensics
+
+This tool investigates the existing bounded chain-audit outputs. It does not
+crawl all announcements and does not modify source reports.
+
+## Run locally first (no network)
+
+```powershell
+python -u .\scripts\szse_anomaly_forensics.py `
+  --report-dir .\reports\szse_year_boundary_audit `
+  --output-dir .\reports\szse_anomaly_forensics
+```
+
+Review the generated JSON and Markdown before considering any network replay.
+
+## Optional GET replay
+
+```powershell
+python -u .\scripts\szse_anomaly_forensics.py `
+  --report-dir .\reports\szse_year_boundary_audit `
+  --output-dir .\reports\szse_anomaly_forensics_fetch `
+  --fetch --delay 0.5 --max-requests 60
+```
+
+Replay is opt-in. Only GET URLs discovered in the saved request manifest are
+considered. Only HTTPS hosts equal to szse.cn or ending in .szse.cn, standard
+port, and HTML resources are eligible. Redirect destinations are validated
+before following. PDF resources are not fetched.
+
+## Known PDF resources in the supplied diagnostic
+
+| File | Identified title | Correct interpretation |
+|---|---|---|
+| P020201231733275849449.pdf | 2020 年深圳证券市场概况 | SZSE-hosted annual market overview PDF |
+| P020251231674893217325.pdf | 2025 年深圳证券市场概况 | SZSE-hosted annual market overview PDF |
+
+These two URLs are on the SZSE domain. They are not external-domain URLs and
+are not HTML announcement pages. The audit should distinguish:
+
+1. **Host trust**: the resource is hosted on an approved SZSE domain.
+2. **Resource type**: PDF, not HTML.
+3. **Graph semantics**: a PDF linked from an announcement is a document/resource
+   edge, not automatically a pre/next announcement node.
+
+Therefore, these findings should not be described as malicious or external
+URLs. They should be retained as linked annual-market-overview resources and
+excluded from the announcement-node chain unless independent source evidence
+proves otherwise. This is likely an audit-rule/resource-type false positive,
+not a confirmed SZSE data error.
+
+## Classification discipline
+
+Use only these final classifications after examining raw HTML, JSON and
+relation API evidence:
+
+- confirmed_data_error
+- historical_channel_transition
+- url_alias
+- parser_error
+- audit_rule_false_positive
+- unresolved
+
+The script extracts evidence; it does not automatically assign a final
+classification where the source evidence is insufficient.
