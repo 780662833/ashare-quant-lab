@@ -94,35 +94,118 @@ def main():
     rows=[]
     for p,data in loaded:
         for loc,obj in walk(data): rows.append((str(p.relative_to(root)),loc,obj))
-    duplicate=[]; unsafe=[]; edges={}; issue_counts=defaultdict(int); requests={}
+
+    # The source audit has used several report schemas over time. Inspect
+    # nested scalar fields and issue labels instead of relying on one exact
+    # key spelling or a single top-level "type" field.
+    ISSUE_KEYS={"type","issuetype","anomalytype","failuretype","code","rule","ruleid","category","kind"}
+    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl"}
+    ID_KEYS_EXT=ID_KEYS | {"sourceid","targetid","nodeid","fromid","toid"}
+    MARKERS=("duplicate_id_different_url","unsafe_neighbor_url",
+             "edge_channel_mismatch","reciprocity_failure","invalid_seed_url")
+
+    def scalar_pairs(value):
+        if isinstance(value,dict):
+            for k,v in value.items():
+                if isinstance(v,(str,int,float)) or v is None:
+                    yield str(k),v
+                else:
+                    yield from scalar_pairs(v)
+        elif isinstance(value,list):
+            for v in value: yield from scalar_pairs(v)
+
+    def direct_markers(obj):
+        found=set()
+        for k,v in obj.items():
+            nk=key(k)
+            candidates=[str(v)] if isinstance(v,(str,int,float)) else []
+            if isinstance(v,list):
+                candidates += [str(x) for x in v if isinstance(x,(str,int,float))]
+            for marker in MARKERS:
+                if marker in nk or any(marker in x.lower() for x in candidates):
+                    found.add(marker)
+        return found
+
+    URL_RE=re.compile(r"https?://[^\\s\\\"'<>]+|(?<![\\w])//[^\\s\\\"'<>]+",re.I)
+    def url_candidates(obj):
+        found=[]
+        for k,v in scalar_pairs(obj):
+            if not isinstance(v,str): continue
+            nk=key(k)
+            vals=URL_RE.findall(v)
+            if not vals and (nk in URL_KEYS_EXT or re.search(r"P0\\d{20,}\\.pdf",v,re.I)):
+                if v.strip().startswith(("/", "./", "../")) or re.search(r"\\.(?:pdf|html?)$",v.strip(),re.I):
+                    vals=[v.strip()]
+            for raw in vals:
+                raw=raw.rstrip(").,;]")
+                if raw not in found: found.append(raw)
+        return found
+
+    def get_values(obj, aliases):
+        wanted={key(x) for x in aliases}
+        return [str(v) for k,v in scalar_pairs(obj)
+                if key(k) in wanted and v not in (None,"")]
+
+    duplicate=[]; unsafe=[]; resources=[]; edges={}; issue_counts=defaultdict(int); requests={}
     for file,loc,obj in rows:
-        typ=str(next((v for k,v in obj.items() if key(k)=="type"),""))
-        if typ: issue_counts[typ]+=1
-        ids=[str(v) for _,v in values(obj,ID_KEYS) if re.fullmatch(r"\d+",str(v))]
-        urls=[str(v) for _,v in values(obj,URL_KEYS) if isinstance(v,str) and ("://" in v or "/" in v)]
-        if "duplicate_id_different_url" in typ or (len(set(ids))==1 and len(set(urls))>1):
-            duplicate.append({"file":file,"location":loc,"record":obj})
-        sid=obj.get("source_id"); tid=obj.get("target_id")
+        markers=direct_markers(obj)
+        for marker in markers: issue_counts[marker]+=1
+        ids=[v for v in get_values(obj,ID_KEYS_EXT) if re.fullmatch(r"\\d+",v)]
+        urls=url_candidates(obj)
+        sid=next(iter(get_values(obj,{"source_id"})),None)
+        tid=next(iter(get_values(obj,{"target_id"})),None)
+
+        # Keep one evidence item per ID/URL group, even when the same finding
+        # is repeated in summary and hard-failure sections.
+        if "duplicate_id_different_url" in markers or (len(set(ids))==1 and len(set(urls))>1):
+            signature=(tuple(sorted(set(ids))),tuple(sorted(set(urls))))
+            duplicate.append({"file":file,"location":loc,"ids":list(signature[0]),
+                              "urls":list(signature[1]),"issue_type":"duplicate_id_different_url",
+                              "record":obj})
+
         for raw in urls:
             info=url_info(raw)
-            if "unsafe_neighbor_url" in typ or (tid and (not info["safe_https_szse"] or info["resource_kind"]!="html_page")):
-                unsafe.append({"file":file,"location":loc,"source_id":sid,"target_id":tid,**info})
-        rel=obj.get("relation")
-        if sid and tid and rel: edges[(str(sid),str(rel),str(tid))]={"source_id":sid,"relation":rel,"target_id":tid,"record":obj}
-        method=next((v for k,v in values(obj,METHOD_KEYS)),None)
-        rawurl=next((v for k,v in values(obj,REQ_URL_KEYS) if isinstance(v,str) and v.startswith(("http://","https://"))),None)
+            item={"file":file,"location":loc,"source_id":sid,"target_id":tid,**info}
+            if info["resource_kind"]=="pdf_resource":
+                if info["host_trusted"]:
+                    item["classification"]="szse_hosted_pdf_resource"
+                    item["source_issue_marker"]="unsafe_neighbor_url" if "unsafe_neighbor_url" in markers else None
+                    item["interpretation"]="Linked document resource; not an HTML announcement node"
+                    resources.append(item)
+                elif "unsafe_neighbor_url" in markers or (sid and tid):
+                    item["classification"]="unsafe_external_or_untrusted_resource"
+                    unsafe.append(item)
+            elif (not info["safe_https_szse"] and
+                  ("unsafe_neighbor_url" in markers or (sid and tid))):
+                item["classification"]="unsafe_or_untrusted_url"
+                unsafe.append(item)
+            elif ("unsafe_neighbor_url" in markers and
+                  info["resource_kind"]!="html_page"):
+                item["classification"]="non_html_linked_resource"
+                resources.append(item)
+
+        rel=next(iter(get_values(obj,{"relation"})),None)
+        if sid and tid and rel:
+            edges[(str(sid),str(rel),str(tid))]={"source_id":sid,"relation":rel,"target_id":tid,"record":obj}
+
+        method=next(iter(get_values(obj,METHOD_KEYS)),None)
+        rawurl=next((u for u in urls if u.startswith(("http://","https://"))),None)
         if rawurl: requests[rawurl]=str(method or "GET").upper()
-    def dedupe(items, fields):
+
+    def dedupe(items, signature_fn):
         seen={}
         for item in items:
-            ident=tuple(json.dumps(item.get(k),sort_keys=True,ensure_ascii=False) if k=="record" else str(item.get(k)) for k in fields)
-            if ident not in seen: seen[ident]=item
-            else: seen[ident]["duplicate_occurrences"]=seen[ident].get("duplicate_occurrences",1)+1
+            sig=signature_fn(item)
+            if sig not in seen: seen[sig]=item
+            else: seen[sig]["duplicate_occurrences"]=seen[sig].get("duplicate_occurrences",1)+1
         return list(seen.values())
-    duplicate=dedupe(duplicate,["record"]); unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
+
+    duplicate=dedupe(duplicate,lambda x:(tuple(x["ids"]),tuple(x["urls"])))
+    unsafe=dedupe(unsafe,lambda x:(x.get("source_id"),x.get("target_id"),x.get("raw_url")))
+    resources=dedupe(resources,lambda x:(x.get("source_id"),x.get("target_id"),x.get("raw_url")))
     report={"version":"1.0.0","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
-      "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"unique_relation_edges":list(edges.values()),
+      "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
       "classifications":sorted(CLASSES),
       "pdf_context":{
@@ -150,7 +233,7 @@ def main():
     outdir.mkdir(parents=True,exist_ok=True)
     (outdir/"szse_anomaly_forensics.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     md=["# SZSE anomaly forensics","",f"- Input files: {len(files)}",f"- Network requests: {report['network_requests_made']}",
-        f"- Duplicate-ID evidence records: {len(duplicate)}",f"- Unsafe/resource URL records: {len(unsafe)}",
+        f"- Duplicate-ID evidence records: {len(duplicate)}",f"- Unsafe URL evidence records: {len(unsafe)}",f"- Linked resource records: {len(resources)}",
         f"- Unique relation edges: {len(edges)}","","## Annual market overview PDF resources",
         "- P020201231733275849449.pdf: 2020 年深圳证券市场概况",
         "- P020251231674893217325.pdf: 2025 年深圳证券市场概况",
@@ -158,6 +241,6 @@ def main():
         "- Preserve resource links separately from announcement graph nodes."]
     (outdir/"szse_anomaly_forensics.md").write_text("\n".join(md)+"\n",encoding="utf-8")
     print(json.dumps({"status":"ok","input_files":len(files),"output_dir":str(outdir),
-       "duplicate_evidence":len(duplicate),"unsafe_resource_evidence":len(unsafe),
+       "duplicate_evidence":len(duplicate),"unsafe_url_evidence":len(unsafe),"linked_resource_evidence":len(resources),
        "network_requests_made":report["network_requests_made"]},ensure_ascii=False,indent=2))
 if __name__=="__main__": main()
