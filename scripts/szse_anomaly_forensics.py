@@ -99,20 +99,24 @@ def main():
     # nested scalar fields and issue labels instead of relying on one exact
     # key spelling or a single top-level "type" field.
     ISSUE_KEYS={"type","issuetype","anomalytype","failuretype","code","rule","ruleid","category","kind"}
-    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl"}
-    ID_KEYS_EXT=ID_KEYS | {"sourceid","targetid","nodeid","fromid","toid"}
+    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl","urls","neighborurls","unsafeurls","linkedurls"}
+    ID_KEYS_EXT=ID_KEYS | {"sourceid","targetid","nodeid","fromid","toid","ids","duplicateids","announcementids"}
     MARKERS=("duplicate_id_different_url","unsafe_neighbor_url",
              "edge_channel_mismatch","reciprocity_failure","invalid_seed_url")
 
-    def scalar_pairs(value):
+    def scalar_pairs(value, parent_key=""):
         if isinstance(value,dict):
             for k,v in value.items():
                 if isinstance(v,(str,int,float)) or v is None:
                     yield str(k),v
                 else:
-                    yield from scalar_pairs(v)
+                    yield from scalar_pairs(v,str(k))
         elif isinstance(value,list):
-            for v in value: yield from scalar_pairs(v)
+            for v in value:
+                if isinstance(v,(str,int,float)) or v is None:
+                    yield parent_key,v
+                else:
+                    yield from scalar_pairs(v,parent_key)
 
     def direct_markers(obj):
         found=set()
@@ -126,15 +130,15 @@ def main():
                     found.add(marker)
         return found
 
-    URL_RE=re.compile(r"https?://[^\\s\\\"'<>]+|(?<![\\w])//[^\\s\\\"'<>]+",re.I)
+    URL_RE=re.compile(r'''https?://[^\s"'<>]+|(?<![\w])//[^\s"'<>]+''',re.I)
     def url_candidates(obj):
         found=[]
         for k,v in scalar_pairs(obj):
             if not isinstance(v,str): continue
             nk=key(k)
             vals=URL_RE.findall(v)
-            if not vals and (nk in URL_KEYS_EXT or re.search(r"P0\\d{20,}\\.pdf",v,re.I)):
-                if v.strip().startswith(("/", "./", "../")) or re.search(r"\\.(?:pdf|html?)$",v.strip(),re.I):
+            if not vals and (nk in URL_KEYS_EXT or re.search(r"P0\d{20,}\.pdf",v,re.I)):
+                if v.strip().startswith(("/", "./", "../")) or re.search(r"\.(?:pdf|html?)$",v.strip(),re.I):
                     vals=[v.strip()]
             for raw in vals:
                 raw=raw.rstrip(").,;]")
@@ -150,7 +154,7 @@ def main():
     for file,loc,obj in rows:
         markers=direct_markers(obj)
         for marker in markers: issue_counts[marker]+=1
-        ids=[v for v in get_values(obj,ID_KEYS_EXT) if re.fullmatch(r"\\d+",v)]
+        ids=[v for v in get_values(obj,ID_KEYS_EXT) if re.fullmatch(r"\d+",v)]
         urls=url_candidates(obj)
         sid=next(iter(get_values(obj,{"source_id"})),None)
         tid=next(iter(get_values(obj,{"target_id"})),None)
@@ -203,7 +207,7 @@ def main():
     duplicate=dedupe(duplicate,lambda x:(tuple(x["ids"]),tuple(x["urls"])))
     unsafe=dedupe(unsafe,lambda x:(x.get("source_id"),x.get("target_id"),x.get("raw_url")))
     resources=dedupe(resources,lambda x:(x.get("source_id"),x.get("target_id"),x.get("raw_url")))
-    report={"version":"1.0.0","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.1.0","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
       "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
