@@ -48,6 +48,25 @@ excluded from the announcement-node chain unless independent source evidence
 proves otherwise. This is likely an audit-rule/resource-type false positive,
 not a confirmed SZSE data error.
 
+## Reading the v1.1 output
+
+The extractor now inspects nested objects and list values for issue labels,
+identifiers, and URL candidates, rather than assuming that every report uses
+the same top-level field names.
+
+It reports two separate URL categories:
+
+- `unsafe_url_evidence`: URLs that fail the HTTPS/SZSE-host policy. A trusted
+  SZSE PDF is not placed here merely because it is not HTML.
+- `linked_resource_evidence`: SZSE-hosted PDF and other non-HTML resources,
+  kept separate from announcement-page nodes.
+
+The generated JSON retains each finding's source file and JSON location so it
+can be traced back to the original audit outputs. Compare the extracted
+duplicate-ID groups and resource links with the original diagnostic and
+hard-failure reports; extraction counts alone are not proof that an anomaly is
+resolved.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
