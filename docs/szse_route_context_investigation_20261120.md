@@ -159,7 +159,7 @@ The report path supplied by the operator is:
 
     reports/source_probes/szse_route_context/route_context_report.json
 
-The report content was supplied in the conversation; the repository documentation records its reported measurements and response digests. It does not claim that the report JSON or raw response files have been committed to the repository.
+The full structured report supplied by the operator has been added to the repository at reports/source_probes/szse_route_context/route_context_report.json. Its report fields and values are preserved in the committed JSON artifact. The six raw HTTP response files remain in the operator's local capture directory and are not part of this commit.
 
 ### Scope and acceptance boundary
 
