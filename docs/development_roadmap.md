@@ -979,11 +979,39 @@ remains unexplained; a later CMS insertion/migration/route-maintenance date is
 only a hypothesis, not a verified cause. Do not classify this as a confirmed
 publication-date source error or as a reciprocity failure.
 
+A subsequent operator-run, GET-only route-variant check covered both mismatch
+nodes. For 618392, the existing
+`/disclosure/notice/general/t20260110_618392.html` route returned 200 for
+HTML, JSON and neighbor context and passed HTML/JSON identity plus archived
+business-payload comparison. The two candidates using path date 2020-12-31
+(`/disclosure/notice/general/t20201231_618392.html` and
+`/disclosure/notice/t20201231_618392.html`) returned 404 for both HTML and
+JSON.
+
+For 584158, the existing
+`/disclosure/notice/general/t20210108_584158.html` route returned 200 for
+HTML, JSON and neighbor context and passed HTML/JSON identity plus archived
+business-payload comparison. The two candidates using path date 2021-01-07
+(`/disclosure/notice/general/t20210107_584158.html` and
+`/disclosure/notice/t20210107_584158.html`) returned 404 for both HTML and
+JSON. In each probe, the four request errors were exactly the four expected
+candidate HTTP 404 responses, not transport failures.
+
+Across the two probes, 14 sequential GET requests produced 6 HTTP 200
+responses for the two existing routes and 8 HTTP 404 responses for the four
+date-aligned candidates. No date-aligned alias was confirmed. This result is
+limited to those four exact candidate URLs; it does not establish that no
+other historical route form exists. The path-date root causes for both nodes
+remain unresolved. The operator reports record zero reverse checks, so these
+route probes do not add reciprocity evidence. See
+docs/szse_url_path_date_investigation_20261120.md for the per-node results
+and report locations.
+
 Data-quality treatment: persist url_path_date separately from JSON pubTime,
 HTML visible date, body signed date and capture time. Never fall back from a
 missing publication date to the URL path suffix. The original archive SHA-256,
-two mismatches, evidence and remaining bounded route-variant checks are
-recorded in docs/szse_url_path_date_investigation_20261120.md.
+the two mismatches and the bounded route-variant outcomes are recorded in
+docs/szse_url_path_date_investigation_20261120.md.
 
 The 77-edge bounded reciprocity result remains unchanged. No v6 forensic
 counter, source capture, production dataset, PIT, training or backtest gate is
