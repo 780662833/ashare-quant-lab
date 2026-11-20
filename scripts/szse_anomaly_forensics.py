@@ -101,6 +101,7 @@ def main():
     ISSUE_KEYS={"type","issuetype","anomalytype","failuretype","code","rule","ruleid","category","kind"}
     URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl","neighborurl","previousurl","nexturl","preurl","posturl"}
     ID_KEYS_EXT=ID_KEYS | {"sourceid","targetid","nodeid","fromid","toid","ids","duplicateids","announcementids"}
+    DUPLICATE_ID_KEYS=ID_KEYS | {"duplicateid","duplicateids","conflictingid","conflictid"}
     MARKERS=("duplicate_id_different_url","unsafe_neighbor_url",
              "edge_channel_mismatch","reciprocity_failure","invalid_seed_url")
     URL_RE=re.compile(r'''https?://[^\\s"'<>]+|(?<![\\w])//[^\\s"'<>]+''',re.I)
@@ -155,18 +156,21 @@ def main():
                 if raw and raw not in found: found.append(raw)
         return found
 
-    def extract_ids(pairs):
-        aliases={key(x) for x in ID_KEYS_EXT}
+    def extract_ids(pairs, allowed=ID_KEYS_EXT):
+        aliases={key(x) for x in allowed}
         return sorted({str(v) for k,v in pairs
                        if key(k) in aliases and v not in (None,"")
                        and re.fullmatch(r"\\d+",str(v))})
 
-    def direct_value(obj, aliases):
+    def value_from_pairs(pairs, aliases):
         wanted={key(x) for x in aliases}
-        for k,v in direct_pairs(obj):
+        for k,v in pairs:
             if key(k) in wanted and v not in (None,""):
                 return str(v)
         return None
+
+    def direct_value(obj, aliases):
+        return value_from_pairs(list(direct_pairs(obj)),aliases)
 
     duplicate_groups={}
     unsafe=[]; resources_by_key={}; edges={}; issue_counts=defaultdict(int); requests={}
@@ -181,7 +185,8 @@ def main():
         urls=extract_urls(evidence_pairs)
 
         if "duplicate_id_different_url" in markers:
-            for doc_id in ids:
+            duplicate_ids=extract_ids(evidence_pairs,DUPLICATE_ID_KEYS)
+            for doc_id in duplicate_ids:
                 group=duplicate_groups.setdefault(doc_id,{"id":doc_id,"urls":set(),
                     "source_locations":[],"evidence_record_count":0})
                 group["urls"].update(urls)
@@ -190,6 +195,9 @@ def main():
 
         sid=direct_value(obj,{"source_id","sourceid","from_id","fromid"})
         tid=direct_value(obj,{"target_id","targetid","to_id","toid"})
+        if "unsafe_neighbor_url" in markers:
+            sid=sid or value_from_pairs(evidence_pairs,{"source_id","sourceid","from_id","fromid"})
+            tid=tid or value_from_pairs(evidence_pairs,{"target_id","targetid","to_id","toid"})
         rel=direct_value(obj,{"relation","relation_type","edge_type"})
         for raw in urls:
             info=url_info(raw)
@@ -230,7 +238,7 @@ def main():
             else: seen[ident]["duplicate_occurrences"]=seen[ident].get("duplicate_occurrences",1)+1
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
-    report={"version":"1.2.0","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.2.1","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
       "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
