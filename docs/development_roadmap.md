@@ -863,32 +863,49 @@ The 2026-11-20 year-boundary capture review identified three apparent
 non-reciprocal relations where a source neighbor response points to a specific
 detail URL, but the target response in the archive belongs to a different URL
 route sharing the same docId. The two target routes absent from the original
-198-request manifest are:
+198-request manifest were:
 
 - /disclosure/notice/t20210104_584083.html
 - /disclosure/notice/company/t20210105_584085.html
 
 Added a bounded route-context capture utility:
-`scripts/capture_szse_route_context.py`,
-`src/ashare_quant/research/szse_route_context.py`, and
-`tests/unit/test_szse_route_context.py`. It captures the exact HTML route,
+scripts/capture_szse_route_context.py,
+src/ashare_quant/research/szse_route_context.py, and
+tests/unit/test_szse_route_context.py. It captures the exact HTML route,
 same-path JSON and route-scoped previous/next response; reads navigation
 channelId/channelCode from that exact HTML; preserves JSON data channel fields
 separately; records raw response SHA-256 and request metadata; and evaluates
 the three known reverse checks without inferring edges. HTTPS exact-host
 allowlisting, GET-only requests, sequential pacing, route/response-size bounds
 and no-attachment behavior are enforced. See
-`docs/szse_route_context_capture.md`.
+docs/szse_route_context_capture.md.
 
-Offline evidence from the supplied year-boundary archive confirms the target
-URLs and the differing captured routes, but does not prove the alternate routes
-are aliases or that the source data is wrong. Until the exact routes are
-captured, all three relations remain `unresolved_route_context`. The
-2026-01-10 URL date in the 618392 path versus its 2020-12-31 publication date
-remains a separate unresolved URL/date issue. See
-`docs/szse_route_context_investigation_20261120.md`.
+The operator's local bounded capture on 2026-11-20 returned 6/6 HTTP 200
+responses with zero request errors. Both target routes passed HTML/JSON
+identity checks and each route's JSON payload matched the archived business
+payload on docId, title, publication time and exact content SHA-256. The
+route-specific navigation contexts were confirmed:
 
-The current review environment could not resolve www.szse.cn, so no live
-alternate-route response is claimed. The probe is ready for a local bounded
-run; it does not establish archive completeness or promote the graph to full
-acceptance, PIT, production, training or backtest eligibility.
+- 584083: exact /notice/ route HTML navigation channel 211
+  (announcement), while its JSON business-data channel is 212
+  (general_news). The neighbor response uses chnlDocId=211_584083,
+  matching the HTML navigation context.
+- 584085: exact /company/ route HTML navigation and JSON data channel are
+  both 214 (ipocompany_news); the neighbor response uses
+  chnlDocId=214_584085.
+
+All three expected reverse relations matched: 584083.nextDocId=584082,
+584083.preDocId=584084 and 584085.nextDocId=584068. The three apparent
+non-reciprocal findings are therefore resolved as route-context mismatches in
+the original sample, not confirmed SZSE source-data errors. They should no
+longer be carried as unresolved_route_context. No reverse edges were
+inferred. Detailed response hashes and report fields are recorded in
+docs/szse_route_context_investigation_20261120.md.
+
+The 2026-01-10 URL date in the 618392 path versus its 2020-12-31 publication
+date remains a separate unresolved URL/date issue. The bounded operator report
+still explicitly returns full_graph_acceptance=false; archive completeness,
+global ID uniqueness, graph-wide reciprocity, chronology, URL/attachment
+classification and historical chain continuity remain unqualified. The
+capture also leaves production, PIT, training and backtest admission false.
+No production source or research-data gate is promoted.
