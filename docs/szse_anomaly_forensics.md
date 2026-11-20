@@ -116,6 +116,34 @@ the source audit's six `unsafe_neighbor_url` findings: the former was polluted
 by over-broad subtree extraction and by treating every non-PDF URL in a marked
 record as unsafe. Re-run v1.3 and inspect the actual URLs and source locations.
 
+## v1.4 issue scoping and de-duplication
+
+The v1.3 report exposed a parent-container false positive: the root
+`diagnostic_report.json` object inherited an issue marker from aggregate
+metadata, then combined unrelated descendant IDs and URLs. v1.4 changes marker
+recognition to exact issue-type/code values or exact marker keys. Summary
+containers are not issue records merely because their field names contain an
+issue marker.
+
+For explicitly marked issue objects, URL extraction may inspect scalar strings
+inside that object. It does not cross into parent or sibling records. The
+extractor now keeps both:
+
+- `issue_type_counts`: unique issue groups after canonical de-duplication.
+- `issue_type_occurrence_counts`: raw record occurrences across the report
+  files, which may repeat the same issue in diagnostic, summary, and issue-list
+  outputs.
+
+`unsafe_issue_records` and `duplicate_issue_records` include grouped source
+locations and occurrence counts. `unsafe_url_evidence` still means URLs that
+fail the HTTPS/SZSE policy, not all source-marked links. Trusted SZSE PDF links
+remain in `linked_resource_evidence`, keyed by source ID, target ID, and URL.
+
+For duplicate-ID findings, inspect each group's `urls` and
+`url_evidence_status`. An empty or single-URL list is incomplete evidence and
+must remain unresolved; it must not be automatically classified as a URL
+alias or a confirmed ID collision.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
