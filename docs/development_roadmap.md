@@ -900,7 +900,7 @@ non-reciprocal findings are therefore resolved as route-context mismatches in
 the original sample, not confirmed SZSE source-data errors. They should no
 longer be carried as unresolved_route_context. No reverse edges were
 inferred. Detailed response hashes and report fields are recorded in
-docs/szse_route_context_investigation_20261120.md.
+docs/szse_route_context_investigation_20261120.md and the committed report at reports/source_probes/szse_route_context/route_context_report.json.
 
 The 2026-01-10 URL date in the 618392 path versus its 2020-12-31 publication
 date remains a separate unresolved URL/date issue. The bounded operator report
