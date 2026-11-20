@@ -315,6 +315,244 @@ def _same_neighbor_context(
         == _normalize_szse_url(right.get("nextDocPuburl"))
     )
 
+
+def _numeric_doc_id(value: Any) -> str | None:
+    """Return a canonical decimal document ID without coercing floats or booleans."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value >= 0:
+        return str(value)
+    if isinstance(value, str):
+        normalized = value.strip()
+        return normalized if normalized.isdigit() else None
+    return None
+
+
+def _capture_identity_coverage(
+    nodes_value: list[Any], edges_value: list[Any]
+) -> dict[str, Any]:
+    """Describe identity and endpoint coverage inside this capture only.
+
+    These metrics deliberately do not infer archive completeness or global
+    uniqueness beyond the supplied bounded capture.
+    """
+    nodes_by_id: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    nodes_by_route: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    node_id_missing_indexes: list[int] = []
+    node_id_invalid_indexes: list[int] = []
+    node_route_invalid_indexes: list[int] = []
+    node_route_id_mismatch: list[dict[str, Any]] = []
+    html_json_match_count = 0
+    html_json_not_match_count = 0
+    non_object_node_count = 0
+
+    for index, node in enumerate(nodes_value, start=1):
+        if not isinstance(node, dict):
+            non_object_node_count += 1
+            continue
+
+        raw_id = node.get("doc_id")
+        doc_id = _numeric_doc_id(raw_id)
+        if doc_id is None:
+            if raw_id in (None, ""):
+                node_id_missing_indexes.append(index)
+            else:
+                node_id_invalid_indexes.append(index)
+        else:
+            nodes_by_id[doc_id].append(node)
+
+        normalized_url = _normalize_szse_url(node.get("url"))
+        route_doc_id = _url_doc_id(normalized_url)
+        if route_doc_id is None:
+            node_route_invalid_indexes.append(index)
+        else:
+            nodes_by_route[normalized_url].append(node)
+
+        if doc_id is not None and route_doc_id is not None and doc_id != route_doc_id:
+            node_route_id_mismatch.append({
+                "node_index": index,
+                "doc_id": doc_id,
+                "route_doc_id": route_doc_id,
+                "route_url": normalized_url,
+            })
+
+        if node.get("html_json_identity") == "match":
+            html_json_match_count += 1
+        else:
+            html_json_not_match_count += 1
+
+    duplicate_doc_id_groups: list[dict[str, Any]] = []
+    for doc_id, matches in sorted(nodes_by_id.items()):
+        if len(matches) < 2:
+            continue
+        urls = sorted({
+            normalized
+            for node in matches
+            if (normalized := _normalize_szse_url(node.get("url"))) is not None
+        })
+        duplicate_doc_id_groups.append({
+            "doc_id": doc_id,
+            "record_count": len(matches),
+            "distinct_route_count": len(urls),
+            "route_urls": urls,
+            "html_json_identity_values": sorted({
+                str(node.get("html_json_identity") or "missing")
+                for node in matches
+            }),
+        })
+
+    duplicate_exact_route_groups: list[dict[str, Any]] = []
+    for route_url, matches in sorted(nodes_by_route.items()):
+        if len(matches) < 2:
+            continue
+        doc_ids = sorted({
+            doc_id
+            for node in matches
+            if (doc_id := _numeric_doc_id(node.get("doc_id"))) is not None
+        })
+        duplicate_exact_route_groups.append({
+            "route_url": route_url,
+            "record_count": len(matches),
+            "doc_ids": doc_ids,
+            "maps_to_multiple_doc_ids": len(doc_ids) > 1,
+        })
+
+    edge_source_ids: set[str] = set()
+    edge_target_ids: set[str] = set()
+    edge_endpoint_missing_indexes: list[int] = []
+    edge_non_object_count = 0
+    edge_keys: Counter[tuple[str, str, str]] = Counter()
+    edge_target_urls_by_key: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+
+    for index, edge in enumerate(edges_value, start=1):
+        if not isinstance(edge, dict):
+            edge_non_object_count += 1
+            continue
+        source_id = _numeric_doc_id(edge.get("source_id"))
+        target_id = _numeric_doc_id(edge.get("target_id"))
+        if source_id is None or target_id is None:
+            edge_endpoint_missing_indexes.append(index)
+            continue
+        relation = str(edge.get("relation") or "")
+        edge_source_ids.add(source_id)
+        edge_target_ids.add(target_id)
+        key = (source_id, relation, target_id)
+        edge_keys[key] += 1
+        target_url = _normalize_szse_url(edge.get("target_url"))
+        if target_url:
+            edge_target_urls_by_key[key].add(target_url)
+
+    all_endpoint_ids = edge_source_ids | edge_target_ids
+    node_ids = set(nodes_by_id)
+    source_ids_missing = sorted(edge_source_ids - node_ids)
+    target_ids_missing = sorted(edge_target_ids - node_ids)
+    ambiguous_source_ids = sorted(
+        doc_id for doc_id in edge_source_ids if len(nodes_by_id.get(doc_id, [])) > 1
+    )
+    ambiguous_target_ids = sorted(
+        doc_id for doc_id in edge_target_ids if len(nodes_by_id.get(doc_id, [])) > 1
+    )
+    duplicate_edge_groups = [
+        {
+            "source_id": source_id,
+            "relation": relation,
+            "target_id": target_id,
+            "record_count": count,
+            "target_urls": sorted(edge_target_urls_by_key[(source_id, relation, target_id)]),
+        }
+        for (source_id, relation, target_id), count in sorted(edge_keys.items())
+        if count > 1
+    ]
+
+    valid_id_record_count = sum(len(matches) for matches in nodes_by_id.values())
+    duplicate_doc_id_record_count = sum(
+        group["record_count"] for group in duplicate_doc_id_groups
+    )
+    unique_route_count = len(nodes_by_route)
+    node_record_count = len(nodes_value)
+    bounded_id_unique = (
+        node_record_count > 0
+        and non_object_node_count == 0
+        and not node_id_missing_indexes
+        and not node_id_invalid_indexes
+        and not duplicate_doc_id_groups
+    )
+    bounded_route_identity_ok = (
+        node_record_count > 0
+        and non_object_node_count == 0
+        and not node_route_invalid_indexes
+        and not node_route_id_mismatch
+        and html_json_not_match_count == 0
+    )
+    endpoint_count = len(all_endpoint_ids)
+    endpoint_present_count = len(all_endpoint_ids & node_ids)
+
+    return {
+        "node_identity": {
+            "node_record_count": node_record_count,
+            "non_object_node_record_count": non_object_node_count,
+            "valid_numeric_doc_id_record_count": valid_id_record_count,
+            "unique_doc_id_count": len(nodes_by_id),
+            "missing_doc_id_record_count": len(node_id_missing_indexes),
+            "invalid_doc_id_record_count": len(node_id_invalid_indexes),
+            "duplicate_doc_id_group_count": len(duplicate_doc_id_groups),
+            "records_in_duplicate_doc_id_groups": duplicate_doc_id_record_count,
+            "duplicate_doc_id_multiple_route_group_count": sum(
+                group["distinct_route_count"] > 1 for group in duplicate_doc_id_groups
+            ),
+            "valid_exact_route_record_count": sum(len(v) for v in nodes_by_route.values()),
+            "unique_exact_route_count": unique_route_count,
+            "invalid_or_missing_exact_route_record_count": len(node_route_invalid_indexes),
+            "route_doc_id_mismatch_record_count": len(node_route_id_mismatch),
+            "duplicate_exact_route_group_count": len(duplicate_exact_route_groups),
+            "exact_routes_mapping_to_multiple_doc_ids_count": sum(
+                group["maps_to_multiple_doc_ids"] for group in duplicate_exact_route_groups
+            ),
+            "html_json_identity_match_record_count": html_json_match_count,
+            "html_json_identity_not_match_or_missing_record_count": html_json_not_match_count,
+            "bounded_sample_doc_id_uniqueness": bounded_id_unique,
+            "bounded_sample_route_identity": bounded_route_identity_ok,
+            "duplicate_doc_id_groups": duplicate_doc_id_groups,
+            "duplicate_exact_route_groups": duplicate_exact_route_groups,
+            "route_doc_id_mismatches": node_route_id_mismatch,
+            "missing_doc_id_node_indexes": node_id_missing_indexes,
+            "invalid_doc_id_node_indexes": node_id_invalid_indexes,
+            "invalid_or_missing_route_node_indexes": node_route_invalid_indexes,
+        },
+        "edge_endpoint_coverage": {
+            "edge_record_count": len(edges_value),
+            "non_object_edge_record_count": edge_non_object_count,
+            "edge_records_with_missing_or_invalid_endpoint_id": len(edge_endpoint_missing_indexes),
+            "unique_source_id_count": len(edge_source_ids),
+            "unique_target_id_count": len(edge_target_ids),
+            "unique_edge_endpoint_id_count": endpoint_count,
+            "endpoint_ids_present_in_node_capture_count": endpoint_present_count,
+            "endpoint_id_coverage_within_capture": (
+                endpoint_present_count / endpoint_count if endpoint_count else None
+            ),
+            "source_ids_missing_from_node_capture": source_ids_missing,
+            "target_ids_missing_from_node_capture": target_ids_missing,
+            "source_ids_ambiguous_in_node_capture": ambiguous_source_ids,
+            "target_ids_ambiguous_in_node_capture": ambiguous_target_ids,
+            "unique_relation_edge_count": len(edge_keys),
+            "duplicate_relation_edge_group_count": len(duplicate_edge_groups),
+            "duplicate_relation_edge_groups": duplicate_edge_groups,
+            "observed_seed_id_count": len({
+                seed_id
+                for edge in edges_value if isinstance(edge, dict)
+                if (seed_id := _numeric_doc_id(edge.get("seed_id"))) is not None
+            }),
+        },
+        "archive_completeness_proven": False,
+        "global_doc_id_uniqueness_proven": False,
+        "scope_note": (
+            "All counts and uniqueness checks are limited to this supplied capture. "
+            "No independent expected archive total, authoritative date boundary, or "
+            "complete exchange-side inventory is available to prove historical archive completeness."
+        ),
+    }
+
+
 def audit_szse_route_aware_reciprocity(
     *, report_dir: Path,
     output_dir: Path,
@@ -644,6 +882,7 @@ def audit_szse_route_aware_reciprocity(
             })
 
         unique_edges = len({(r["source_id"], r["relation"], str(r["target_id"])) for r in records})
+        identity_coverage = _capture_identity_coverage(nodes_value, edges_value)
         passed = sum(r["reciprocity_status"] == "reciprocal_exact_route" for r in records)
         source_matches = sum(
             r["source_evidence_status"] == "source_edge_observation_match" for r in records
@@ -675,6 +914,7 @@ def audit_szse_route_aware_reciprocity(
                     else {}
                 ),
             },
+            "identity_coverage": identity_coverage,
             "capture_scope": {
                 "captured_node_count": len(nodes_value),
                 "captured_edge_record_count": len(records),
@@ -710,8 +950,11 @@ def audit_szse_route_aware_reciprocity(
                 "fallback is prohibited.",
                 "Supplemental routes require HTML/JSON identity, same-business-payload checks, "
                 "matching HTML navigation context, and successful GET receipts.",
-                "Historical archive completeness, global announcement-ID uniqueness, and complete "
-                "cross-period chain continuity are not established.",
+                "Historical archive completeness and global announcement-ID uniqueness are not established; "
+                "identity_coverage reports only bounded-capture diagnostics.",
+                "Node IDs, exact routes and edge endpoint coverage are not an independent exchange-side "
+                "inventory and cannot prove omitted announcements are absent.",
+                "Complete cross-period chain continuity is not established.",
                 "No network access or source-data mutation is performed by this audit.",
             ],
         }
@@ -760,6 +1003,7 @@ def main() -> None:
             {
                 "summary": report["summary"],
                 "capture_scope": report["capture_scope"],
+                "identity_coverage": report["identity_coverage"],
                 "output_files": report["output_files"],
             },
             ensure_ascii=False,
