@@ -135,8 +135,21 @@ def main():
         "code","issue_code","anomaly_code","category","kind"
     )}
 
+    AGGREGATE_CONTAINER_KEYS={key(x) for x in (
+        "audit_summary","hard_failures","hard_failure_issues","issue_type_counts",
+        "issue_counts","issues","all_issues","nodes","edges","summary"
+    )}
+
+    def is_aggregate_container(obj):
+        # Parent audit reports and summary containers may contain marker counts
+        # or descendant issue objects. Never treat them as an issue themselves.
+        return any(key(k) in AGGREGATE_CONTAINER_KEYS and isinstance(v,(dict,list))
+                   for k,v in obj.items())
+
     def direct_markers(obj):
-        """Recognize explicit issue records, not aggregate summaries."""
+        """Recognize explicit issue records, never aggregate containers."""
+        if is_aggregate_container(obj):
+            return set()
         found=set()
         for k,v in obj.items():
             nk=key(k)
@@ -200,19 +213,30 @@ def main():
         return value_from_pairs(list(direct_pairs(obj)),aliases)
 
     duplicate_groups={}
+    excluded_aggregate_containers=[]
     issue_groups=defaultdict(dict)
     unsafe=[]; resources_by_key={}; source_rule_conflicts=[]
     edges={}; issue_occurrence_counts=defaultdict(int); requests={}
 
     def issue_identity(marker, sid, tid, rel, reverse_id, duplicate_ids, urls, obj):
-        signature=(marker,sid or "",tid or "",rel or "",reverse_id or "",
-                   tuple(duplicate_ids),tuple(sorted(urls)))
-        if not any((sid,tid,rel,reverse_id,duplicate_ids,urls)):
+        # For relation findings, URL variants are evidence attached to the same
+        # relation, not a reason to create a second issue group. This collapses
+        # copies in diagnostic_report/issues/summary without losing URLs in
+        # the grouped record's separate evidence list.
+        if sid and tid:
+            signature=(marker,sid,tid,rel or "",reverse_id or "")
+            if marker=="duplicate_id_different_url":
+                signature+=(tuple(duplicate_ids),tuple(sorted(urls)))
+            return signature
+        signature=(marker,tuple(duplicate_ids),tuple(sorted(urls)))
+        if not duplicate_ids and not urls:
             raw_obj=json.dumps(obj,sort_keys=True,ensure_ascii=False,default=str)
             signature+=(hashlib.sha256(raw_obj.encode("utf-8")).hexdigest(),)
         return signature
 
     for file,loc,obj in rows:
+        if is_aggregate_container(obj):
+            excluded_aggregate_containers.append({"file":file,"location":loc})
         markers=direct_markers(obj)
 
         # Only explicitly marked issue objects are allowed recursive evidence
@@ -304,7 +328,7 @@ def main():
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
     source_rule_conflicts=dedupe(source_rule_conflicts,["source_id","target_id","raw_url"])
-    report={"version":"1.4.1","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.4.2","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":unique_issue_counts,"issue_type_occurrence_counts":dict(issue_occurrence_counts),
       "evidence_record_counts":{"duplicate_issue_records":len(duplicate_issue_records),
        "duplicate_issue_occurrences":issue_occurrence_counts.get("duplicate_id_different_url",0),
@@ -312,6 +336,7 @@ def main():
        "unsafe_issue_occurrences":issue_occurrence_counts.get("unsafe_neighbor_url",0),"unsafe_policy_failing_urls":len(unsafe),
        "source_rule_conflict_candidates":len(source_rule_conflicts),"unique_pdf_resource_links":len(resources)},
       "duplicate_id_evidence":duplicate,"duplicate_issue_records":duplicate_issue_records,
+      "excluded_aggregate_containers":excluded_aggregate_containers,
       "unsafe_url_evidence":unsafe,"unsafe_issue_records":unsafe_issue_records,
       "source_rule_conflict_candidates":source_rule_conflicts,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
@@ -350,6 +375,7 @@ def main():
     (outdir/"szse_anomaly_forensics.md").write_text("\n".join(md)+"\n",encoding="utf-8")
     print(json.dumps({"status":"ok","input_files":len(files),"output_dir":str(outdir),
        "duplicate_evidence_groups":len(duplicate),"duplicate_issue_records":len(duplicate_issue_records),
+       "excluded_aggregate_containers":len(excluded_aggregate_containers),
        "duplicate_issue_occurrences":issue_occurrence_counts.get("duplicate_id_different_url",0),
        "unsafe_url_evidence":len(unsafe),"unsafe_issue_records":len(unsafe_issue_records),
        "unsafe_issue_occurrences":issue_occurrence_counts.get("unsafe_neighbor_url",0),
