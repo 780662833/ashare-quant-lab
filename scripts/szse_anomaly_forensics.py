@@ -130,32 +130,47 @@ def main():
                 else:
                     yield from scalar_pairs(v,parent_key)
 
+    MARKER_VALUE_KEYS={key(x) for x in (
+        "type","issue_type","anomaly_type","failure_type","rule","rule_id",
+        "code","issue_code","anomaly_code"
+    )}
+
     def direct_markers(obj):
+        """Recognize explicit issue records, not aggregate summaries."""
         found=set()
         for k,v in obj.items():
             nk=key(k)
-            candidates=[str(v)] if isinstance(v,(str,int,float)) else []
+            candidates=[v] if isinstance(v,(str,int,float)) else []
             if isinstance(v,list):
-                candidates += [str(x) for x in v if isinstance(x,(str,int,float))]
+                candidates.extend(x for x in v if isinstance(x,(str,int,float)))
             for marker in MARKERS:
-                if marker in nk or any(marker in x.lower() for x in candidates):
+                mk=key(marker)
+                # Marker in a field name must be an exact key, not a summary
+                # key such as unsafe_neighbor_url_count or issue_type_counts.
+                if nk==mk and v not in (None,"",False,0):
+                    found.add(marker)
+                # Marker values are accepted only from explicit type/code keys
+                # and only on exact normalized equality.
+                elif nk in MARKER_VALUE_KEYS and any(
+                    isinstance(x,(str,int,float)) and key(x)==mk for x in candidates
+                ):
                     found.add(marker)
         return found
 
-    def extract_urls(pairs):
+    def extract_urls(pairs, allow_all_text=False):
         found=[]
         url_aliases={key(x) for x in URL_KEYS_EXT}
         text_aliases={key(x) for x in URL_TEXT_KEYS}
         for k,v in pairs:
             if not isinstance(v,str): continue
             nk=key(k)
-            # Do not scrape arbitrary strings from an anomaly subtree. Only
-            # explicit URL fields, plus clearly textual diagnostic fields,
-            # may contribute URL candidates.
-            if nk not in url_aliases and nk not in text_aliases:
+            # On an explicitly identified issue record, scan its own scalar
+            # values for URLs. On ordinary records, stay with URL-like fields.
+            if not allow_all_text and nk not in url_aliases and nk not in text_aliases:
                 continue
             vals=URL_RE.findall(v)
-            if not vals and nk in url_aliases:
+            field_looks_like_url=("url" in nk or "href" in nk or "link" in nk)
+            if not vals and (nk in url_aliases or field_looks_like_url):
                 candidate=v.strip()
                 if candidate.startswith(("/", "./", "../", "//")) or re.search(r"\.(?:pdf|html?)$",candidate,re.I):
                     vals=[candidate]
@@ -181,24 +196,51 @@ def main():
         return value_from_pairs(list(direct_pairs(obj)),aliases)
 
     duplicate_groups={}
-    unsafe=[]; resources_by_key={}; source_rule_conflicts=[]; unsafe_issue_records=[]
-    duplicate_issue_records=[]; edges={}; issue_counts=defaultdict(int); requests={}
+    issue_groups=defaultdict(dict)
+    unsafe=[]; resources_by_key={}; source_rule_conflicts=[]
+    edges={}; issue_occurrence_counts=defaultdict(int); requests={}
+
+    def issue_identity(marker, sid, tid, rel, reverse_id, duplicate_ids, urls, obj):
+        signature=(marker,sid or "",tid or "",rel or "",reverse_id or "",
+                   tuple(duplicate_ids),tuple(sorted(urls)))
+        if not any((sid,tid,rel,reverse_id,duplicate_ids,urls)):
+            raw_obj=json.dumps(obj,sort_keys=True,ensure_ascii=False,default=str)
+            signature+=(hashlib.sha256(raw_obj.encode("utf-8")).hexdigest(),)
+        return signature
+
     for file,loc,obj in rows:
         markers=direct_markers(obj)
-        for marker in markers: issue_counts[marker]+=1
-        if "unsafe_neighbor_url" in markers:
-            unsafe_issue_records.append({"file":file,"location":loc})
-        if "duplicate_id_different_url" in markers:
-            duplicate_issue_records.append({"file":file,"location":loc})
 
-        # Explicitly marked issue records may store evidence in nested children.
-        # Unmarked objects are never recursively joined across their descendants.
+        # Only explicitly marked issue objects are allowed recursive evidence
+        # extraction. Summary/root containers no longer inherit issue markers.
         evidence_pairs=list(scalar_pairs(obj)) if markers else list(direct_pairs(obj))
         ids=extract_ids(evidence_pairs)
-        urls=extract_urls(evidence_pairs)
+        urls=extract_urls(evidence_pairs,allow_all_text=bool(markers))
+        sid=direct_value(obj,{"source_id","sourceid","from_id","fromid"})
+        tid=direct_value(obj,{"target_id","targetid","to_id","toid"})
+        rel=direct_value(obj,{"relation","relation_type","edge_type"})
+        reverse_id=direct_value(obj,{"reverse_id_returned","reverseidreturned","reverse_id","reverseid"})
+        if markers:
+            sid=sid or value_from_pairs(evidence_pairs,{"source_id","sourceid","from_id","fromid"})
+            tid=tid or value_from_pairs(evidence_pairs,{"target_id","targetid","to_id","toid"})
+            rel=rel or value_from_pairs(evidence_pairs,{"relation","relation_type","edge_type"})
+            reverse_id=reverse_id or value_from_pairs(evidence_pairs,{"reverse_id_returned","reverseidreturned","reverse_id","reverseid"})
+
+        duplicate_ids=extract_ids(evidence_pairs,DUPLICATE_ID_KEYS) if "duplicate_id_different_url" in markers else []
+        for marker in markers:
+            issue_occurrence_counts[marker]+=1
+            sig=issue_identity(marker,sid,tid,rel,reverse_id,duplicate_ids,urls,obj)
+            group=issue_groups[marker].setdefault(sig,{
+                "issue_type":marker,"source_id":sid,"target_id":tid,"relation":rel,
+                "reverse_id_returned":reverse_id,"ids":duplicate_ids,"urls":sorted(urls),
+                "source_locations":[],"occurrence_count":0
+            })
+            location={"file":file,"location":loc}
+            if location not in group["source_locations"]:
+                group["source_locations"].append(location)
+            group["occurrence_count"]+=1
 
         if "duplicate_id_different_url" in markers:
-            duplicate_ids=extract_ids(evidence_pairs,DUPLICATE_ID_KEYS)
             for doc_id in duplicate_ids:
                 group=duplicate_groups.setdefault(doc_id,{"id":doc_id,"urls":set(),
                     "source_locations":[],"evidence_record_count":0})
@@ -206,12 +248,6 @@ def main():
                 group["source_locations"].append({"file":file,"location":loc})
                 group["evidence_record_count"]+=1
 
-        sid=direct_value(obj,{"source_id","sourceid","from_id","fromid"})
-        tid=direct_value(obj,{"target_id","targetid","to_id","toid"})
-        if "unsafe_neighbor_url" in markers:
-            sid=sid or value_from_pairs(evidence_pairs,{"source_id","sourceid","from_id","fromid"})
-            tid=tid or value_from_pairs(evidence_pairs,{"target_id","targetid","to_id","toid"})
-        rel=direct_value(obj,{"relation","relation_type","edge_type"})
         for raw in urls:
             info=url_info(raw)
             item={"file":file,"location":loc,"source_id":sid,"target_id":tid,**info}
@@ -229,14 +265,12 @@ def main():
                 item["classification"]="unsafe_or_untrusted_url"
                 unsafe.append(item)
             elif marked_unsafe and info["safe_https_szse"]:
-                # The source audit called this unsafe, but URL policy says the
-                # URL itself is trusted. Preserve the discrepancy for review.
                 item["classification"]="source_rule_conflict_candidate"
                 item["interpretation"]="Source marked unsafe_neighbor_url, but URL passes HTTPS/SZSE host policy"
                 source_rule_conflicts.append(item)
 
-        # Relations are counted from the current object only. Never inherit
-        # source/target/relation values from a parent or child object.
+        # Relations are counted only from the current edge object; fields are
+        # never inherited from unrelated parent/child objects.
         if sid and tid and rel:
             edges[(sid,rel,tid)]={"source_id":sid,"relation":rel,"target_id":tid,"record":obj}
 
@@ -246,9 +280,17 @@ def main():
 
     duplicate=[{"id":g["id"],"urls":sorted(g["urls"]),
                 "source_locations":g["source_locations"],
-                "evidence_record_count":g["evidence_record_count"]}
+                "evidence_record_count":g["evidence_record_count"],
+                "url_evidence_status":"complete" if len(g["urls"])>=2 else "missing_or_incomplete"}
                for _,g in sorted(duplicate_groups.items())]
     resources=list(resources_by_key.values())
+
+    def groups_for(marker):
+        return list(issue_groups.get(marker,{}).values())
+
+    duplicate_issue_records=groups_for("duplicate_id_different_url")
+    unsafe_issue_records=groups_for("unsafe_neighbor_url")
+    unique_issue_counts={marker:len(groups) for marker,groups in issue_groups.items()}
     def dedupe(items, fields):
         seen={}
         for item in items:
@@ -257,10 +299,13 @@ def main():
             else: seen[ident]["duplicate_occurrences"]=seen[ident].get("duplicate_occurrences",1)+1
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
-    report={"version":"1.3.0","source_dir":str(root),"network_requests_made":0,
-      "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
+    source_rule_conflicts=dedupe(source_rule_conflicts,["source_id","target_id","raw_url"])
+    report={"version":"1.4.0","source_dir":str(root),"network_requests_made":0,
+      "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":unique_issue_counts,"issue_type_occurrence_counts":dict(issue_occurrence_counts),
       "evidence_record_counts":{"duplicate_issue_records":len(duplicate_issue_records),
-       "unsafe_issue_records":len(unsafe_issue_records),"unsafe_policy_failing_urls":len(unsafe),
+       "duplicate_issue_occurrences":issue_occurrence_counts.get("duplicate_id_different_url",0),
+       "unsafe_issue_records":len(unsafe_issue_records),
+       "unsafe_issue_occurrences":issue_occurrence_counts.get("unsafe_neighbor_url",0),"unsafe_policy_failing_urls":len(unsafe),
        "source_rule_conflict_candidates":len(source_rule_conflicts),"unique_pdf_resource_links":len(resources)},
       "duplicate_id_evidence":duplicate,"duplicate_issue_records":duplicate_issue_records,
       "unsafe_url_evidence":unsafe,"unsafe_issue_records":unsafe_issue_records,
@@ -292,7 +337,7 @@ def main():
     outdir.mkdir(parents=True,exist_ok=True)
     (outdir/"szse_anomaly_forensics.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     md=["# SZSE anomaly forensics","",f"- Input files: {len(files)}",f"- Network requests: {report['network_requests_made']}",
-        f"- Unique duplicate-ID groups: {len(duplicate)}",f"- Duplicate issue records: {len(duplicate_issue_records)}",f"- Unsafe URL records (policy-failing): {len(unsafe)}",f"- Source unsafe markers: {len(unsafe_issue_records)}",f"- Source-rule conflict candidates: {len(source_rule_conflicts)}",f"- Linked resource records: {len(resources)}",
+        f"- Unique duplicate-ID groups: {len(duplicate)}",f"- Duplicate issue groups: {len(duplicate_issue_records)}",f"- Duplicate issue report occurrences: {issue_occurrence_counts.get('duplicate_id_different_url',0)}",f"- Unsafe URL records (policy-failing): {len(unsafe)}",f"- Unique source unsafe issue groups: {len(unsafe_issue_records)}",f"- Unsafe issue report occurrences: {issue_occurrence_counts.get('unsafe_neighbor_url',0)}",f"- Source-rule conflict candidates: {len(source_rule_conflicts)}",f"- Linked resource records: {len(resources)}",
         f"- Unique relation edges: {len(edges)}","","## Annual market overview PDF resources",
         "- P020201231733275849449.pdf: 2020 年深圳证券市场概况",
         "- P020251231674893217325.pdf: 2025 年深圳证券市场概况",
@@ -301,7 +346,9 @@ def main():
     (outdir/"szse_anomaly_forensics.md").write_text("\n".join(md)+"\n",encoding="utf-8")
     print(json.dumps({"status":"ok","input_files":len(files),"output_dir":str(outdir),
        "duplicate_evidence_groups":len(duplicate),"duplicate_issue_records":len(duplicate_issue_records),
+       "duplicate_issue_occurrences":issue_occurrence_counts.get("duplicate_id_different_url",0),
        "unsafe_url_evidence":len(unsafe),"unsafe_issue_records":len(unsafe_issue_records),
+       "unsafe_issue_occurrences":issue_occurrence_counts.get("unsafe_neighbor_url",0),
        "source_rule_conflict_candidates":len(source_rule_conflicts),"linked_resource_evidence":len(resources),
        "network_requests_made":report["network_requests_made"]},ensure_ascii=False,indent=2))
 if __name__=="__main__": main()
