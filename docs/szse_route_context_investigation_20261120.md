@@ -169,7 +169,11 @@ This resolves only the three route-specific reciprocity checks and the identity/
 
 ## Related anomaly kept separate
 
-The 618392 capture has a URL path date segment 2026-01-10, while its JSON publication time and visible announcement date are 2020-12-31. The relationship between 584083 and 618392 is reciprocal in the existing captured route data. Keep the URL-date discrepancy as a separate unresolved URL/date anomaly; do not convert it into a reciprocity failure.
+The 618392 capture has a URL path date segment 2026-01-10, while its JSON publication time, visible HTML date and signed announcement body all say 2020-12-31. The 618392 identity and neighbor context are valid and its publication date is independently corroborated by SZSE's current 业务通知 listing and contemporaneous reporting.
+
+A full comparison of all 66 nodes found two URL-path/publication-date differences: 584158 (path date 2021-01-08, publication date 2021-01-07) and 618392 (path date 2026-01-10, publication date 2020-12-31). For both, HTML and JSON publication dates agree. The route suffix therefore must not be used as a publication-date field. The publication date for 618392 is corroborated; the reason its URL path uses 2026-01-10 remains unresolved. See docs/szse_url_path_date_investigation_20261120.md.
+
+Keep these as locator-date discrepancies, not reciprocity failures and not confirmed publication-date errors. Do not rewrite the official URL or infer that 2026-01-10 is the event date.
 
 ## Scope
 
