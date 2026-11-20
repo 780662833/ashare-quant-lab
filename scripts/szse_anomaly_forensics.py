@@ -95,14 +95,24 @@ def main():
     for p,data in loaded:
         for loc,obj in walk(data): rows.append((str(p.relative_to(root)),loc,obj))
 
-    # The source audit has used several report schemas over time. Inspect
-    # nested scalar fields and issue labels instead of relying on one exact
-    # key spelling or a single top-level "type" field.
+    # Only explicit anomaly records are authoritative for anomaly counts.
+    # Generic recursive ID/URL co-occurrence caused parent/child contamination
+    # (e.g. a summary node inheriting URLs from every nested child).
     ISSUE_KEYS={"type","issuetype","anomalytype","failuretype","code","rule","ruleid","category","kind"}
-    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl","urls","neighborurls","unsafeurls","linkedurls"}
+    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl","neighborurl","previousurl","nexturl","preurl","posturl"}
     ID_KEYS_EXT=ID_KEYS | {"sourceid","targetid","nodeid","fromid","toid","ids","duplicateids","announcementids"}
     MARKERS=("duplicate_id_different_url","unsafe_neighbor_url",
              "edge_channel_mismatch","reciprocity_failure","invalid_seed_url")
+    URL_RE=re.compile(r'''https?://[^\\s"'<>]+|(?<![\\w])//[^\\s"'<>]+''',re.I)
+
+    def direct_pairs(obj):
+        for k,v in obj.items():
+            if isinstance(v,(str,int,float)) or v is None:
+                yield str(k),v
+            elif isinstance(v,list):
+                for item in v:
+                    if isinstance(item,(str,int,float)) and item is not None:
+                        yield str(k),item
 
     def scalar_pairs(value, parent_key=""):
         if isinstance(value,dict):
@@ -130,84 +140,97 @@ def main():
                     found.add(marker)
         return found
 
-    URL_RE=re.compile(r'''https?://[^\s"'<>]+|(?<![\w])//[^\s"'<>]+''',re.I)
-    def url_candidates(obj):
+    def extract_urls(pairs):
         found=[]
-        for k,v in scalar_pairs(obj):
+        for k,v in pairs:
             if not isinstance(v,str): continue
             nk=key(k)
             vals=URL_RE.findall(v)
-            if not vals and (nk in URL_KEYS_EXT or re.search(r"P0\d{20,}\.pdf",v,re.I)):
-                if v.strip().startswith(("/", "./", "../")) or re.search(r"\.(?:pdf|html?)$",v.strip(),re.I):
-                    vals=[v.strip()]
+            if not vals and nk in {key(x) for x in URL_KEYS_EXT}:
+                candidate=v.strip()
+                if candidate.startswith(("/", "./", "../", "//")) or re.search(r"\\.(?:pdf|html?)$",candidate,re.I):
+                    vals=[candidate]
             for raw in vals:
                 raw=raw.rstrip(").,;]")
-                if raw not in found: found.append(raw)
+                if raw and raw not in found: found.append(raw)
         return found
 
-    def get_values(obj, aliases):
-        wanted={key(x) for x in aliases}
-        return [str(v) for k,v in scalar_pairs(obj)
-                if key(k) in wanted and v not in (None,"")]
+    def extract_ids(pairs):
+        aliases={key(x) for x in ID_KEYS_EXT}
+        return sorted({str(v) for k,v in pairs
+                       if key(k) in aliases and v not in (None,"")
+                       and re.fullmatch(r"\\d+",str(v))})
 
-    duplicate=[]; unsafe=[]; resources=[]; edges={}; issue_counts=defaultdict(int); requests={}
+    def direct_value(obj, aliases):
+        wanted={key(x) for x in aliases}
+        for k,v in direct_pairs(obj):
+            if key(k) in wanted and v not in (None,""):
+                return str(v)
+        return None
+
+    duplicate_groups={}
+    unsafe=[]; resources_by_key={}; edges={}; issue_counts=defaultdict(int); requests={}
     for file,loc,obj in rows:
         markers=direct_markers(obj)
         for marker in markers: issue_counts[marker]+=1
-        ids=[v for v in get_values(obj,ID_KEYS_EXT) if re.fullmatch(r"\d+",v)]
-        urls=url_candidates(obj)
-        sid=next(iter(get_values(obj,{"source_id"})),None)
-        tid=next(iter(get_values(obj,{"target_id"})),None)
 
-        # Keep one evidence item per ID/URL group, even when the same finding
-        # is repeated in summary and hard-failure sections.
-        if "duplicate_id_different_url" in markers or (len(set(ids))==1 and len(set(urls))>1):
-            signature=(tuple(sorted(set(ids))),tuple(sorted(set(urls))))
-            duplicate.append({"file":file,"location":loc,"ids":list(signature[0]),
-                              "urls":list(signature[1]),"issue_type":"duplicate_id_different_url",
-                              "record":obj})
+        # Explicitly marked issue records may store evidence in nested children.
+        # Unmarked objects are never recursively joined across their descendants.
+        evidence_pairs=list(scalar_pairs(obj)) if markers else list(direct_pairs(obj))
+        ids=extract_ids(evidence_pairs)
+        urls=extract_urls(evidence_pairs)
 
+        if "duplicate_id_different_url" in markers:
+            for doc_id in ids:
+                group=duplicate_groups.setdefault(doc_id,{"id":doc_id,"urls":set(),
+                    "source_locations":[],"evidence_record_count":0})
+                group["urls"].update(urls)
+                group["source_locations"].append({"file":file,"location":loc})
+                group["evidence_record_count"]+=1
+
+        sid=direct_value(obj,{"source_id","sourceid","from_id","fromid"})
+        tid=direct_value(obj,{"target_id","targetid","to_id","toid"})
+        rel=direct_value(obj,{"relation","relation_type","edge_type"})
         for raw in urls:
             info=url_info(raw)
             item={"file":file,"location":loc,"source_id":sid,"target_id":tid,**info}
-            if info["resource_kind"]=="pdf_resource":
-                if info["host_trusted"]:
-                    item["classification"]="szse_hosted_pdf_resource"
-                    item["source_issue_marker"]="unsafe_neighbor_url" if "unsafe_neighbor_url" in markers else None
-                    item["interpretation"]="Linked document resource; not an HTML announcement node"
-                    resources.append(item)
-                elif "unsafe_neighbor_url" in markers or (sid and tid):
-                    item["classification"]="unsafe_external_or_untrusted_resource"
-                    unsafe.append(item)
-            elif (not info["safe_https_szse"] and
-                  ("unsafe_neighbor_url" in markers or (sid and tid))):
+            marked_unsafe="unsafe_neighbor_url" in markers
+            if info["resource_kind"]=="pdf_resource" and info["host_trusted"] and (marked_unsafe or (sid and tid)):
+                item.update(classification="szse_hosted_pdf_resource",
+                            interpretation="Linked PDF resource; not an HTML announcement node")
+                resource_key=(sid,tid,info["resolved_url"] or raw)
+                existing=resources_by_key.get(resource_key)
+                if existing is None:
+                    resources_by_key[resource_key]=item
+                else:
+                    existing.setdefault("source_locations",[]).append({"file":file,"location":loc})
+            elif marked_unsafe:
                 item["classification"]="unsafe_or_untrusted_url"
                 unsafe.append(item)
-            elif ("unsafe_neighbor_url" in markers and
-                  info["resource_kind"]!="html_page"):
-                item["classification"]="non_html_linked_resource"
-                resources.append(item)
 
-        rel=next(iter(get_values(obj,{"relation"})),None)
+        # Relations are counted from the current object only. Never inherit
+        # source/target/relation values from a parent or child object.
         if sid and tid and rel:
-            edges[(str(sid),str(rel),str(tid))]={"source_id":sid,"relation":rel,"target_id":tid,"record":obj}
+            edges[(sid,rel,tid)]={"source_id":sid,"relation":rel,"target_id":tid,"record":obj}
 
-        method=next(iter(get_values(obj,METHOD_KEYS)),None)
-        rawurl=next((u for u in urls if u.startswith(("http://","https://"))),None)
+        method=direct_value(obj,METHOD_KEYS)
+        rawurl=next((u for u in extract_urls(list(direct_pairs(obj))) if u.startswith(("http://","https://"))),None)
         if rawurl: requests[rawurl]=str(method or "GET").upper()
 
-    def dedupe(items, signature_fn):
+    duplicate=[{"id":g["id"],"urls":sorted(g["urls"]),
+                "source_locations":g["source_locations"],
+                "evidence_record_count":g["evidence_record_count"]}
+               for _,g in sorted(duplicate_groups.items())]
+    resources=list(resources_by_key.values())
+    def dedupe(items, fields):
         seen={}
         for item in items:
-            sig=signature_fn(item)
-            if sig not in seen: seen[sig]=item
-            else: seen[sig]["duplicate_occurrences"]=seen[sig].get("duplicate_occurrences",1)+1
+            ident=tuple(json.dumps(item.get(k),sort_keys=True,ensure_ascii=False) if k=="record" else str(item.get(k)) for k in fields)
+            if ident not in seen: seen[ident]=item
+            else: seen[ident]["duplicate_occurrences"]=seen[ident].get("duplicate_occurrences",1)+1
         return list(seen.values())
-
-    duplicate=dedupe(duplicate,lambda x:(tuple(x["ids"]),tuple(x["urls"])))
-    unsafe=dedupe(unsafe,lambda x:(x.get("source_id"),x.get("target_id"),x.get("raw_url")))
-    resources=dedupe(resources,lambda x:(x.get("source_id"),x.get("target_id"),x.get("raw_url")))
-    report={"version":"1.1.0","source_dir":str(root),"network_requests_made":0,
+    unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
+    report={"version":"1.2.0","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
       "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
