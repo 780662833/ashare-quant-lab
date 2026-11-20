@@ -120,7 +120,8 @@ The node-identity summary reports:
   ID uses (this is evidence for review, not an automatic alias classification);
 - duplicate exact announcement routes and routes associated with multiple IDs;
 - missing/invalid detail routes, URL-path document-ID mismatches, and the
-  captured HTML/JSON identity status.
+  captured HTML article ID and JSON doc ID agreement with the node ID, as well
+  as the precomputed HTML/JSON identity flag.
 
 The edge-endpoint summary reports the unique source/target ID sets, IDs absent
 from the captured node set, IDs represented by multiple node records, duplicate
@@ -135,7 +136,8 @@ Two booleans are intentionally scoped to the bounded sample:
   numeric IDs and no duplicate ID appears in this input.
 - `bounded_sample_route_identity`: all supplied node records have a valid
   supported detail route, the route ID agrees with the node ID, and the
-  precomputed HTML/JSON identity flag is `match`.
+  HTML article ID and JSON doc ID both equal the node ID, and the precomputed
+  HTML/JSON identity flag is `match`.
 
 The report unconditionally keeps
 `archive_completeness_proven=false` and
