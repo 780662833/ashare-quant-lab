@@ -344,6 +344,7 @@ def _capture_identity_coverage(
     node_route_id_mismatch: list[dict[str, Any]] = []
     html_json_match_count = 0
     html_json_not_match_count = 0
+    html_json_identity_issue_indexes: list[int] = []
     non_object_node_count = 0
 
     for index, node in enumerate(nodes_value, start=1):
@@ -376,10 +377,19 @@ def _capture_identity_coverage(
                 "route_url": normalized_url,
             })
 
-        if node.get("html_json_identity") == "match":
+        html_article_id = _numeric_doc_id(node.get("html_article_id"))
+        json_doc_id = _numeric_doc_id(node.get("json_doc_id"))
+        html_json_identity_ok = (
+            doc_id is not None
+            and node.get("html_json_identity") == "match"
+            and html_article_id == doc_id
+            and json_doc_id == doc_id
+        )
+        if html_json_identity_ok:
             html_json_match_count += 1
         else:
             html_json_not_match_count += 1
+            html_json_identity_issue_indexes.append(index)
 
     duplicate_doc_id_groups: list[dict[str, Any]] = []
     for doc_id, matches in sorted(nodes_by_id.items()):
@@ -520,6 +530,7 @@ def _capture_identity_coverage(
             "missing_doc_id_node_indexes": node_id_missing_indexes,
             "invalid_doc_id_node_indexes": node_id_invalid_indexes,
             "invalid_or_missing_route_node_indexes": node_route_invalid_indexes,
+            "html_json_identity_issue_node_indexes": html_json_identity_issue_indexes,
         },
         "edge_endpoint_coverage": {
             "edge_record_count": len(edges_value),
