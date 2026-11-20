@@ -165,6 +165,13 @@ type, source ID, target ID, relation, and returned reverse ID. URL evidence is
 retained on the grouped record but does not split one relation issue into
 multiple groups solely because report copies serialize URL fields differently.
 
+### v1.4.3 evidence union
+
+When repeated report copies collapse into one semantic issue group, the grouped
+record now carries the union of URLs and IDs observed across those copies,
+along with distinct source locations and an occurrence count. De-duplication
+therefore no longer discards URL evidence from later copies.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
