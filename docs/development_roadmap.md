@@ -1017,3 +1017,26 @@ The 77-edge bounded reciprocity result remains unchanged. No v6 forensic
 counter, source capture, production dataset, PIT, training or backtest gate is
 modified or promoted.
 
+### Phase 9.41 — quantify identity and endpoint coverage inside the bounded SZSE capture
+
+Extended the offline exact-route reciprocity report with an `identity_coverage`
+section. It counts missing/malformed/duplicate node IDs, duplicate ID groups
+and their distinct routes, duplicate exact routes, node URL-to-ID mismatches,
+and missing or failed HTML/JSON identity flags. It also reports source/target
+edge endpoint IDs missing from or ambiguous in the node set, duplicate
+relation-edge groups, and endpoint-ID presence within the supplied capture.
+
+The report distinguishes bounded-sample checks from global claims:
+`bounded_sample_doc_id_uniqueness` and
+`bounded_sample_route_identity` describe only the input nodes. The report
+always leaves `archive_completeness_proven=false` and
+`global_doc_id_uniqueness_proven=false`; no external expected inventory or
+complete exchange-side archive has been reconciled. A high endpoint-presence
+ratio is not proof of historical graph completeness.
+
+The audit remains offline and makes zero network requests. Synthetic tests
+cover a clean bounded fixture and deliberate duplicate/missing/invalid ID and
+edge-endpoint cases. This phase does not alter the 77-edge reciprocity outcome,
+v6 forensic counters, source captures, or any production/PIT/training/backtest
+gate.
+

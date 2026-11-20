@@ -107,6 +107,62 @@ The separate `618392` URL-path date versus publication-date anomaly remains
 outside this reciprocity result and must retain its own classification. The
 v6 forensic counter is not changed by this audit.
 
+## Bounded node-identity and edge-endpoint coverage diagnostics
+
+The offline audit also emits an `identity_coverage` section. It describes only
+the supplied `nodes.json` and `edges.json`; it does not discover or infer
+records outside the input capture.
+
+The node-identity summary reports:
+
+- missing, malformed and duplicate numeric document IDs;
+- duplicate document-ID groups, including how many distinct exact routes each
+  ID uses (this is evidence for review, not an automatic alias classification);
+- duplicate exact announcement routes and routes associated with multiple IDs;
+- missing/invalid detail routes, URL-path document-ID mismatches, and the
+  captured HTML article ID and JSON doc ID agreement with the node ID, as well
+  as the precomputed HTML/JSON identity flag.
+
+The edge-endpoint summary reports the unique source/target ID sets, IDs absent
+from the captured node set, IDs represented by multiple node records, duplicate
+(source ID, relation, target ID) edge groups, and the fraction of distinct
+edge endpoint IDs present in the node capture. This is ID-set presence only;
+the reciprocity audit continues to require the exact target URL and
+route-specific reverse ID + URL checks.
+
+Two booleans are intentionally scoped to the bounded sample:
+
+- `bounded_sample_doc_id_uniqueness`: all supplied node records have valid
+  numeric IDs and no duplicate ID appears in this input.
+- `bounded_sample_route_identity`: all supplied node records have a valid
+  supported detail route, the route ID agrees with the node ID, and the
+  HTML article ID and JSON doc ID both equal the node ID, and the precomputed
+  HTML/JSON identity flag is `match`.
+
+The report unconditionally keeps
+`archive_completeness_proven=false` and
+`global_doc_id_uniqueness_proven=false`. Even a clean bounded-sample result
+does not establish global ID uniqueness: an independent expected archive
+inventory, historical boundary and reconciliation against the exchange's
+complete record set are still required. Likewise, endpoint presence among 66
+captured nodes cannot prove that the 66 nodes are all historical announcements
+or that no chain segments were omitted.
+
+Run the updated audit against the original local capture and supplemental
+route-context evidence:
+
+```powershell
+python scripts\audit_szse_route_aware_reciprocity.py `
+  --report-dir reports\szse_year_boundary_audit.zip `
+  --route-context-report reports\source_probes\szse_route_context\route_context_report.json `
+  --output-dir reports\source_probes\szse_route_aware_reciprocity_coverage
+```
+
+This remains an offline operation with zero HTTP requests. Review the JSON
+`identity_coverage.node_identity` and
+`identity_coverage.edge_endpoint_coverage` objects before classifying any
+duplicate or missing-endpoint finding.
+
 ## Acceptance boundary
 
 The output always sets:
