@@ -382,7 +382,7 @@ def capture_szse_route_context(
         else:
             result["neighbor_skipped_reason"] = "HTML/JSON identity or HTML navigation channel unavailable"
 
-        channel_match = result.get("neighbor_context", {}).get("channel_context_match")
+        channel_match = (result.get("neighbor_context") or {}).get("channel_context_match")
         result["reverse_checks"] = _reverse_checks(doc_id, neighbor_data, channel_match)
         report["route_results"].append(result)
 
