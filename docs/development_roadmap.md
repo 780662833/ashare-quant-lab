@@ -902,13 +902,18 @@ longer be carried as unresolved_route_context. No reverse edges were
 inferred. Detailed response hashes and report fields are recorded in
 docs/szse_route_context_investigation_20261120.md and the committed report at reports/source_probes/szse_route_context/route_context_report.json.
 
-The 2026-01-10 URL date in the 618392 path versus its 2020-12-31 publication
-date remains a separate unresolved URL/date issue. The bounded operator report
-still explicitly returns full_graph_acceptance=false; archive completeness,
-global ID uniqueness, graph-wide reciprocity, chronology, URL/attachment
-classification and historical chain continuity remain unqualified. The
-capture also leaves production, PIT, training and backtest admission false.
-No production source or research-data gate is promoted.
+The 618392 publication date is supported as 2020-12-31 by the captured JSON,
+HTML visible date and signed body, the neighbor chronology, SZSE's current
+business-notification listing and contemporaneous reporting. Its URL path still
+contains 2026-01-10; the path-date root cause remains unresolved. A broader
+66-node comparison also found a one-day path/publication-date difference for
+584158, demonstrating that the tYYYYMMDD URL suffix is not a reliable
+publication-date field. See docs/szse_url_path_date_investigation_20261120.md.
+The bounded operator report still explicitly returns full_graph_acceptance=false;
+archive completeness, global ID uniqueness, URL/attachment classification and
+historical chain continuity remain unqualified. The capture also leaves
+production, PIT, training and backtest admission false. No production source or
+research-data gate is promoted.
 
 ### Phase 9.39 — route-aware reciprocity audit for the bounded SZSE edge set
 
@@ -937,13 +942,14 @@ the complete original request manifest as GET-only, HTTP 200, error-free and
 unchanged-request/final-URL before accepting source evidence.
 
 The bounded 2026-11-20 sample contains 66 nodes, 77 edge records and 198
-original GET requests. The offline integration run resolved 74 target route
-contexts from the original archive and 3 from the supplemental exact-route
-capture. All 77 source edge observations matched the source neighbor
-responses, all 77 target exact-route contexts were available, and all 77
-reverse IDs and URLs matched. The bounded edge-set reciprocity result is PASS
-for these 77 records. Six focused unit tests passed in the implementation
-environment; the PR CI remains the independent repository check.
+original GET requests. The offline integration run resolved 74 target edge
+contexts from the original archive and 3 additional edge contexts using 2
+unique supplemental exact-route captures (584083 and 584085). All 77 source
+edge observations matched the source neighbor responses, all 77 target
+exact-route contexts were available, and all 77 reverse IDs and URLs matched.
+The bounded edge-set reciprocity result is PASS for these 77 records. Six
+focused unit tests passed in the implementation environment; PR and main CI
+also passed.
 
 This does not establish completeness of the historical SZSE announcement
 archive, global ID uniqueness outside the sample, full cross-period chain
@@ -953,3 +959,33 @@ Full graph, production, PIT, training and backtest admission remain false.
 
 See `docs/szse_route_aware_reciprocity.md` for the run command and acceptance
 boundaries.
+
+### Phase 9.40 — separate SZSE URL path date from publication date
+
+A complete date-field comparison across the 66 nodes in the supplied
+year-boundary archive found 64 exact path/publication-date matches and 2
+differences. In both differing cases, the HTML visible date agrees with the
+JSON pubTime after Asia/Shanghai conversion:
+
+- 584158: URL path date 2021-01-08; JSON/HTML/body publication date 2021-01-07
+  (+1 day).
+- 618392: URL path date 2026-01-10; JSON/HTML/body publication date 2020-12-31
+  (+1836 days).
+
+For 618392, the publication date is independently corroborated by the SZSE
+business-notification listing and contemporaneous reporting. Its HTML/JSON
+identity, channel 212 and neighbor chronology are coherent. The URL path date
+remains unexplained; a later CMS insertion/migration/route-maintenance date is
+only a hypothesis, not a verified cause. Do not classify this as a confirmed
+publication-date source error or as a reciprocity failure.
+
+Data-quality treatment: persist url_path_date separately from JSON pubTime,
+HTML visible date, body signed date and capture time. Never fall back from a
+missing publication date to the URL path suffix. The original archive SHA-256,
+two mismatches, evidence and remaining bounded route-variant checks are
+recorded in docs/szse_url_path_date_investigation_20261120.md.
+
+The 77-edge bounded reciprocity result remains unchanged. No v6 forensic
+counter, source capture, production dataset, PIT, training or backtest gate is
+modified or promoted.
+

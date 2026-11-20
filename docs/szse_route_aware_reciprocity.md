@@ -92,8 +92,10 @@ The route-aware audit result for this bounded edge set is:
 | Target exact-route context available | 77 / 77 |
 | Reverse ID and exact URL both match | 77 / 77 |
 | Non-reciprocal or unresolved edges | 0 |
-| Target context from original archive | 74 |
-| Target context from supplemental exact-route report | 3 |
+| Target edge contexts from original archive | 74 |
+| Target edge contexts resolved using supplemental exact-route report | 3 |
+
+The supplemental report contains 2 unique exact target routes (584083 and 584085); together those two route observations resolve 3 edge targets. The count of 3 in the table is edge-context resolutions, not a count of unique supplementary routes.
 
 The bounded edge-set reciprocity acceptance is true for these 77 edges. This
 result is limited to the files and records in the supplied capture and the two
