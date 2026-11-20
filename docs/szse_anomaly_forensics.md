@@ -89,6 +89,33 @@ A changed count is a diagnostic signal, not proof of correctness. Compare the
 source locations and URLs against the original diagnostic and hard-failure
 records before assigning final classifications.
 
+## Source-marker versus URL-policy findings (v1.3)
+
+The audit label `unsafe_neighbor_url` is evidence that the source audit flagged
+a neighbor link. It is not, by itself, proof that the URL is external or unsafe.
+
+The v1.3 extractor therefore separates:
+
+- `unsafe_issue_records`: source records carrying the
+  `unsafe_neighbor_url` marker.
+- `unsafe_url_evidence`: candidate URLs from those records that actually fail
+  the HTTPS/SZSE-host policy.
+- `source_rule_conflict_candidates`: URLs marked unsafe by the source report
+  that nevertheless pass the host and HTTPS policy; these require review of
+  the resource type and graph semantics.
+- `linked_resource_evidence`: trusted SZSE-hosted PDF links, retained as
+  resources rather than announcement HTML nodes.
+
+URL extraction is restricted to explicit URL fields and diagnostic text fields;
+arbitrary strings elsewhere in an anomaly subtree are not treated as URL
+evidence. The summary now reports issue-record counts separately from unique
+ID groups and unique resource links.
+
+Do not compare the previous v1.2.3 `unsafe_url_evidence=25` directly with
+the source audit's six `unsafe_neighbor_url` findings: the former was polluted
+by over-broad subtree extraction and by treating every non-PDF URL in a marked
+record as unsafe. Re-run v1.3 and inspect the actual URLs and source locations.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
