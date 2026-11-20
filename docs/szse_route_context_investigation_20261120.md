@@ -119,6 +119,15 @@ The operator ran the bounded probe from the local Windows checkout on 2026-11-20
 | 584083 | /disclosure/notice/t20210104_584083.html | 211 / announcement | 212 / general_news | chnlDocId=211_584083; pre=584084; next=584082 | same_business_payload; docId/title/pubTime/content SHA-256 all match |
 | 584085 | /disclosure/notice/company/t20210105_584085.html | 214 / ipocompany_news | 214 / ipocompany_news | chnlDocId=214_584085; pre=584086; next=584068 | same_business_payload; docId/title/pubTime/content SHA-256 all match |
 
+### Business-payload identity checks
+
+| docId | Title | pub_time (epoch ms) | Reference / route data channel | Reference and route content SHA-256 | Result |
+|---|---|---:|---|---|---|
+| 584083 | 深圳证券交易所《纪律处分事先告知书》送达公告 | 1609689600000 | 212 / 212 | 358ed2fe4d92aca34ac5a32b08359524882aca9b154a964058fb9ad3fe13e9e4 | docId, title, pub_time and content hash match |
+| 584085 | 关于祖名豆制品股份有限公司股票上市交易的公告 | 1609776000000 | 214 / 214 | 081ae9882490417b1e8aa5a3729cb04fc1e7c1664503bf3c81a1e7ed9062fcb0 | docId, title, pub_time and content hash match |
+
+Both pages also report HTML articleId equal to the URL docId; the report records route_identity_status=html_json_doc_id_match for each route.
+
 For 584083, the HTML navigation channel is 211 while the JSON business-data channel is 212. The neighbor API response uses 211, matching the exact HTML navigation context. This is direct evidence that the neighbor request must be scoped by the HTML route's navigation channel, not by the JSON data channel.
 
 For 584085, the exact /company/ route exposes navigation channel 214, and its neighbor response uses chnlDocId=214_584085. The older plain /notice/ capture exposed a different navigation context (211), so it could not stand in for the exact company route.
