@@ -99,7 +99,8 @@ def main():
     # Generic recursive ID/URL co-occurrence caused parent/child contamination
     # (e.g. a summary node inheriting URLs from every nested child).
     ISSUE_KEYS={"type","issuetype","anomalytype","failuretype","code","rule","ruleid","category","kind"}
-    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl","neighborurl","previousurl","nexturl","preurl","posturl"}
+    URL_KEYS_EXT=URL_KEYS | {"adjuncturl","attachmenturl","documenturl","downloadurl","fileurl","pdfurl","resourceurl","docurl","neighborurl","previousurl","nexturl","preurl","posturl","unsafeurl","linkedresourceurl","relatedurl"}
+    URL_TEXT_KEYS={"message","detail","description","reason","error","rawtext","rawurl"}
     ID_KEYS_EXT=ID_KEYS | {"sourceid","targetid","nodeid","fromid","toid","ids","duplicateids","announcementids"}
     DUPLICATE_ID_KEYS=ID_KEYS | {"duplicateid","duplicateids","conflictingid","conflictingids","conflictid","ids","announcementids","docids","articleids"}
     MARKERS=("duplicate_id_different_url","unsafe_neighbor_url",
@@ -143,11 +144,18 @@ def main():
 
     def extract_urls(pairs):
         found=[]
+        url_aliases={key(x) for x in URL_KEYS_EXT}
+        text_aliases={key(x) for x in URL_TEXT_KEYS}
         for k,v in pairs:
             if not isinstance(v,str): continue
             nk=key(k)
+            # Do not scrape arbitrary strings from an anomaly subtree. Only
+            # explicit URL fields, plus clearly textual diagnostic fields,
+            # may contribute URL candidates.
+            if nk not in url_aliases and nk not in text_aliases:
+                continue
             vals=URL_RE.findall(v)
-            if not vals and nk in {key(x) for x in URL_KEYS_EXT}:
+            if not vals and nk in url_aliases:
                 candidate=v.strip()
                 if candidate.startswith(("/", "./", "../", "//")) or re.search(r"\.(?:pdf|html?)$",candidate,re.I):
                     vals=[candidate]
@@ -173,10 +181,15 @@ def main():
         return value_from_pairs(list(direct_pairs(obj)),aliases)
 
     duplicate_groups={}
-    unsafe=[]; resources_by_key={}; edges={}; issue_counts=defaultdict(int); requests={}
+    unsafe=[]; resources_by_key={}; source_rule_conflicts=[]; unsafe_issue_records=[]
+    duplicate_issue_records=[]; edges={}; issue_counts=defaultdict(int); requests={}
     for file,loc,obj in rows:
         markers=direct_markers(obj)
         for marker in markers: issue_counts[marker]+=1
+        if "unsafe_neighbor_url" in markers:
+            unsafe_issue_records.append({"file":file,"location":loc})
+        if "duplicate_id_different_url" in markers:
+            duplicate_issue_records.append({"file":file,"location":loc})
 
         # Explicitly marked issue records may store evidence in nested children.
         # Unmarked objects are never recursively joined across their descendants.
@@ -212,9 +225,15 @@ def main():
                     resources_by_key[resource_key]=item
                 else:
                     existing.setdefault("source_locations",[]).append({"file":file,"location":loc})
-            elif marked_unsafe:
+            elif marked_unsafe and not info["safe_https_szse"]:
                 item["classification"]="unsafe_or_untrusted_url"
                 unsafe.append(item)
+            elif marked_unsafe and info["safe_https_szse"]:
+                # The source audit called this unsafe, but URL policy says the
+                # URL itself is trusted. Preserve the discrepancy for review.
+                item["classification"]="source_rule_conflict_candidate"
+                item["interpretation"]="Source marked unsafe_neighbor_url, but URL passes HTTPS/SZSE host policy"
+                source_rule_conflicts.append(item)
 
         # Relations are counted from the current object only. Never inherit
         # source/target/relation values from a parent or child object.
@@ -238,9 +257,14 @@ def main():
             else: seen[ident]["duplicate_occurrences"]=seen[ident].get("duplicate_occurrences",1)+1
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
-    report={"version":"1.2.3","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.3.0","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
-      "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
+      "evidence_record_counts":{"duplicate_issue_records":len(duplicate_issue_records),
+       "unsafe_issue_records":len(unsafe_issue_records),"unsafe_policy_failing_urls":len(unsafe),
+       "source_rule_conflict_candidates":len(source_rule_conflicts),"unique_pdf_resource_links":len(resources)},
+      "duplicate_id_evidence":duplicate,"duplicate_issue_records":duplicate_issue_records,
+      "unsafe_url_evidence":unsafe,"unsafe_issue_records":unsafe_issue_records,
+      "source_rule_conflict_candidates":source_rule_conflicts,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
       "classifications":sorted(CLASSES),
       "pdf_context":{
@@ -268,7 +292,7 @@ def main():
     outdir.mkdir(parents=True,exist_ok=True)
     (outdir/"szse_anomaly_forensics.json").write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
     md=["# SZSE anomaly forensics","",f"- Input files: {len(files)}",f"- Network requests: {report['network_requests_made']}",
-        f"- Duplicate-ID evidence records: {len(duplicate)}",f"- Unsafe URL evidence records: {len(unsafe)}",f"- Linked resource records: {len(resources)}",
+        f"- Unique duplicate-ID groups: {len(duplicate)}",f"- Duplicate issue records: {len(duplicate_issue_records)}",f"- Unsafe URL records (policy-failing): {len(unsafe)}",f"- Source unsafe markers: {len(unsafe_issue_records)}",f"- Source-rule conflict candidates: {len(source_rule_conflicts)}",f"- Linked resource records: {len(resources)}",
         f"- Unique relation edges: {len(edges)}","","## Annual market overview PDF resources",
         "- P020201231733275849449.pdf: 2020 年深圳证券市场概况",
         "- P020251231674893217325.pdf: 2025 年深圳证券市场概况",
@@ -276,6 +300,8 @@ def main():
         "- Preserve resource links separately from announcement graph nodes."]
     (outdir/"szse_anomaly_forensics.md").write_text("\n".join(md)+"\n",encoding="utf-8")
     print(json.dumps({"status":"ok","input_files":len(files),"output_dir":str(outdir),
-       "duplicate_evidence":len(duplicate),"unsafe_url_evidence":len(unsafe),"linked_resource_evidence":len(resources),
+       "duplicate_evidence_groups":len(duplicate),"duplicate_issue_records":len(duplicate_issue_records),
+       "unsafe_url_evidence":len(unsafe),"unsafe_issue_records":len(unsafe_issue_records),
+       "source_rule_conflict_candidates":len(source_rule_conflicts),"linked_resource_evidence":len(resources),
        "network_requests_made":report["network_requests_made"]},ensure_ascii=False,indent=2))
 if __name__=="__main__": main()
