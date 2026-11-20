@@ -308,7 +308,7 @@ def test_identity_coverage_exposes_duplicate_ids_and_missing_edge_endpoints(tmp_
     nodes.append({"doc_id": "not-an-id", "url": "https://evil.example/item.html"})
     nodes.append({
         "doc_id": "799999",
-        "url": EXACT_TARGET_URL,
+        "url": OLD_TARGET_URL,
         "html_json_identity": "match",
     })
     _write_json(nodes_path, nodes)
