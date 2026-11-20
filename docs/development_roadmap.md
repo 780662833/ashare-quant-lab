@@ -855,3 +855,40 @@ any relevant first-party script is considered.
 
 No live search request, CNEquity change/read/backfill, local data-lake
 access, production write, training or real backtest is enabled.
+
+
+### Phase 9.38 — exact-route SZSE announcement reciprocity probe
+
+The 2026-11-20 year-boundary capture review identified three apparent
+non-reciprocal relations where a source neighbor response points to a specific
+detail URL, but the target response in the archive belongs to a different URL
+route sharing the same docId. The two target routes absent from the original
+198-request manifest are:
+
+- /disclosure/notice/t20210104_584083.html
+- /disclosure/notice/company/t20210105_584085.html
+
+Added a bounded route-context capture utility:
+`scripts/capture_szse_route_context.py`,
+`src/ashare_quant/research/szse_route_context.py`, and
+`tests/unit/test_szse_route_context.py`. It captures the exact HTML route,
+same-path JSON and route-scoped previous/next response; reads navigation
+channelId/channelCode from that exact HTML; preserves JSON data channel fields
+separately; records raw response SHA-256 and request metadata; and evaluates
+the three known reverse checks without inferring edges. HTTPS exact-host
+allowlisting, GET-only requests, sequential pacing, route/response-size bounds
+and no-attachment behavior are enforced. See
+`docs/szse_route_context_capture.md`.
+
+Offline evidence from the supplied year-boundary archive confirms the target
+URLs and the differing captured routes, but does not prove the alternate routes
+are aliases or that the source data is wrong. Until the exact routes are
+captured, all three relations remain `unresolved_route_context`. The
+2026-01-10 URL date in the 618392 path versus its 2020-12-31 publication date
+remains a separate unresolved URL/date issue. See
+`docs/szse_route_context_investigation_20261120.md`.
+
+The current review environment could not resolve www.szse.cn, so no live
+alternate-route response is claimed. The probe is ready for a local bounded
+run; it does not establish archive completeness or promote the graph to full
+acceptance, PIT, production, training or backtest eligibility.
