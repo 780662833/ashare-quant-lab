@@ -342,6 +342,7 @@ def test_identity_coverage_exposes_duplicate_ids_and_missing_edge_endpoints(tmp_
     assert nodes_summary["exact_routes_mapping_to_multiple_doc_ids_count"] == 1
     assert nodes_summary["bounded_sample_doc_id_uniqueness"] is False
     assert nodes_summary["bounded_sample_route_identity"] is False
+    assert nodes_summary["html_json_identity_not_match_or_missing_record_count"] == 3
     assert edges_summary["source_ids_missing_from_node_capture"] == ["799991"]
     assert edges_summary["target_ids_missing_from_node_capture"] == ["799992"]
     assert identity["archive_completeness_proven"] is False
