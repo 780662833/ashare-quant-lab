@@ -300,8 +300,17 @@ def test_identity_coverage_exposes_duplicate_ids_and_missing_edge_endpoints(tmp_
         "channel_id": "211",
         "html_json_identity": "match",
     })
-    nodes.append({"doc_id": None, "url": None})
+    nodes.append({
+        "doc_id": None,
+        "url": "https://www.szse.cn/disclosure/notice/t20210105_799990.html",
+        "html_json_identity": "match",
+    })
     nodes.append({"doc_id": "not-an-id", "url": "https://evil.example/item.html"})
+    nodes.append({
+        "doc_id": "799999",
+        "url": EXACT_TARGET_URL,
+        "html_json_identity": "match",
+    })
     _write_json(nodes_path, nodes)
 
     edges_path = capture / "edges.json"
@@ -327,8 +336,12 @@ def test_identity_coverage_exposes_duplicate_ids_and_missing_edge_endpoints(tmp_
     assert nodes_summary["duplicate_doc_id_multiple_route_group_count"] == 1
     assert nodes_summary["missing_doc_id_record_count"] == 1
     assert nodes_summary["invalid_doc_id_record_count"] == 1
-    assert nodes_summary["invalid_or_missing_exact_route_record_count"] == 2
+    assert nodes_summary["invalid_or_missing_exact_route_record_count"] == 1
+    assert nodes_summary["route_doc_id_mismatch_record_count"] == 1
+    assert nodes_summary["duplicate_exact_route_group_count"] == 1
+    assert nodes_summary["exact_routes_mapping_to_multiple_doc_ids_count"] == 1
     assert nodes_summary["bounded_sample_doc_id_uniqueness"] is False
+    assert nodes_summary["bounded_sample_route_identity"] is False
     assert edges_summary["source_ids_missing_from_node_capture"] == ["799991"]
     assert edges_summary["target_ids_missing_from_node_capture"] == ["799992"]
     assert identity["archive_completeness_proven"] is False
