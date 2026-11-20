@@ -909,3 +909,47 @@ global ID uniqueness, graph-wide reciprocity, chronology, URL/attachment
 classification and historical chain continuity remain unqualified. The
 capture also leaves production, PIT, training and backtest admission false.
 No production source or research-data gate is promoted.
+
+### Phase 9.39 — route-aware reciprocity audit for the bounded SZSE edge set
+
+Added an offline, read-only audit for every relation edge in a supplied SZSE
+chain capture:
+
+- `src/ashare_quant/research/szse_route_aware_reciprocity.py`
+- `scripts/audit_szse_route_aware_reciprocity.py`
+- `tests/unit/test_szse_route_aware_reciprocity.py`
+- `docs/szse_route_aware_reciprocity.md`
+
+The audit verifies the original source route identity, source HTML-navigation
+channel, source neighbor `chnlDocId`, source relation ID plus exact URL, and
+original request receipts. It resolves each target by exact URL only; a
+document-ID-only fallback is prohibited. For a target captured only by the
+supplemental route report, the audit requires HTML/JSON identity, same-business
+payload checks (docId, title, publication time and content SHA-256), matching
+HTML navigation channel, and successful unchanged GET receipts. Reciprocity
+requires both the reverse document ID and the exact reverse URL to point back
+to the source route.
+
+The audit is local-only and performs zero network requests. It accepts either
+the original ZIP archive or its extracted directory, and writes a structured
+JSON report plus an edge-level CSV outside the source capture. It validates
+the complete original request manifest as GET-only, HTTP 200, error-free and
+unchanged-request/final-URL before accepting source evidence.
+
+The bounded 2026-11-20 sample contains 66 nodes, 77 edge records and 198
+original GET requests. The offline integration run resolved 74 target route
+contexts from the original archive and 3 from the supplemental exact-route
+capture. All 77 source edge observations matched the source neighbor
+responses, all 77 target exact-route contexts were available, and all 77
+reverse IDs and URLs matched. The bounded edge-set reciprocity result is PASS
+for these 77 records. Six focused unit tests passed in the implementation
+environment; the PR CI remains the independent repository check.
+
+This does not establish completeness of the historical SZSE announcement
+archive, global ID uniqueness outside the sample, full cross-period chain
+continuity or absence of records omitted from the capture. The 618392 URL-date
+anomaly remains separate and unresolved. The v6 forensic counter is unchanged.
+Full graph, production, PIT, training and backtest admission remain false.
+
+See `docs/szse_route_aware_reciprocity.md` for the run command and acceptance
+boundaries.
