@@ -152,6 +152,19 @@ values, while explicit type/code fields must contain an exact normalized marker
 value. This prevents numeric counters from turning a report root into an
 anomaly record.
 
+## v1.4.2 aggregate-container exclusion
+
+Objects containing aggregate collection fields such as `audit_summary`,
+`hard_failures`, `hard_failure_issues`, `issue_type_counts`, `issues`,
+`nodes`, or `edges` are treated as report containers, not issue records.
+Their child records are still traversed independently. The generated JSON
+lists these paths in `excluded_aggregate_containers`.
+
+For relation issues with source and target IDs, de-duplication uses the issue
+type, source ID, target ID, relation, and returned reverse ID. URL evidence is
+retained on the grouped record but does not split one relation issue into
+multiple groups solely because report copies serialize URL fields differently.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
