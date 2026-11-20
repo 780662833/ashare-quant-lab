@@ -92,15 +92,54 @@ Keep these observations as separate fields:
 
 Publication-date logic must not fall back to the URL path date merely because the fields often coincide. A path-date mismatch is a diagnostic to preserve and investigate; it is not by itself proof of an incorrect publication timestamp.
 
-## Remaining route-variant check for 618392
+## Bounded route-variant checks for both mismatches
 
-The captured exact route is valid and identity-consistent, but the root cause of the path segment is still unknown. A bounded GET-only comparison of these candidates can test whether a publication-date-shaped alternate URL exists:
+The operator completed two separate GET-only route-context probes on 2026-11-20. Each probe tested the currently captured route plus two date-aligned route candidates. The output reports were supplied from the local checkout; the raw response files remain in the operator's local capture directories and are not represented here as committed artifacts.
 
-- Existing route: https://www.szse.cn/disclosure/notice/general/t20260110_618392.html
-- Date-aligned general route candidate: https://www.szse.cn/disclosure/notice/general/t20201231_618392.html
-- Date-aligned plain notice route candidate: https://www.szse.cn/disclosure/notice/t20201231_618392.html
+### 618392
 
-A 404 or failed candidate must remain a failed route observation, not be converted into an alias. A candidate can be classified as the same business document only after HTML/JSON identity and payload checks pass. This comparison is not required to retain 2020-12-31 as the publication date.
+The existing route
+
+`/disclosure/notice/general/t20260110_618392.html`
+
+returned HTTP 200 for HTML, same-path JSON and the route-scoped neighbor API. The HTML article ID and JSON docId both matched 618392. The JSON payload matched the archived reference on docId, title, pubTime and exact content SHA-256.
+
+Both date-aligned candidates returned HTTP 404 for HTML and JSON:
+
+- `/disclosure/notice/general/t20201231_618392.html`
+- `/disclosure/notice/t20201231_618392.html`
+
+The operator report records 7 GET requests, 3 successful HTTP 200 responses, 4 HTTP 404 responses and one route passing HTML/JSON identity. The four request errors are the expected 404 responses, not transport failures. No reverse checks were configured for this document in the capture utility.
+
+### 584158
+
+The existing route
+
+`/disclosure/notice/general/t20210108_584158.html`
+
+returned HTTP 200 for HTML, same-path JSON and the route-scoped neighbor API. The HTML article ID and JSON docId both matched 584158. Its navigation channel was 212 / general_news, and the JSON payload matched the archived reference on docId, title, pubTime and exact content SHA-256.
+
+Both date-aligned candidates returned HTTP 404 for HTML and JSON:
+
+- `/disclosure/notice/general/t20210107_584158.html`
+- `/disclosure/notice/t20210107_584158.html`
+
+The operator report likewise records 7 GET requests, 3 successful HTTP 200 responses, 4 HTTP 404 responses and one route passing HTML/JSON identity. The four request errors are the expected 404 responses, not transport failures. No reverse checks were configured for this document in the capture utility.
+
+### Combined interpretation
+
+Across the two probes, 14 GET requests were made: 6 responses with HTTP 200 for the two existing exact routes (HTML, JSON and neighbor each), and 8 HTTP 404 responses for the four date-aligned candidate routes (HTML and JSON each). The candidate URLs were requested without redirects; none was confirmed as an alternate route to the same business document.
+
+The route-variant checks therefore found no date-aligned alias among the four explicitly tested candidates. This is a bounded negative result, not proof that no other historical route form or alias exists. The reason the two accepted existing routes contain path dates different from their publication dates remains unresolved. CMS ingestion, migration, republishing and route maintenance remain hypotheses only.
+
+The publication dates remain 2020-12-31 for 618392 and 2021-01-07 for 584158, based on the source JSON/HTML/body evidence described above. Do not rewrite either exact source URL, use its path suffix as the publication date, or classify the HTTP 404 candidates as aliases. Both operator reports leave `full_graph_acceptance=false`; their `reverse_checks_total=0` values mean no reverse checks were performed, not that reciprocity passed.
+
+Local report locations supplied by the operator:
+
+- `reports/source_probes/szse_618392_route_variants/route_context_report.json`
+- `reports/source_probes/szse_584158_route_variants/route_context_report.json`
+
+These report paths identify local output locations; they do not assert that those files or the raw response captures have been committed to the repository.
 
 ## Acceptance boundary
 
