@@ -480,6 +480,8 @@ def _capture_identity_coverage(
     bounded_route_identity_ok = (
         node_record_count > 0
         and non_object_node_count == 0
+        and not node_id_missing_indexes
+        and not node_id_invalid_indexes
         and not node_route_invalid_indexes
         and not node_route_id_mismatch
         and html_json_not_match_count == 0
