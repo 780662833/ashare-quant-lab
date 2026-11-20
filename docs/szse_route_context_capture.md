@@ -43,6 +43,7 @@ A channel context mismatch or request failure remains unresolved. A reverse mism
 
 - Default invocation makes no request; --execute is required.
 - HTTPS and exact www.szse.cn host are enforced for requests and redirects.
+- Redirects are followed only when the exact request path and query are unchanged; route or channelId/docId-changing redirects are blocked and their Location is recorded.
 - Only the observed detail-page path forms and the fixed previous/next API path are accepted.
 - Requests are sequential, rate-limited to at least 0.5 seconds, bounded to ten routes and 20 MiB per response.
 - Only GET is used. PDFs and other attachments are never downloaded.

@@ -97,7 +97,17 @@ def _sha256(raw: bytes) -> str:
 
 class _SameHostRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Any:
-        _parse_origin(urllib.parse.urljoin(req.full_url, newurl))
+        destination_url = urllib.parse.urljoin(req.full_url, newurl)
+        try:
+            destination = _parse_origin(destination_url)
+            source = _parse_origin(req.full_url)
+        except ValueError:
+            # Returning None makes urllib surface the 3xx response as HTTPError;
+            # the caller records Location without following an untrusted host.
+            return None
+        if destination.path != source.path or destination.query != source.query:
+            # Do not issue a second request under a changed route or docId/channelId.
+            return None
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -193,6 +203,20 @@ def _get(opener: Any, url: str, kind: str, timeout: float) -> tuple[bytes | None
                 bytes_received=len(raw), sha256=_sha256(raw) if raw else None,
                 error=f"HTTP status {exc.code}",
             )
+        location = exc.headers.get("Location") if exc.headers else None
+        if location:
+            redirect_location = urllib.parse.urljoin(exc.geturl(), location)
+            record["redirect_location"] = redirect_location
+            try:
+                destination = _parse_origin(redirect_location)
+                redirect_changes_context = (
+                    destination.path != parsed.path or destination.query != parsed.query
+                )
+            except ValueError:
+                redirect_changes_context = True
+            if redirect_changes_context:
+                record["redirect_blocked"] = True
+                record["error"] = "redirect blocked: request path or query context changed"
         record.update(final_url=exc.geturl(), response_captured_at=_now())
         return raw, record
     except Exception as exc:

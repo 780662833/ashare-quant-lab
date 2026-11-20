@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
+from urllib.error import HTTPError
+from urllib.request import Request
 
 import pytest
 
 from ashare_quant.research.szse_route_context import (
     DEFAULT_ROUTE_URLS,
+    _SameHostRedirectHandler,
     capture_szse_route_context,
     extract_html_route_context,
 )
@@ -128,6 +132,64 @@ def test_channel_mismatch_stays_unresolved(tmp_path: Path) -> None:
         "unresolved_neighbor_channel_mismatch", "unresolved_neighbor_channel_mismatch",
     ]
     assert report["summary"]["reverse_checks_mismatch"] == 0
+
+
+def test_redirect_handler_blocks_route_or_query_change_before_following() -> None:
+    handler = _SameHostRedirectHandler()
+    original = _neighbor_url("211", "584083")
+
+    changed_query = _neighbor_url("211", "584084")
+    assert handler.redirect_request(
+        Request(original), None, 302, "Found", {"Location": changed_query}, changed_query,
+    ) is None
+
+    changed_path = (
+        "https://www.szse.cn/api/report/webdocument/other"
+        "?channelId=211&docId=584083"
+    )
+    assert handler.redirect_request(
+        Request(original), None, 302, "Found", {"Location": changed_path}, changed_path,
+    ) is None
+
+    external = "https://example.com/api/report/webdocument/queryPreAndNextDoc?channelId=211&docId=584083"
+    assert handler.redirect_request(
+        Request(original), None, 302, "Found", {"Location": external}, external,
+    ) is None
+
+
+def test_blocked_redirect_location_is_recorded_without_following(tmp_path: Path) -> None:
+    route = DEFAULT_ROUTE_URLS[0]
+    json_url = route[:-5] + ".json"
+    neighbor_url = _neighbor_url("211", "584083")
+    changed_url = _neighbor_url("211", "584084")
+
+    class RedirectingOpener(FakeOpener):
+        def open(self, request, *, timeout: float):
+            if request.full_url == neighbor_url:
+                self.requests.append(request)
+                raise HTTPError(
+                    neighbor_url, 302, "Found", {"Location": changed_url},
+                    io.BytesIO(b"redirect blocked"),
+                )
+            return super().open(request, timeout=timeout)
+
+    opener = RedirectingOpener({
+        route: FakeResponse(_html("584083", "211", "announcement"), url=route),
+        json_url: FakeResponse(_json({"docId": 584083, "content": ""}), url=json_url),
+    })
+    report = capture_szse_route_context(
+        output_dir=tmp_path, route_urls=(route,), opener=opener, sleep_fn=lambda _: None,
+    )
+
+    redirect_record = report["request_manifest"][2]
+    assert redirect_record["status_code"] == 302
+    assert redirect_record["redirect_blocked"] is True
+    assert redirect_record["redirect_location"] == changed_url
+    assert "path or query context changed" in redirect_record["error"]
+    assert [request.full_url for request in opener.requests] == [
+        route, json_url, neighbor_url,
+    ]
+    assert report["summary"]["reverse_checks_unresolved"] == 2
 
 
 def test_neighbor_redirect_cannot_change_query_context(tmp_path: Path) -> None:
