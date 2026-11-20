@@ -21,7 +21,6 @@ def _write_json(path: Path, value: object) -> None:
 
 def _fixture(tmp_path: Path, *, reverse_url: str = SOURCE_URL) -> tuple[Path, Path]:
     capture = tmp_path / "capture"
-    output = tmp_path / "output"
     nodes = [
         {
             "doc_id": "700001",
