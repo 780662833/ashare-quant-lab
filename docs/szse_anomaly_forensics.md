@@ -144,6 +144,14 @@ For duplicate-ID findings, inspect each group's `urls` and
 must remain unresolved; it must not be automatically classified as a URL
 alias or a confirmed ID collision.
 
+### v1.4.1 marker guard
+
+A numeric aggregate such as `unsafe_neighbor_url: 25` is not an issue record.
+Exact marker-key recognition therefore accepts non-empty string/object/list
+values, while explicit type/code fields must contain an exact normalized marker
+value. This prevents numeric counters from turning a report root into an
+anomaly record.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
