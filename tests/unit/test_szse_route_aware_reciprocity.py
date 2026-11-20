@@ -264,3 +264,72 @@ def test_supplemental_report_rejects_any_bad_receipt(tmp_path: Path) -> None:
             route_context_report=supplement,
             output_dir=tmp_path / "audit",
         )
+
+
+def test_identity_coverage_reports_bounded_unique_ids_and_endpoint_closure(tmp_path: Path) -> None:
+    capture, supplement = _fixture(tmp_path)
+    report = audit_szse_route_aware_reciprocity(
+        report_dir=capture,
+        route_context_report=supplement,
+        output_dir=tmp_path / "audit",
+    )
+    identity = report["identity_coverage"]
+    nodes = identity["node_identity"]
+    endpoints = identity["edge_endpoint_coverage"]
+    assert nodes["node_record_count"] == 2
+    assert nodes["unique_doc_id_count"] == 2
+    assert nodes["duplicate_doc_id_group_count"] == 0
+    assert nodes["bounded_sample_doc_id_uniqueness"] is True
+    assert nodes["bounded_sample_route_identity"] is True
+    assert endpoints["endpoint_id_coverage_within_capture"] == 1.0
+    assert endpoints["source_ids_missing_from_node_capture"] == []
+    assert endpoints["target_ids_missing_from_node_capture"] == []
+    assert identity["archive_completeness_proven"] is False
+    assert identity["global_doc_id_uniqueness_proven"] is False
+
+
+def test_identity_coverage_exposes_duplicate_ids_and_missing_edge_endpoints(tmp_path: Path) -> None:
+    capture, supplement = _fixture(tmp_path)
+    nodes_path = capture / "nodes.json"
+    nodes = json.loads(nodes_path.read_text(encoding="utf-8"))
+    nodes.append({
+        "doc_id": "700001",
+        "url": "https://www.szse.cn/disclosure/notice/general/t20210106_700001.html",
+        "html_article_id": "700001",
+        "json_doc_id": "700001",
+        "channel_id": "211",
+        "html_json_identity": "match",
+    })
+    nodes.append({"doc_id": None, "url": None})
+    nodes.append({"doc_id": "not-an-id", "url": "https://evil.example/item.html"})
+    _write_json(nodes_path, nodes)
+
+    edges_path = capture / "edges.json"
+    edges = json.loads(edges_path.read_text(encoding="utf-8"))
+    edges.append({
+        "seed_id": "700001",
+        "source_id": "799991",
+        "relation": "next",
+        "target_id": "799992",
+        "target_url": "https://www.szse.cn/disclosure/notice/t20210106_799992.html",
+    })
+    _write_json(edges_path, edges)
+
+    report = audit_szse_route_aware_reciprocity(
+        report_dir=capture,
+        route_context_report=supplement,
+        output_dir=tmp_path / "audit",
+    )
+    identity = report["identity_coverage"]
+    nodes_summary = identity["node_identity"]
+    edges_summary = identity["edge_endpoint_coverage"]
+    assert nodes_summary["duplicate_doc_id_group_count"] == 1
+    assert nodes_summary["duplicate_doc_id_multiple_route_group_count"] == 1
+    assert nodes_summary["missing_doc_id_record_count"] == 1
+    assert nodes_summary["invalid_doc_id_record_count"] == 1
+    assert nodes_summary["invalid_or_missing_exact_route_record_count"] == 2
+    assert nodes_summary["bounded_sample_doc_id_uniqueness"] is False
+    assert edges_summary["source_ids_missing_from_node_capture"] == ["799991"]
+    assert edges_summary["target_ids_missing_from_node_capture"] == ["799992"]
+    assert identity["archive_completeness_proven"] is False
+    assert identity["global_doc_id_uniqueness_proven"] is False
