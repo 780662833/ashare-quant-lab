@@ -1,0 +1,227 @@
+{
+  "schema_version": "1.0.0",
+  "status": "CAPTURED_BOUNDED_ROUTE_SAMPLE",
+  "captured_at": "2026-11-20T13:54:20+00:00",
+  "route_count": 2,
+  "request_count": 6,
+  "requests_are_get_only": true,
+  "minimum_interval_seconds": 1,
+  "reference_dir": "reports\\szse_year_boundary_audit",
+  "route_results": [
+    {
+      "route_index": 1,
+      "doc_id_from_url": "584083",
+      "date_from_url": "20210104",
+      "requested_html_url": "https://www.szse.cn/disclosure/notice/t20210104_584083.html",
+      "html_context": {
+        "article_id": "584083",
+        "navigation_channel_id": "211",
+        "navigation_channel_code": "announcement"
+      },
+      "json_identity": {
+        "doc_id": "584083",
+        "title": "深圳证券交易所《纪律处分事先告知书》送达公告",
+        "pub_time": 1609689600000,
+        "data_channel_id": "212",
+        "data_channel_code": "general_news",
+        "content_sha256": "358ed2fe4d92aca34ac5a32b08359524882aca9b154a964058fb9ad3fe13e9e4"
+      },
+      "neighbor_context": {
+        "chnl_doc_id": "211_584083",
+        "channel_context_match": true,
+        "pre_doc_id": "584084",
+        "pre_doc_url": "/disclosure/notice/t20210105_584084.html",
+        "next_doc_id": "584082",
+        "next_doc_url": "/disclosure/notice/t20210104_584082.html"
+      },
+      "reference_comparison": {
+        "status": "same_business_payload",
+        "checks": {
+          "doc_id_match": true,
+          "title_match": true,
+          "pub_time_match": true,
+          "content_sha256_match": true
+        },
+        "reference_content_sha256": "358ed2fe4d92aca34ac5a32b08359524882aca9b154a964058fb9ad3fe13e9e4",
+        "route_content_sha256": "358ed2fe4d92aca34ac5a32b08359524882aca9b154a964058fb9ad3fe13e9e4",
+        "reference_data_channel_id": "212",
+        "route_data_channel_id": "212"
+      },
+      "reverse_checks": [
+        {
+          "source_id": "584082",
+          "source_relation": "pre",
+          "target_field": "nextDocId",
+          "observed_value": "584082",
+          "status": "match"
+        },
+        {
+          "source_id": "584084",
+          "source_relation": "next",
+          "target_field": "preDocId",
+          "observed_value": "584084",
+          "status": "match"
+        }
+      ],
+      "route_identity_status": "html_json_doc_id_match"
+    },
+    {
+      "route_index": 2,
+      "doc_id_from_url": "584085",
+      "date_from_url": "20210105",
+      "requested_html_url": "https://www.szse.cn/disclosure/notice/company/t20210105_584085.html",
+      "html_context": {
+        "article_id": "584085",
+        "navigation_channel_id": "214",
+        "navigation_channel_code": "ipocompany_news"
+      },
+      "json_identity": {
+        "doc_id": "584085",
+        "title": "关于祖名豆制品股份有限公司股票上市交易的公告",
+        "pub_time": 1609776000000,
+        "data_channel_id": "214",
+        "data_channel_code": "ipocompany_news",
+        "content_sha256": "081ae9882490417b1e8aa5a3729cb04fc1e7c1664503bf3c81a1e7ed9062fcb0"
+      },
+      "neighbor_context": {
+        "chnl_doc_id": "214_584085",
+        "channel_context_match": true,
+        "pre_doc_id": "584086",
+        "pre_doc_url": "/disclosure/notice/company/t20210105_584086.html",
+        "next_doc_id": "584068",
+        "next_doc_url": "/disclosure/notice/company/t20210104_584068.html"
+      },
+      "reference_comparison": {
+        "status": "same_business_payload",
+        "checks": {
+          "doc_id_match": true,
+          "title_match": true,
+          "pub_time_match": true,
+          "content_sha256_match": true
+        },
+        "reference_content_sha256": "081ae9882490417b1e8aa5a3729cb04fc1e7c1664503bf3c81a1e7ed9062fcb0",
+        "route_content_sha256": "081ae9882490417b1e8aa5a3729cb04fc1e7c1664503bf3c81a1e7ed9062fcb0",
+        "reference_data_channel_id": "214",
+        "route_data_channel_id": "214"
+      },
+      "reverse_checks": [
+        {
+          "source_id": "584068",
+          "source_relation": "pre",
+          "target_field": "nextDocId",
+          "observed_value": "584068",
+          "status": "match"
+        }
+      ],
+      "route_identity_status": "html_json_doc_id_match"
+    }
+  ],
+  "request_manifest": [
+    {
+      "kind": "html",
+      "method": "GET",
+      "requested_url": "https://www.szse.cn/disclosure/notice/t20210104_584083.html",
+      "requested_at": "2026-11-20T13:54:20+00:00",
+      "final_url": "https://www.szse.cn/disclosure/notice/t20210104_584083.html",
+      "status_code": 200,
+      "content_type": "text/html",
+      "bytes_received": 18499,
+      "sha256": "48f50a29bb161838ae8f0cb89d24e4561750d73990fdb01af7b191c654206228",
+      "capture_file": "routes\\01_584083\\html.html",
+      "error": null,
+      "response_captured_at": "2026-11-20T13:54:20+00:00"
+    },
+    {
+      "kind": "json",
+      "method": "GET",
+      "requested_url": "https://www.szse.cn/disclosure/notice/t20210104_584083.json",
+      "requested_at": "2026-11-20T13:54:21+00:00",
+      "final_url": "https://www.szse.cn/disclosure/notice/t20210104_584083.json",
+      "status_code": 200,
+      "content_type": "application/json",
+      "bytes_received": 7764,
+      "sha256": "71939f35413e2ebba4f2999ac3df4e5e0c7d82c168be28f39fcc381a3ff7e9b0",
+      "capture_file": "routes\\01_584083\\json.json",
+      "error": null,
+      "response_captured_at": "2026-11-20T13:54:21+00:00"
+    },
+    {
+      "kind": "neighbor",
+      "method": "GET",
+      "requested_url": "https://www.szse.cn/api/report/webdocument/queryPreAndNextDoc?channelId=211&docId=584083",
+      "requested_at": "2026-11-20T13:54:22+00:00",
+      "final_url": "https://www.szse.cn/api/report/webdocument/queryPreAndNextDoc?channelId=211&docId=584083",
+      "status_code": 200,
+      "content_type": "application/json;charset=UTF-8",
+      "bytes_received": 577,
+      "sha256": "9cc827507824e8314ee3ad6833be8425072c3288beef267522fde89b565ce183",
+      "capture_file": "routes\\01_584083\\neighbor.json",
+      "error": null,
+      "response_captured_at": "2026-11-20T13:54:22+00:00"
+    },
+    {
+      "kind": "html",
+      "method": "GET",
+      "requested_url": "https://www.szse.cn/disclosure/notice/company/t20210105_584085.html",
+      "requested_at": "2026-11-20T13:54:23+00:00",
+      "final_url": "https://www.szse.cn/disclosure/notice/company/t20210105_584085.html",
+      "status_code": 200,
+      "content_type": "text/html",
+      "bytes_received": 12951,
+      "sha256": "6b2f1ead31d7add88551e229bee2ff427b978c61e9deff2d24c7ecffc57795ad",
+      "capture_file": "routes\\02_584085\\html.html",
+      "error": null,
+      "response_captured_at": "2026-11-20T13:54:23+00:00"
+    },
+    {
+      "kind": "json",
+      "method": "GET",
+      "requested_url": "https://www.szse.cn/disclosure/notice/company/t20210105_584085.json",
+      "requested_at": "2026-11-20T13:54:24+00:00",
+      "final_url": "https://www.szse.cn/disclosure/notice/company/t20210105_584085.json",
+      "status_code": 200,
+      "content_type": "application/json",
+      "bytes_received": 2061,
+      "sha256": "e3f653d7eacf2e2a0557f3e73687a33f4bbfddf72fe7f9be09781bf7b54e879e",
+      "capture_file": "routes\\02_584085\\json.json",
+      "error": null,
+      "response_captured_at": "2026-11-20T13:54:24+00:00"
+    },
+    {
+      "kind": "neighbor",
+      "method": "GET",
+      "requested_url": "https://www.szse.cn/api/report/webdocument/queryPreAndNextDoc?channelId=214&docId=584085",
+      "requested_at": "2026-11-20T13:54:25+00:00",
+      "final_url": "https://www.szse.cn/api/report/webdocument/queryPreAndNextDoc?channelId=214&docId=584085",
+      "status_code": 200,
+      "content_type": "application/json;charset=UTF-8",
+      "bytes_received": 513,
+      "sha256": "371b0291b8019a6253894a8ed55b6613b168c8e55aef7c321e31ecccc22b0848",
+      "capture_file": "routes\\02_584085\\neighbor.json",
+      "error": null,
+      "response_captured_at": "2026-11-20T13:54:25+00:00"
+    }
+  ],
+  "safety": {
+    "host_allowlist": [
+      "www.szse.cn"
+    ],
+    "https_only": true,
+    "attachments_downloaded": false,
+    "production_admitted": false,
+    "pit_admitted": false,
+    "training_admitted": false,
+    "backtest_admitted": false,
+    "source_error_confirmed_by_tool": false
+  },
+  "summary": {
+    "request_errors": 0,
+    "routes_captured_identity_match": 2,
+    "reverse_checks_total": 3,
+    "reverse_checks_match": 3,
+    "reverse_checks_mismatch": 0,
+    "reverse_checks_unresolved": 0,
+    "full_graph_acceptance": false
+  },
+  "report_file": "reports\\source_probes\\szse_route_context\\route_context_report.json"
+}

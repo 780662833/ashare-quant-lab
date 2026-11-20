@@ -100,11 +100,72 @@ Also compare each alternate route against the existing capture on:
 
 A missing response, HTTP error, chnlDocId mismatch or missing channel context remains unresolved. A matching reverse relation plus a matching business payload supports a route-alias interpretation, but does not by itself establish historical archive completeness.
 
-## Execution limitation and current result
+## Operator-run local exact-route capture result
 
-The exact route URLs and their .json counterparts were attempted from the current execution environment on 2026-11-20. Requests failed before HTTP with DNS resolution errors for www.szse.cn; the web retrieval route also reported those exact URLs inaccessible.
+The operator ran the bounded probe from the local Windows checkout on 2026-11-20. The supplied report records:
 
-This is an execution-environment limitation, not evidence that the SZSE routes are invalid or missing. No live response, HTTP status or new SHA-256 is claimed here.
+- Capture time: 2026-11-20T13:54:20+00:00.
+- Status: CAPTURED_BOUNDED_ROUTE_SAMPLE.
+- 2 exact routes, 6 sequential GET requests, 1.0-second minimum interval.
+- All six responses returned HTTP 200; request_errors=0.
+- Both routes passed HTML/JSON URL identity checks.
+- All three route-specific reverse checks matched; no mismatch or unresolved check.
+- Both route JSON payloads matched their original archived business payloads on docId, title, publication time and exact content SHA-256.
+
+### Exact route evidence
+
+| docId | Exact captured route | HTML navigation context | JSON data context | Neighbor context | Reference comparison |
+|---|---|---|---|---|---|
+| 584083 | /disclosure/notice/t20210104_584083.html | 211 / announcement | 212 / general_news | chnlDocId=211_584083; pre=584084; next=584082 | same_business_payload; docId/title/pubTime/content SHA-256 all match |
+| 584085 | /disclosure/notice/company/t20210105_584085.html | 214 / ipocompany_news | 214 / ipocompany_news | chnlDocId=214_584085; pre=584086; next=584068 | same_business_payload; docId/title/pubTime/content SHA-256 all match |
+
+### Business-payload identity checks
+
+| docId | Title | pub_time (epoch ms) | Reference / route data channel | Reference and route content SHA-256 | Result |
+|---|---|---:|---|---|---|
+| 584083 | 深圳证券交易所《纪律处分事先告知书》送达公告 | 1609689600000 | 212 / 212 | 358ed2fe4d92aca34ac5a32b08359524882aca9b154a964058fb9ad3fe13e9e4 | docId, title, pub_time and content hash match |
+| 584085 | 关于祖名豆制品股份有限公司股票上市交易的公告 | 1609776000000 | 214 / 214 | 081ae9882490417b1e8aa5a3729cb04fc1e7c1664503bf3c81a1e7ed9062fcb0 | docId, title, pub_time and content hash match |
+
+Both pages also report HTML articleId equal to the URL docId; the report records route_identity_status=html_json_doc_id_match for each route.
+
+For 584083, the HTML navigation channel is 211 while the JSON business-data channel is 212. The neighbor API response uses 211, matching the exact HTML navigation context. This is direct evidence that the neighbor request must be scoped by the HTML route's navigation channel, not by the JSON data channel.
+
+For 584085, the exact /company/ route exposes navigation channel 214, and its neighbor response uses chnlDocId=214_584085. The older plain /notice/ capture exposed a different navigation context (211), so it could not stand in for the exact company route.
+
+### Reverse-edge results
+
+| Source relation | Expected reverse field on target route | Observed | Result |
+|---|---|---|---|
+| 584082 preDocId=584083 | 584083 nextDocId | 584082 | MATCH |
+| 584084 nextDocId=584083 | 584083 preDocId | 584084 | MATCH |
+| 584068 preDocId=584085 | 584085 nextDocId | 584068 | MATCH |
+
+Thus, the three previously apparent non-reciprocal findings are resolved as route-context mismatches in the original audit sample. They are not confirmed SZSE source-data errors. Do not retain these three checks as unresolved_route_context, and do not create inferred edges: the target-route responses directly contain the matching values.
+
+### Captured response receipts
+
+The operator report records these response SHA-256 values:
+
+| Route | Kind | HTTP | Bytes | Response SHA-256 |
+|---|---|---:|---:|---|
+| 584083 | HTML | 200 | 18,499 | 48f50a29bb161838ae8f0cb89d24e4561750d73990fdb01af7b191c654206228 |
+| 584083 | JSON | 200 | 7,764 | 71939f35413e2ebba4f2999ac3df4e5e0c7d82c168be28f39fcc381a3ff7e9b0 |
+| 584083 | neighbor | 200 | 577 | 9cc827507824e8314ee3ad6833be8425072c3288beef267522fde89b565ce183 |
+| 584085 | HTML | 200 | 12,951 | 6b2f1ead31d7add88551e229bee2ff427b978c61e9deff2d24c7ecffc57795ad |
+| 584085 | JSON | 200 | 2,061 | e3f653d7eacf2e2a0557f3e73687a33f4bbfddf72fe7f9be09781bf7b54e879e |
+| 584085 | neighbor | 200 | 513 | 371b0291b8019a6253894a8ed55b6613b168c8e55aef7c321e31ecccc22b0848 |
+
+The report path supplied by the operator is:
+
+    reports/source_probes/szse_route_context/route_context_report.json
+
+The full structured report supplied by the operator has been added to the repository at reports/source_probes/szse_route_context/route_context_report.json. Its report fields and values are preserved in the committed JSON artifact. The six raw HTTP response files remain in the operator's local capture directory and are not part of this commit.
+
+### Scope and acceptance boundary
+
+The probe was GET-only, HTTPS-only and restricted to www.szse.cn. It downloaded no attachments. Its safety block explicitly leaves production, PIT, training and backtest admission false, and reports source_error_confirmed_by_tool=false.
+
+This resolves only the three route-specific reciprocity checks and the identity/payload checks for these two routes. The report explicitly returns full_graph_acceptance=false. It does not prove historical archive completeness, full-graph edge reciprocity, global ID uniqueness, chronology, URL/attachment safety across the graph, or historical chain continuity.
 
 ## Related anomaly kept separate
 
