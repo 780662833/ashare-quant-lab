@@ -260,9 +260,13 @@ def main():
             sig=issue_identity(marker,sid,tid,rel,reverse_id,duplicate_ids,urls,obj)
             group=issue_groups[marker].setdefault(sig,{
                 "issue_type":marker,"source_id":sid,"target_id":tid,"relation":rel,
-                "reverse_id_returned":reverse_id,"ids":duplicate_ids,"urls":sorted(urls),
+                "reverse_id_returned":reverse_id,"ids":list(duplicate_ids),"urls":[],
                 "source_locations":[],"occurrence_count":0
             })
+            # Keep the union of evidence values while collapsing repeated
+            # manifestations of the same issue across report files.
+            group["ids"]=sorted(set(group.get("ids",[])) | set(duplicate_ids))
+            group["urls"]=sorted(set(group.get("urls",[])) | set(urls))
             location={"file":file,"location":loc}
             if location not in group["source_locations"]:
                 group["source_locations"].append(location)
@@ -328,7 +332,7 @@ def main():
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
     source_rule_conflicts=dedupe(source_rule_conflicts,["source_id","target_id","raw_url"])
-    report={"version":"1.4.2","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.4.3","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":unique_issue_counts,"issue_type_occurrence_counts":dict(issue_occurrence_counts),
       "evidence_record_counts":{"duplicate_issue_records":len(duplicate_issue_records),
        "duplicate_issue_occurrences":issue_occurrence_counts.get("duplicate_id_different_url",0),
