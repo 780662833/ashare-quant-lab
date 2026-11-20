@@ -14,32 +14,32 @@ reverse URL to point back to the source route.
 
 Implementation:
 
-- \`src/ashare_quant/research/szse_route_aware_reciprocity.py\`
-- \`scripts/audit_szse_route_aware_reciprocity.py\`
-- \`tests/unit/test_szse_route_aware_reciprocity.py\`
+- `src/ashare_quant/research/szse_route_aware_reciprocity.py`
+- `scripts/audit_szse_route_aware_reciprocity.py`
+- `tests/unit/test_szse_route_aware_reciprocity.py`
 
 ## Usage
 
 Run from the repository root against the original ZIP archive and the
 operator-supplied exact-route report:
 
-\`\`\`powershell
-python scripts\\audit_szse_route_aware_reciprocity.py \`
-  --report-dir reports\\szse_year_boundary_audit.zip \`
-  --route-context-report reports\\source_probes\\szse_route_context\\route_context_report.json \`
-  --output-dir reports\\source_probes\\szse_route_aware_reciprocity
-\`\`\`
+```powershell
+python scripts\audit_szse_route_aware_reciprocity.py `
+  --report-dir reports\szse_year_boundary_audit.zip `
+  --route-context-report reports\source_probes\szse_route_context\route_context_report.json `
+  --output-dir reports\source_probes\szse_route_aware_reciprocity
+```
 
-\`--report-dir\` may instead point to the extracted archive directory containing
-\`nodes.json\`, \`edges.json\`, \`manifest.json\` and \`neighbor_responses/\`.
+`--report-dir` may instead point to the extracted archive directory containing
+`nodes.json`, `edges.json`, `manifest.json` and `neighbor_responses/`.
 The output directory must be outside an extracted source directory.
 
 The command is local-only. It makes zero HTTP requests and writes only the two
-new output files under \`--output-dir\`:
+new output files under `--output-dir`:
 
-- \`route_aware_reciprocity_report.json\`: structured audit, input digests,
+- `route_aware_reciprocity_report.json`: structured audit, input digests,
   per-edge decisions, counts and explicit limitations;
-- \`route_aware_reciprocity_edges.csv\`: one row per input edge for review and
+- `route_aware_reciprocity_edges.csv`: one row per input edge for review and
   filtering.
 
 ## Evidence checks
@@ -54,20 +54,20 @@ For each edge, the audit performs these checks in order:
    must be internally consistent and GET-only. The source route must have one
    successful HTML request, same-path JSON request, and neighbor API request
    whose channel ID is the source page's HTML navigation channel. The saved
-   neighbor response must have the corresponding \`chnlDocId\`, and its relation
+   neighbor response must have the corresponding `chnlDocId`, and its relation
    field's ID and URL must equal the edge's target ID and exact target URL.
 3. **Target exact-route context.** The target is resolved only by exact URL,
    never by document ID alone. It can be resolved from an original captured
    node or from the supplemental exact-route report. A supplemental route is
-   accepted only when HTML \`articleId\` and JSON \`docId\` match the URL ID, the
-   reference comparison reports \`same_business_payload\` with matching ID,
+   accepted only when HTML `articleId` and JSON `docId` match the URL ID, the
+   reference comparison reports `same_business_payload` with matching ID,
    title, publication time and content SHA-256, the neighbor channel matches
    the HTML navigation channel, and the three exact GET receipts are
    successful and unchanged.
-4. **Reverse relation.** For a source \`pre\` relation, the exact target route's
-   \`nextDocId\` and \`nextDocPuburl\` must point back to the source ID and exact
-   source URL. For a source \`next\` relation, the target's \`preDocId\` and
-   \`preDocPuburl\` must point back. Matching only the ID is insufficient.
+4. **Reverse relation.** For a source `pre` relation, the exact target route's
+   `nextDocId` and `nextDocPuburl` must point back to the source ID and exact
+   source URL. For a source `next` relation, the target's `preDocId` and
+   `preDocPuburl` must point back. Matching only the ID is insufficient.
 
 Missing, duplicate, conflicting, malformed or failed route evidence is kept
 unresolved. A route-specific reverse ID or URL mismatch is reported separately
@@ -76,12 +76,12 @@ data error; that requires separate source adjudication.
 
 ## 2026-11-20 bounded-sample result
 
-The supplied \`szse_year_boundary_audit.zip\` sample contains 66 captured nodes,
+The supplied `szse_year_boundary_audit.zip` sample contains 66 captured nodes,
 77 edge records and 198 request-manifest records (66 each for HTML, detail JSON
 and neighbor API). The original capture contains exact target-route contexts
 for 74 edges. Three remaining edge targets require the supplemental exact-route
 observations for IDs 584083 and 584085 recorded in
-\`reports/source_probes/szse_route_context/route_context_report.json\`.
+`reports/source_probes/szse_route_context/route_context_report.json`.
 
 The route-aware audit result for this bounded edge set is:
 
@@ -101,7 +101,7 @@ supplemental routes. It does not prove archive completeness, historical
 universe coverage, global ID uniqueness, cross-period chain continuity, or
 correctness of events not represented in the sample.
 
-The separate \`618392\` URL-path date versus publication-date anomaly remains
+The separate `618392` URL-path date versus publication-date anomaly remains
 outside this reciprocity result and must retain its own classification. The
 v6 forensic counter is not changed by this audit.
 
@@ -109,11 +109,11 @@ v6 forensic counter is not changed by this audit.
 
 The output always sets:
 
-- \`full_graph_acceptance = false\`
-- \`production_admitted = false\`
-- \`pit_admitted = false\`
-- \`training_admitted = false\`
-- \`backtest_admitted = false\`
+- `full_graph_acceptance = false`
+- `production_admitted = false`
+- `pit_admitted = false`
+- `training_admitted = false`
+- `backtest_admitted = false`
 
 A bounded-edge-set PASS is not a full historical graph PASS and does not
 promote the source into a production event dataset or any research-data gate.
