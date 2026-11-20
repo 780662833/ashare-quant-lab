@@ -67,6 +67,28 @@ duplicate-ID groups and resource links with the original diagnostic and
 hard-failure reports; extraction counts alone are not proof that an anomaly is
 resolved.
 
+## Evidence count semantics (v1.2)
+
+The extractor counts explicit anomaly records rather than inferring an anomaly
+whenever an arbitrary parent object happens to contain both an ID and URLs.
+This prevents unrelated child records from being combined into synthetic
+duplicate-ID findings.
+
+- `duplicate_id_evidence` is grouped by the duplicated document/article ID.
+  Multiple source-report occurrences for the same ID are retained in
+  `source_locations` and `evidence_record_count`.
+- `unsafe_url_evidence` contains URLs explicitly attached to
+  `unsafe_neighbor_url` findings and classified as unsafe or untrusted.
+- `linked_resource_evidence` keeps trusted SZSE-hosted PDFs separately. Its
+  identity is the source ID + target ID + resolved resource URL, so repeated
+  report copies do not inflate the number of unique resource links.
+- Relation edges are extracted from each object containing its own
+  source/target/relation fields; parent and child fields are not merged.
+
+A changed count is a diagnostic signal, not proof of correctness. Compare the
+source locations and URLs against the original diagnostic and hard-failure
+records before assigning final classifications.
+
 ## Classification discipline
 
 Use only these final classifications after examining raw HTML, JSON and
