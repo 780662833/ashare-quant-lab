@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from urllib.request import Request
 
 import pytest
 
 from ashare_quant.research.szse_route_context import (
     DEFAULT_ROUTE_URLS,
+    _SameHostRedirectHandler,
     capture_szse_route_context,
     extract_html_route_context,
 )
@@ -128,6 +130,29 @@ def test_channel_mismatch_stays_unresolved(tmp_path: Path) -> None:
         "unresolved_neighbor_channel_mismatch", "unresolved_neighbor_channel_mismatch",
     ]
     assert report["summary"]["reverse_checks_mismatch"] == 0
+
+
+def test_redirect_handler_blocks_route_or_query_change_before_following() -> None:
+    handler = _SameHostRedirectHandler()
+    original = _neighbor_url("211", "584083")
+
+    changed_query = _neighbor_url("211", "584084")
+    assert handler.redirect_request(
+        Request(original), None, 302, "Found", {"Location": changed_query}, changed_query,
+    ) is None
+
+    changed_path = (
+        "https://www.szse.cn/api/report/webdocument/other"
+        "?channelId=211&docId=584083"
+    )
+    assert handler.redirect_request(
+        Request(original), None, 302, "Found", {"Location": changed_path}, changed_path,
+    ) is None
+
+    external = "https://example.com/api/report/webdocument/queryPreAndNextDoc?channelId=211&docId=584083"
+    assert handler.redirect_request(
+        Request(original), None, 302, "Found", {"Location": external}, external,
+    ) is None
 
 
 def test_neighbor_redirect_cannot_change_query_context(tmp_path: Path) -> None:
