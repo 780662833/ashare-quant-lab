@@ -104,7 +104,7 @@ def main():
     DUPLICATE_ID_KEYS=ID_KEYS | {"duplicateid","duplicateids","conflictingid","conflictid"}
     MARKERS=("duplicate_id_different_url","unsafe_neighbor_url",
              "edge_channel_mismatch","reciprocity_failure","invalid_seed_url")
-    URL_RE=re.compile(r'''https?://[^\\s"'<>]+|(?<![\\w])//[^\\s"'<>]+''',re.I)
+    URL_RE=re.compile(r'''https?://[^\s"'<>]+|(?<![\w])//[^\s"'<>]+''',re.I)
 
     def direct_pairs(obj):
         for k,v in obj.items():
@@ -149,7 +149,7 @@ def main():
             vals=URL_RE.findall(v)
             if not vals and nk in {key(x) for x in URL_KEYS_EXT}:
                 candidate=v.strip()
-                if candidate.startswith(("/", "./", "../", "//")) or re.search(r"\\.(?:pdf|html?)$",candidate,re.I):
+                if candidate.startswith(("/", "./", "../", "//")) or re.search(r"\.(?:pdf|html?)$",candidate,re.I):
                     vals=[candidate]
             for raw in vals:
                 raw=raw.rstrip(").,;]")
@@ -160,7 +160,7 @@ def main():
         aliases={key(x) for x in allowed}
         return sorted({str(v) for k,v in pairs
                        if key(k) in aliases and v not in (None,"")
-                       and re.fullmatch(r"\\d+",str(v))})
+                       and re.fullmatch(r"\d+",str(v))})
 
     def value_from_pairs(pairs, aliases):
         wanted={key(x) for x in aliases}
@@ -238,7 +238,7 @@ def main():
             else: seen[ident]["duplicate_occurrences"]=seen[ident].get("duplicate_occurrences",1)+1
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
-    report={"version":"1.2.1","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.2.2","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":dict(issue_counts),
       "duplicate_id_evidence":duplicate,"unsafe_url_evidence":unsafe,"linked_resource_evidence":resources,"unique_relation_edges":list(edges.values()),
       "request_manifest_candidates":[{"url":u,"method":m} for u,m in requests.items()],
