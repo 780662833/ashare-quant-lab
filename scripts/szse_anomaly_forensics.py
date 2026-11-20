@@ -132,7 +132,7 @@ def main():
 
     MARKER_VALUE_KEYS={key(x) for x in (
         "type","issue_type","anomaly_type","failure_type","rule","rule_id",
-        "code","issue_code","anomaly_code"
+        "code","issue_code","anomaly_code","category","kind"
     )}
 
     def direct_markers(obj):
@@ -147,7 +147,11 @@ def main():
                 mk=key(marker)
                 # Marker in a field name must be an exact key, not a summary
                 # key such as unsafe_neighbor_url_count or issue_type_counts.
-                if nk==mk and v not in (None,"",False,0):
+                explicit_marker_key=(nk==mk and (
+                    (isinstance(v,str) and bool(v.strip())) or
+                    (isinstance(v,(list,dict)) and bool(v))
+                ))
+                if explicit_marker_key:
                     found.add(marker)
                 # Marker values are accepted only from explicit type/code keys
                 # and only on exact normalized equality.
@@ -300,7 +304,7 @@ def main():
         return list(seen.values())
     unsafe=dedupe(unsafe,["source_id","target_id","raw_url"])
     source_rule_conflicts=dedupe(source_rule_conflicts,["source_id","target_id","raw_url"])
-    report={"version":"1.4.0","source_dir":str(root),"network_requests_made":0,
+    report={"version":"1.4.1","source_dir":str(root),"network_requests_made":0,
       "input_file_sha256":hashes,"input_file_count":len(files),"issue_type_counts":unique_issue_counts,"issue_type_occurrence_counts":dict(issue_occurrence_counts),
       "evidence_record_counts":{"duplicate_issue_records":len(duplicate_issue_records),
        "duplicate_issue_occurrences":issue_occurrence_counts.get("duplicate_id_different_url",0),
